@@ -1,28 +1,42 @@
-; Ascua Infinita — original Godot 4 project
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
+
 config/name="Ascua Infinita"
 config/description="Un clic enciende la llama. Cada caída la hace eterna."
+config/version="0.2.0"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(0.039, 0.047, 0.067, 1)
+boot_splash/show_image=false
 config/icon="res://assets/icon.svg"
 
 [display]
+
 window/size/viewport_width=1440
 window/size/viewport_height=900
 window/size/window_width_override=1280
 window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/size/min_width=1100
 window/size/min_height=700
-window/stretch/mode="canvas_items"
 
 [rendering]
+
+textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-textures/default_filters/use_nearest_mipmap_filter=false
-textures/canvas_textures/default_texture_filter=0
 environment/defaults/default_clear_color=Color(0.035, 0.043, 0.071, 1)
-
-[audio]
-driver/enable_input=false

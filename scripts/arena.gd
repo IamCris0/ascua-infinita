@@ -1,176 +1,613 @@
 extends Control
-## A low-resolution, original pixel stage rendered at integer coordinates.
+## The battle stage: Gemini backgrounds, animated actors, effects and the
+## in-world HUD (enemy plate, telegraphs, banners, damage numbers).
+## Stage coordinates are the background's own 1024 x 800 pixel space.
+
 signal clicked
+signal ember_clicked
+signal coins(screen_pos: Vector2, amount: int, essence: int)
+
+const Actor = preload("res://scripts/actor.gd")
+const STAGE_SIZE = Vector2(1024, 800)
+const HERO_FEET = Vector2(300, 652)
+const ENEMY_FEET = Vector2(745, 640)
+const LIGHTS = [
+	[[Vector2(203, 488), Color(1.0, 0.55, 0.2), 170.0], [Vector2(898, 484), Color(1.0, 0.55, 0.2), 110.0], [Vector2(515, 108), Color(0.6, 0.4, 1.0), 120.0], [Vector2(745, 625), Color(0.35, 0.95, 0.7), 150.0]],
+	[[Vector2(200, 468), Color(0.75, 0.6, 1.0), 170.0], [Vector2(515, 98), Color(0.6, 0.4, 1.0), 130.0], [Vector2(745, 625), Color(0.7, 0.5, 1.0), 150.0]],
+	[[Vector2(215, 455), Color(1.0, 0.5, 0.15), 190.0], [Vector2(855, 520), Color(1.0, 0.45, 0.1), 230.0], [Vector2(510, 238), Color(1.0, 0.7, 0.25), 170.0], [Vector2(745, 625), Color(1.0, 0.75, 0.3), 150.0]]
+]
+# Hue shift (turns) and tint for each enemy in each biome.
+const VARIANTS = {
+	"slime": [[0.0, Color.WHITE, 1.0], [0.24, Color(0.9, 0.95, 1.1), 1.0], [-0.36, Color(1.1, 0.95, 0.9), 1.0]],
+	"wisp": [[0.0, Color.WHITE, 1.0], [-0.12, Color(0.92, 1.0, 1.15), 1.1], [0.0, Color(1.45, 0.8, 0.55), 1.25]],
+	"sentinel": [[0.0, Color.WHITE, 1.0], [0.0, Color(0.86, 0.86, 1.22), 1.0], [0.0, Color(1.15, 0.92, 0.85), 1.0]],
+	"boss": [[0.0, Color.WHITE, 1.0], [0.72, Color(0.95, 0.95, 1.1), 1.0], [0.08, Color(1.1, 1.0, 0.92), 1.0]]
+}
+const PARTICLE_COLORS = {"slime": [Color("74d9a8"), Color("2f6b55")], "wisp": [Color("c9a6f5"), Color("fff3c8")],
+	"sentinel": [Color("7e8796"), Color("ff9a4a")], "boss": [Color("ff7a3d"), Color("8c2f2f")]}
+
 var state
-var time: float = 0
-var hit_time: float = 0
-var spawn_time: float = 0
-var shake: float = 0
+var lib
+var reduced_motion: bool = false
+var shake_enabled: bool = true
+var show_numbers: bool = true
+var stage: Node2D
+var backdrop: Node2D
+var lights: Node2D
+var fx_layer: Node2D
+var overlay: Control
+var hero
+var enemy
+var corpse
+var glow: Texture2D
+var time: float = 0.0
+var ambient_time: float = 0.0
+var shake: float = 0.0
+var flash: float = 0.0
+var hurt_vignette: float = 0.0
+var bg_index: int = 0
+var bg_prev: int = 0
+var bg_fade: float = 0.0
 var particles: Array = []
+var effects: Array = []
 var numbers: Array = []
-var textures: Dictionary = {}
+var rings: Array = []
+var projectiles: Array = []
+var ash: Array = []
+var banner: Dictionary = {}
+var shown_kind: String = ""
+var enemy_attacking: bool = false
+var hp_trail: float = 1.0
 var hovered: bool = false
-var font: Font
-const BG = Color("101723")
+var last_hurt_anim: float = 0.0
+var hint_alpha: float = 1.0
 
 func _ready() -> void:
 	clip_contents = true
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	font = ThemeDB.fallback_font
-	for key in ["hero", "slime", "wisp", "sentinel", "boss"]:
-		textures[key] = load("res://assets/sprites/" + key + ".svg")
+	focus_mode = Control.FOCUS_NONE
+	lib = load("res://scripts/art_library.gd").shared()
+	var g = Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var gt = GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 128
+	gt.height = 128
+	glow = gt
+	stage = Node2D.new()
+	add_child(stage)
+	backdrop = Node2D.new()
+	backdrop.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	backdrop.draw.connect(_draw_backdrop)
+	stage.add_child(backdrop)
+	lights = Node2D.new()
+	var add = CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	lights.material = add
+	lights.draw.connect(_draw_lights)
+	stage.add_child(lights)
+	corpse = Actor.new(lib, "slime")
+	corpse.alpha = 0.0
+	stage.add_child(corpse)
+	enemy = Actor.new(lib, "slime")
+	enemy.position = ENEMY_FEET
+	stage.add_child(enemy)
+	hero = Actor.new(lib, "hero")
+	hero.position = HERO_FEET
+	stage.add_child(hero)
+	fx_layer = Node2D.new()
+	fx_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fx_layer.draw.connect(_draw_fx)
+	stage.add_child(fx_layer)
+	overlay = Control.new()
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.draw.connect(_draw_overlay)
+	add_child(overlay)
+	for i in range(28):
+		ash.append({"pos": Vector2(randf() * 1024, randf() * 800), "speed": randf_range(8, 22), "phase": randf() * TAU, "size": randf_range(1.5, 3.5)})
 	mouse_entered.connect(func(): hovered = true)
 	mouse_exited.connect(func(): hovered = false)
-	gui_input.connect(func(e):
-		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+	resized.connect(_layout)
+	if state != null:
+		sync_enemy(false)
+		bg_index = state.biome()
+		bg_prev = bg_index
+	_layout()
+
+func _layout() -> void:
+	if stage == null or size.x <= 0 or size.y <= 0:
+		return
+	var s: float
+	var origin := Vector2.ZERO
+	if size.x / size.y >= STAGE_SIZE.x / STAGE_SIZE.y:
+		s = size.x / STAGE_SIZE.x
+		var visible_h = size.y / s
+		var top = clampf((STAGE_SIZE.y - visible_h) * 0.78, 0, STAGE_SIZE.y - visible_h)
+		origin = Vector2(0, -top * s)
+	else:
+		s = size.y / STAGE_SIZE.y
+		var visible_w = size.x / s
+		var left = clampf(522 - visible_w * 0.5, 0, STAGE_SIZE.x - visible_w)
+		origin = Vector2(-left * s, 0)
+	stage.scale = Vector2(s, s)
+	stage.position = origin
+	stage.set_meta("origin", origin)
+
+func stage_to_screen(p: Vector2) -> Vector2:
+	return stage.position + p * stage.scale
+
+func visible_stage_rect() -> Rect2:
+	var origin: Vector2 = stage.get_meta("origin", Vector2.ZERO)
+	return Rect2(-origin / stage.scale, size / stage.scale)
+
+func enemy_center() -> Vector2:
+	return enemy.position + Vector2(enemy.offset.x, -enemy.height() * 0.5)
+
+func hero_center() -> Vector2:
+	return hero.position + Vector2(10, -hero.height() * 0.5)
+
+func ember_stage_pos() -> Vector2:
+	var r = visible_stage_rect()
+	return r.position + r.size * state.ember_pos + Vector2(0, sin(ambient_time * 2.2) * 8)
+
+# ---------------------------------------------------------------- input
+func _gui_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+		if state != null and state.ember_active and e.position.distance_to(stage_to_screen(ember_stage_pos())) < 46:
+			ember_clicked.emit()
+		else:
 			clicked.emit()
-	)
+		accept_event()
 
-func impact(damage: float, critical: bool, automatic: bool) -> void:
-	hit_time = 0.25
-	shake = 5.0 if critical else 2.0
-	numbers.append({"pos": Vector2(466 + randf_range(-35, 35), 270), "life": 1.0, "text": ("¡" if critical else "") + compact_number(damage), "color": Color("ffcf7b") if critical else (Color("86e0bd") if automatic else Color("f2e9d6"))})
-	for i in range(10 if critical else 5):
-		particles.append({"pos": Vector2(491, 328), "vel": Vector2(randf_range(-120, 120), randf_range(-140, 30)), "life": randf_range(0.25, 0.65), "color": Color("ffcf7b") if critical else Color("86e0bd")})
+# ---------------------------------------------------------------- reactions
+func sync_enemy(walk_in: bool = true) -> void:
+	var kind: String = state.enemy_kind()
+	# A new actor must not inherit the defeated enemy's lunge or arrival.
+	for tag in ["lunge", "walk_in", "walking"]:
+		if enemy.has_meta(tag):
+			enemy.remove_meta(tag)
+	enemy.offset = Vector2.ZERO
+	enemy.speed = 1.0
+	enemy.set_character(kind)
+	var variant = VARIANTS[kind][state.biome()]
+	enemy.hue = variant[0]
+	enemy.tint = variant[1]
+	enemy.saturation = variant[2]
+	enemy.alpha = 1.0
+	enemy.brightness = 1.12 if state.enemy_elite else 1.0
+	enemy.base_scale = 1.15 if kind == "boss" else (1.12 if state.enemy_elite else 1.0)
+	enemy.bob = 10.0 if kind == "wisp" and not reduced_motion else 0.0
+	enemy.position = ENEMY_FEET + (Vector2(0, -34) if kind == "wisp" else Vector2.ZERO)
+	enemy.flash = 0
+	enemy_attacking = false
+	hp_trail = 1.0
+	shown_kind = kind
+	if walk_in:
+		var distance = 420.0 if kind == "boss" else 300.0
+		enemy.offset = Vector2(distance, 0)
+		enemy.play("walk")
+		enemy.set_meta("walk_in", distance)
+	if state.biome() != bg_index:
+		bg_prev = bg_index
+		bg_index = state.biome()
+		bg_fade = 1.0
+		show_banner(state.BIOMES[bg_index], state.BIOME_RULES[bg_index], Color("84cdb7"))
+	if kind == "boss":
+		show_banner("EL REY SIN BRASA", state.boss_title(), Color("ff8a5c"), 1.9)
 
+func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
+	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
+
+func on_struck(damage: float, critical: bool, automatic: bool) -> void:
+	var at = enemy_center() + Vector2(randf_range(-18, 18), randf_range(-24, 18))
+	if automatic:
+		effects.append({"name": "magic", "t": 0.0, "pos": at, "size": 120.0, "rot": 0.0, "color": Color(1, 1, 1, 0.9)})
+		for i in range(mini(state.wisps, 6)):
+			var from = companion_pos(i)
+			projectiles.append({"from": from, "to": at, "t": 0.0, "dur": 0.22, "color": Color("86e0bd"), "size": 4.0})
+		enemy.flash = maxf(enemy.flash, 0.25)
+		enemy.flash_color = Color("c8ffe9")
+	else:
+		hero.play("attack")
+		hero.anim_time = 0.08
+		hero.offset = Vector2(14, 0)
+		var rot = randf_range(-0.7, 0.5)
+		effects.append({"name": "slash", "t": 0.0, "pos": at, "size": 230.0 if critical else 170.0, "rot": rot, "color": Color(1, 1, 1)})
+		if critical:
+			effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 210.0, "rot": 0.0, "color": Color(1, 1, 1)})
+			add_shake(5.0)
+		enemy.flash = 0.85
+		enemy.flash_color = Color(1, 0.96, 0.88)
+		enemy.offset += Vector2(10 if not critical else 18, 0)
+		if not enemy_attacking and time - last_hurt_anim > 0.45 and not enemy.has_meta("walking"):
+			enemy.play("hurt")
+			last_hurt_anim = time
+	burst_particles(at, PARTICLE_COLORS.get(enemy.key, [Color.WHITE, Color.GRAY]), 10 if critical else (3 if automatic else 6), 260.0)
+	if show_numbers:
+		var text = compact_number(damage) + ("!" if critical else "")
+		var color = Color("ffcf7b") if critical else (Color("86e0bd") if automatic else Color("f6efe0"))
+		numbers.append({"pos": at + Vector2(randf_range(-30, 30), -40), "vel": Vector2(randf_range(-20, 20), -95), "life": 1.0, "text": text, "color": color, "size": 34 if critical else (20 if automatic else 26)})
+	hint_alpha = maxf(0.0, hint_alpha - 0.12)
+
+func on_burst(interrupted: bool) -> void:
+	hero.play("attack")
+	flash = 0.0 if reduced_motion else 0.55
+	add_shake(9.0)
+	var at = enemy_center()
+	effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 380.0, "rot": 0.0, "color": Color(1, 1, 1)})
+	effects.append({"name": "embers", "t": 0.0, "pos": at + Vector2(0, -30), "size": 300.0, "rot": 0.0, "color": Color(1, 1, 1)})
+	rings.append({"pos": at, "t": 0.0, "dur": 0.6, "radius": 260.0, "color": Color("ffcf7b")})
+	projectiles.append({"from": hero_center(), "to": at, "t": 0.0, "dur": 0.12, "color": Color("fff1cf"), "size": 9.0})
+	burst_particles(at, [Color("ffcf7b"), Color("ff8a3d"), Color("fff1cf")], 34, 520.0)
+	if interrupted:
+		enemy.play("hurt")
+		show_banner("¡INTERRUMPIDO!", "El Rey queda aturdido", Color("ffcf7b"), 1.6)
+
+func on_hero_hit(damage: float, heavy: bool) -> void:
+	if heavy:
+		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": 0.32, "color": Color("ff9a4a"), "size": 26.0, "fire": true})
+	hero.play("hurt")
+	hero.flash = 0.75
+	hero.flash_color = Color(1, 0.3, 0.25)
+	hero.offset = Vector2(-16 if not heavy else -30, 0)
+	hurt_vignette = 1.0 if heavy else 0.6
+	add_shake(12.0 if heavy else 6.0)
+	burst_particles(hero_center(), [Color("ff6a4a"), Color("ffcf7b")], 16 if heavy else 8, 240.0)
+	if heavy:
+		effects.append({"name": "critical", "t": 0.0, "pos": hero_center(), "size": 300.0, "rot": 0.0, "color": Color(1, 0.7, 0.6)})
+	if show_numbers:
+		numbers.append({"pos": hero_center() + Vector2(0, -60), "vel": Vector2(-20, -80), "life": 1.1, "text": "-" + compact_number(damage), "color": Color("ff6b5b"), "size": 34 if heavy else 26})
+
+func on_enemy_defeated(kind: String, elite: bool, boss: bool) -> void:
+	corpse.set_character(kind)
+	corpse.hue = enemy.hue
+	corpse.tint = enemy.tint
+	corpse.saturation = enemy.saturation
+	corpse.base_scale = enemy.base_scale
+	corpse.brightness = enemy.brightness
+	corpse.position = enemy.position
+	corpse.offset = Vector2.ZERO
+	corpse.alpha = 1.0
+	corpse.flash = 0.6
+	corpse.play("death", "death", true)
+	var at = enemy_center()
+	effects.append({"name": "embers", "t": 0.0, "pos": at, "size": 260.0 if boss else 180.0, "rot": 0.0, "color": Color(1, 1, 1)})
+	burst_particles(at, PARTICLE_COLORS.get(kind, [Color.WHITE]) + [Color("ffcf7b")], 40 if boss else 18, 380.0)
+	if boss:
+		rings.append({"pos": at, "t": 0.0, "dur": 1.0, "radius": 420.0, "color": Color("ff8a5c")})
+		add_shake(14.0)
+		flash = 0.0 if reduced_motion else 0.4
+	var amount = 14 if boss else (8 if elite else 4)
+	var essence = 5 if boss else (2 if elite else 1)
+	coins.emit(global_position + stage_to_screen(at), amount, essence)
+
+func on_fallen() -> void:
+	hero.play("death", "death", true)
+	add_shake(10.0)
+	burst_particles(hero_center(), [Color("86e0bd"), Color("ff8a3d")], 30, 200.0)
+
+func on_restart() -> void:
+	hero.play("idle")
+	hero.alpha = 1.0
+	corpse.alpha = 0.0
+	particles.clear()
+	effects.clear()
+	numbers.clear()
+	projectiles.clear()
+	hint_alpha = 1.0
+	sync_enemy(true)
+
+func on_ember_collected(kind: String) -> void:
+	var at = ember_stage_pos()
+	effects.append({"name": "magic" if kind == "heal" else "critical", "t": 0.0, "pos": at, "size": 200.0, "rot": 0.0, "color": Color(1, 1, 1)})
+	rings.append({"pos": at, "t": 0.0, "dur": 0.5, "radius": 140.0, "color": Color("ffcf7b")})
+	burst_particles(at, [Color("ffcf7b"), Color("ff9a4a")], 20, 300.0)
+	var labels = {"gold": "¡ORO!", "fury": "¡FURIA!", "heal": "¡VIDA!", "spark": "¡DESTELLO!"}
+	numbers.append({"pos": at + Vector2(0, -30), "vel": Vector2(0, -60), "life": 1.4, "text": labels.get(kind, "¡ASCUA!"), "color": Color("ffcf7b"), "size": 30})
+	if kind == "gold":
+		coins.emit(global_position + stage_to_screen(at), 10, 0)
+
+func add_shake(amount: float) -> void:
+	if shake_enabled and not reduced_motion:
+		shake = maxf(shake, amount)
+
+func burst_particles(at: Vector2, palette: Array, count: int, power: float) -> void:
+	if reduced_motion:
+		count = int(count / 2.0)
+	for i in range(count):
+		var angle = randf_range(-PI, 0.2) if randf() < 0.8 else randf() * TAU
+		var v = Vector2(cos(angle), sin(angle)) * randf_range(power * 0.3, power)
+		particles.append({"pos": at, "vel": v, "life": randf_range(0.35, 0.8), "max": 0.8, "color": palette[randi() % palette.size()], "size": randf_range(3, 7)})
+
+func companion_pos(i: int) -> Vector2:
+	var count = mini(state.wisps, 6)
+	var a = ambient_time * 1.6 + i * TAU / maxf(1, count)
+	return HERO_FEET + Vector2(cos(a) * 78, -96 + sin(a) * 26)
+
+# ---------------------------------------------------------------- update
 func _process(delta: float) -> void:
 	if state == null:
 		return
-	if state.active():
-		time += delta
-	hit_time = maxf(0, hit_time - delta)
-	spawn_time = maxf(0, spawn_time - delta)
-	shake = maxf(0, shake - delta * 24)
+	time += delta
+	if not reduced_motion:
+		ambient_time += delta
+	enemy.bob = 10.0 if enemy.key == "wisp" and not reduced_motion else 0.0
+	if reduced_motion:
+		shake = 0.0
+		flash = 0.0
+	shake = maxf(0.0, shake - delta * 30.0)
+	flash = maxf(0.0, flash - delta * 2.2)
+	hurt_vignette = maxf(0.0, hurt_vignette - delta * 1.6)
+	bg_fade = maxf(0.0, bg_fade - delta * 0.8)
+	if not banner.is_empty():
+		banner.t += delta
+		if banner.t > banner.dur:
+			banner = {}
+	var shake_offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake
+	stage.position = stage.get_meta("origin", Vector2.ZERO) + shake_offset
+	if shown_kind != state.enemy_kind():
+		sync_enemy(true)
+	# Walk-in for a freshly spawned enemy.
+	if enemy.has_meta("walk_in"):
+		var distance: float = enemy.get_meta("walk_in")
+		var total = state.BOSS_INTRO if state.is_boss() else state.SPAWN_DELAY
+		var k = clampf(state.spawn_delay / total, 0, 1) if total > 0 else 0.0
+		enemy.offset = Vector2(distance * k, 0)
+		enemy.set_meta("walking", true)
+		if state.spawn_delay <= 0:
+			enemy.remove_meta("walk_in")
+			enemy.remove_meta("walking")
+			enemy.play("idle")
+	# Enemy wind-up: start the attack animation just before the blow lands.
+	if state.active() and state.spawn_delay <= 0 and not state.charging and state.stun_time <= 0:
+		var left = state.attack_interval() - state.attack_timer
+		if left < 0.32 and not enemy_attacking:
+			enemy_attacking = true
+			enemy.play("attack")
+			if enemy.key in ["slime", "wisp"]:
+				enemy.set_meta("lunge", 0.0)
+		elif left > 0.5:
+			enemy_attacking = false
+	if state.charging and not enemy.playing("attack"):
+		enemy.play("attack")
+	if state.charging:
+		enemy.anim_time = fmod(enemy.anim_time, 0.36)
+		enemy.flash = maxf(enemy.flash, 0.25 + 0.2 * sin(ambient_time * 14.0))
+		enemy.flash_color = Color(1, 0.55, 0.2)
+	if enemy.has_meta("lunge"):
+		var t: float = enemy.get_meta("lunge") + delta
+		enemy.set_meta("lunge", t)
+		enemy.offset.x = -sin(clampf(t / 0.45, 0, 1) * PI) * 150
+		if t >= 0.45:
+			enemy.remove_meta("lunge")
+	if state.stun_time > 0:
+		enemy.speed = 0.25
+	else:
+		enemy.speed = 1.0
+	corpse.alpha = maxf(0.0, corpse.alpha - delta * (0.55 if corpse.key == "boss" else 1.1))
+	hero.brightness = 1.0 + (0.18 + 0.08 * sin(ambient_time * 10.0) if state.fury_time > 0 else 0.0)
+	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
+	hp_trail = maxf(ratio, hp_trail - delta * 0.7)
 	for p in particles:
 		p.life -= delta
 		p.pos += p.vel * delta
-		p.vel.y += delta * 240
+		p.vel.y += 620 * delta
+		p.vel *= 0.985
 	particles = particles.filter(func(p): return p.life > 0)
+	for e in effects:
+		e.t += delta
+	effects = effects.filter(func(e): return e.t < 0.6)
+	for r in rings:
+		r.t += delta
+	rings = rings.filter(func(r): return r.t < r.dur)
+	for p in projectiles:
+		p.t += delta
+	projectiles = projectiles.filter(func(p): return p.t < p.dur)
 	for n in numbers:
 		n.life -= delta
-		n.pos.y -= delta * 42
+		n.pos += n.vel * delta
+		n.vel.y += 60 * delta
 	numbers = numbers.filter(func(n): return n.life > 0)
-	queue_redraw()
+	for a in ash:
+		if reduced_motion:
+			break
+		a.pos.y -= a.speed * delta
+		a.pos.x += sin(ambient_time * 0.7 + a.phase) * 10 * delta
+		if a.pos.y < -10:
+			a.pos = Vector2(randf() * 1024, 810)
+	backdrop.queue_redraw()
+	lights.queue_redraw()
+	fx_layer.queue_redraw()
+	overlay.queue_redraw()
 
-func box(x: float, y: float, w: float, h: float, color: Color) -> void:
-	draw_rect(Rect2(floor(x), floor(y), w, h), color)
+# ---------------------------------------------------------------- drawing
+func _draw_backdrop() -> void:
+	var rect = Rect2(Vector2.ZERO, STAGE_SIZE)
+	backdrop.draw_texture_rect(lib.backgrounds[bg_index], rect, false)
+	if bg_fade > 0:
+		backdrop.draw_texture_rect(lib.backgrounds[bg_prev], rect, false, Color(1, 1, 1, bg_fade))
+	# Ground shadows under the actors.
+	_ellipse(backdrop, HERO_FEET + Vector2(0, 2), Vector2(62, 12), Color(0, 0, 0, 0.45))
+	var ew = 70.0 if enemy.key != "boss" else 110.0
+	_ellipse(backdrop, ENEMY_FEET + Vector2(enemy.offset.x, 2), Vector2(ew, 14), Color(0, 0, 0, 0.45))
 
-func text_at(pos: Vector2, value: String, size_px: int, color: Color) -> void:
-	draw_string(font, pos, value, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
+func _ellipse(canvas: CanvasItem, center: Vector2, radius: Vector2, color: Color) -> void:
+	var pts = PackedVector2Array()
+	for i in range(24):
+		var a = i * TAU / 24
+		pts.append(center + Vector2(cos(a) * radius.x, sin(a) * radius.y))
+	canvas.draw_colored_polygon(pts, color)
 
-func _draw() -> void:
-	if state == null or textures.is_empty():
-		return
-	var scale_factor = size / Vector2(760, 590)
-	draw_set_transform(Vector2.ZERO, 0, scale_factor)
-	var biome: int = state.biome()
-	var accent: Color = [Color("65b7a4"), Color("b79bd8"), Color("e99868")][biome]
-	var stone: Color = [Color("26333b"), Color("303044"), Color("3c3033")][biome]
-	box(0, 0, 760, 590, BG)
-	box(0, 0, 760, 388, Color("151e2b"))
-	# Stars, ruined arcade, and deep forest silhouettes.
-	for i in range(38):
-		var x = fmod(i * 127.0 + 49, 752)
-		var y = fmod(i * 61.0 + 7, 215)
-		box(x, y, 2, 2, Color(accent, 0.12 + 0.12 * sin(time + i)))
-	box(340, 44, 82, 82, Color("263441"))
-	box(350, 54, 62, 62, Color("394652"))
-	box(369, 54, 43, 44, Color("151e2b"))
-	for i in range(7):
-		var x = i * 125 - 18
-		box(x, 141, 49, 252, Color("1c2732"))
-		box(x - 8, 140, 65, 15, stone.darkened(0.24))
-		box(x + 8, 158, 7, 220, stone.darkened(0.3))
-		box(x - 5, 375, 60, 17, stone)
-		box(x + 50, 150, 71, 15, stone.darkened(0.4))
-		box(x + 57, 165, 55, 10, stone.darkened(0.4))
-	# Moss/crystals are deterministic and do not change with redraw.
-	for i in range(23):
-		var x = fmod(i * 93.0 + 7, 760)
-		var y = 180 + fmod(i * 63.0, 192)
-		box(x, y, 8, 16 + i % 4 * 7, accent.darkened(0.67))
-		box(x + 8, y + 9, 6, 9, accent.darkened(0.54))
-	box(0, 395, 760, 195, Color("17212b"))
-	box(0, 395, 760, 5, stone.lightened(0.08))
-	for row in range(5):
-		for col in range(10):
-			var x = col * 88 - (42 if row % 2 == 0 else 0)
-			var y = 404 + row * 37
-			box(x, y, 82, 31, stone.darkened(0.36 + fmod(col * 0.13, 0.2)))
-			box(x + 4, y + 3, 69, 2, Color("35414a"))
-	# Raised ritual dais.
-	box(350, 421, 299, 17, Color("101720"))
-	box(329, 400, 332, 19, stone.lightened(0.09))
-	box(344, 389, 304, 14, stone.lightened(0.18))
-	box(357, 390, 278, 2, accent.darkened(0.25))
-	for x in [65, 682]:
-		box(x, 323, 13, 77, Color("303341"))
-		box(x - 8, 316, 29, 11, Color("63606a"))
-		var flicker = 3 * sin(time * 10 + x)
-		box(x - 2, 289 + flicker, 17, 25 - flicker, Color("ed8650"))
-		box(x + 2, 281 + flicker, 8, 31 - flicker, Color("ffcf7b"))
-		box(x + 4, 300, 5, 15, Color("fff1cf"))
-	# Ground shadows.
-	draw_ellipse_pixels(Vector2(204, 402), Vector2(54, 9), Color("0e1520"))
-	draw_ellipse_pixels(Vector2(495, 400), Vector2(75, 12), Color("111722"))
-	var idle = int(time * 5) % 4 if not state.reduced_motion else 0
-	var hero_frame = (9 if hit_time > 0.12 else 10) if hit_time > 0 else idle
-	if spawn_time > 0 and not state.reduced_motion:
-		hero_frame = 4 + int(time * 12) % 4
-	if state.dead:
-		hero_frame = 14
-	var hero_pos = Vector2(132 + (15 if hit_time > 0 else 0), 272)
-	draw_texture_rect_region(textures.hero, Rect2(hero_pos, Vector2(136, 136)), Rect2(hero_frame * 32, 0, 32, 32))
-	var enemy_frame = 12 if hit_time > 0.12 else idle
-	if state.attack_timer / state.attack_interval() > 0.80 and hit_time <= 0:
-		enemy_frame = 8 + int(time * 8) % 4
-	var enemy_size = 192 if state.is_boss() else 152
-	var offset = Vector2(sin(time * 71) * shake, 0) if not state.reduced_motion else Vector2.ZERO
-	var enemy_pos = Vector2(494 - enemy_size / 2.0, 405 - enemy_size) + offset
-	draw_texture_rect_region(textures[state.enemy_kind()], Rect2(enemy_pos, Vector2.ONE * enemy_size), Rect2(enemy_frame * 32, 0, 32, 32))
-	# Orbiting companions and strike arc.
+func _draw_lights() -> void:
+	for light in LIGHTS[bg_index]:
+		var flicker = 1.0 + 0.08 * sin(ambient_time * 9.0 + light[0].x) + 0.05 * sin(ambient_time * 23.0 + light[0].y)
+		var r: float = light[2] * flicker
+		lights.draw_texture_rect(glow, Rect2(light[0] - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(light[1], 0.32))
+	var core = 105.0 + 6.0 * sin(ambient_time * 3.0)
+	lights.draw_texture_rect(glow, Rect2(HERO_FEET + Vector2(0, -80) - Vector2.ONE * core, Vector2.ONE * core * 2), false, Color(0.45, 1.0, 0.8, 0.22))
+	for a in ash:
+		var c = Color(1.0, 0.6, 0.3, 0.55) if bg_index != 1 else Color(0.75, 0.6, 1.0, 0.5)
+		lights.draw_rect(Rect2(a.pos, Vector2.ONE * a.size), c)
+	if state.enemy_elite and state.spawn_delay <= 0:
+		var r = 140.0 + 10 * sin(ambient_time * 4.0)
+		lights.draw_texture_rect(glow, Rect2(enemy_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.75, 0.25, 0.55))
+	if state.charging:
+		var r = 120.0 + 160.0 * state.charge_progress()
+		lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(-70, -10) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.45, 0.1, 0.7))
+	if state.fury_time > 0:
+		var r = 130.0
+		lights.draw_texture_rect(glow, Rect2(hero_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.5, 0.2, 0.45))
+	if state.ember_active:
+		var r = 70.0 + 8 * sin(ambient_time * 6.0)
+		lights.draw_texture_rect(glow, Rect2(ember_stage_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.7, 0.3, 0.9))
+
+func _draw_fx() -> void:
+	# Companions orbiting the bearer.
 	for i in range(mini(state.wisps, 6)):
-		var pos = Vector2(202 + cos(time * 1.8 + i * 1.2) * 51, 289 + sin(time * 1.8 + i * 1.2) * 18)
-		box(pos.x, pos.y, 8, 8, Color("86e0bd"))
-		box(pos.x + 2, pos.y + 2, 4, 4, Color("e9e9ce"))
-	if hit_time > 0 and not state.reduced_motion:
-		draw_arc(Vector2(410, 320), 70, -1.1, 1.1, 12, Color("fff1cf", hit_time * 3), 5)
-		draw_line(Vector2(273, 325), Vector2(451, 312), Color("ffcf7b", hit_time * 2), 3)
+		var pos = companion_pos(i)
+		var frame = lib.frame_at("companion", "idle", ambient_time + i * 0.3)
+		lib.draw_frame(fx_layer, "companion", frame, pos, 1.0)
+	for p in projectiles:
+		var k = clampf(p.t / p.dur, 0, 1)
+		var pos = p.from.lerp(p.to, k) + Vector2(0, -sin(k * PI) * (40 if p.get("fire", false) else 12))
+		if p.get("fire", false):
+			lib.draw_fx(fx_layer, "critical", fmod(time, 0.2), pos, p.size * 5, Color(1, 0.75, 0.5), 20.0, time * 6.0)
+		else:
+			fx_layer.draw_line(p.from.lerp(p.to, maxf(0, k - 0.25)), pos, Color(p.color, 0.8), p.size)
+	for e in effects:
+		lib.draw_fx(fx_layer, e.name, e.t, e.pos, e.size, e.color, 16.0 if e.name == "slash" else 13.0, e.rot)
 	for p in particles:
-		box(p.pos.x, p.pos.y, 4, 4, Color(p.color, minf(1, p.life * 3)))
-	for n in numbers:
-		text_at(n.pos, n.text, 26, Color(n.color, minf(1, n.life * 2)))
-	# Enemy card / visible telegraph.
-	text_at(Vector2(30, 40), "CÁMARA %02d" % state.room, 17, accent)
-	text_at(Vector2(30, 69), "Un paso más hacia el corazón del eclipse.", 15, Color("8d9ba9"))
-	var label = state.enemy_name()
-	var name_width = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x
-	text_at(Vector2(494 - name_width / 2, 170), label, 21, Color("eae2d2"))
-	box(375, 186, 238, 8, Color("090f19"))
-	box(375, 186, maxf(0, 238 * state.enemy_hp / state.enemy_max), 8, Color("d87974") if state.is_boss() else accent)
-	text_at(Vector2(420, 217), "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))], 15, Color("9baab7"))
-	var warning: float = state.attack_timer / state.attack_interval()
-	box(402, 441, 187, 4, Color("0d141e"))
-	box(402, 441, 187 * warning, 4, Color("ed8650") if warning > 0.8 else Color("64717e"))
-	text_at(Vector2(407, 468), "Golpe en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer), 15, Color("edaa85") if warning > 0.8 else Color("8999a8"))
-	var prompt = "CLIC PARA ATACAR   /   ESPACIO"
-	var prompt_width = font.get_string_size(prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
-	text_at(Vector2((760 - prompt_width) / 2, 539), prompt, 18, Color("ffcf7b") if hovered else Color("a5b2bc"))
-	if state.combo >= 4:
-		text_at(Vector2(166, 446), "CADENA ×%d" % state.combo, 16, Color("ffcf7b"))
-	draw_set_transform(Vector2.ZERO)
+		var a = clampf(p.life / 0.4, 0, 1)
+		fx_layer.draw_rect(Rect2(p.pos - Vector2.ONE * p.size * 0.5, Vector2.ONE * p.size), Color(p.color, a))
+	for r in rings:
+		var k = r.t / r.dur
+		fx_layer.draw_arc(r.pos, r.radius * ease(k, 0.4), 0, TAU, 48, Color(r.color, 1.0 - k), 6.0 * (1.0 - k) + 1.0)
+	if state.ember_active:
+		var at = ember_stage_pos()
+		lib.draw_fx(fx_layer, "embers", fmod(ambient_time, 0.3), at + Vector2(0, -18), 110.0, Color(1, 1, 1, 0.9), 13.0)
+		fx_layer.draw_circle(at, 15.0, Color("ff9a4a"))
+		fx_layer.draw_circle(at, 9.0, Color("ffe7a8"))
+		fx_layer.draw_arc(at, 30.0, -PI / 2, -PI / 2 + TAU * state.ember_timer / 8.0, 32, Color(1, 0.85, 0.5, 0.85), 3.0)
+	if state.stun_time > 0:
+		var top = enemy_center() + Vector2(0, -enemy.height() * 0.55)
+		for i in range(3):
+			var a = ambient_time * 4.0 + i * TAU / 3
+			lib.draw_fx(fx_layer, "critical", 0.08, top + Vector2(cos(a) * 46, sin(a) * 12), 54.0, Color(1, 0.95, 0.6), 14.0)
 
-func draw_ellipse_pixels(center: Vector2, radius: Vector2, color: Color) -> void:
-	for y in range(-int(radius.y), int(radius.y), 3):
-		var width = radius.x * sqrt(maxf(0, 1 - pow(y / radius.y, 2)))
-		box(center.x - width, center.y + y, width * 2, 3, color)
+func _draw_overlay() -> void:
+	var font: Font = lib.heading_font
+	var body: Font = ThemeDB.fallback_font
+	var w = size.x
+	# Screen-space vignettes.
+	if hurt_vignette > 0 or (state.hp < state.max_hp() * 0.3 and not state.dead):
+		var low = 0.25 + 0.15 * sin(ambient_time * 5.0) if state.hp < state.max_hp() * 0.3 and not state.dead else 0.0
+		var a = maxf(hurt_vignette * 0.55, low)
+		_frame_glow(Color(0.85, 0.08, 0.05, a))
+	if flash > 0:
+		overlay.draw_rect(Rect2(Vector2.ZERO, size), Color(1, 0.93, 0.75, flash * 0.6))
+	# Enemy plate.
+	if state.spawn_delay <= 0 or not state.is_boss():
+		var head = stage_to_screen(enemy.position + Vector2(enemy.offset.x, -enemy.height() - 26 - (enemy.bob)))
+		var plate_w = clampf(w * 0.3, 210, 300)
+		var top_y = maxf(56.0, head.y - 54)
+		var cx = clampf(head.x, plate_w * 0.5 + 12, w - plate_w * 0.5 - 12)
+		var name: String = state.enemy_name()
+		var name_color = Color("ffd37a") if state.enemy_elite else (Color("ff9c7a") if state.is_boss() else Color("f1e9da"))
+		if state.is_boss():
+			_text_center(body, state.boss_title(), Vector2(cx, top_y - 22), 13, Color("e7b089"))
+		_text_center(font, name, Vector2(cx, top_y), 22, name_color, 5)
+		var bar = Rect2(cx - plate_w * 0.5, top_y + 10, plate_w, 12)
+		overlay.draw_rect(bar.grow(2), Color(0.02, 0.03, 0.05, 0.85))
+		var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
+		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.95, 0.85, 0.55))
+		var fill = Color("e0645a") if state.is_boss() else (Color("e8b450") if state.enemy_elite else Color("6fcf9f"))
+		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
+		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
+		_text_center(body, "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))], Vector2(cx, bar.end.y + 17), 13, Color("c3cbd3"), 3)
+		# Telegraph.
+		var feet = stage_to_screen(ENEMY_FEET)
+		var tele_w = plate_w * 0.8
+		var tele = Rect2(cx - tele_w * 0.5, minf(feet.y + 26, size.y - 46), tele_w, 7)
+		if state.charging:
+			var k = state.charge_progress()
+			var pulse = 0.6 + 0.4 * sin(ambient_time * 16.0)
+			tele = Rect2(w * 0.5 - w * 0.3, size.y * 0.16, w * 0.6, 12)
+			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
+			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
+			_text_center(font, "¡BRASA DEL REY!  Interrumpe con DESTELLO  [E]", Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
+		elif state.stun_time > 0:
+			_text_center(font, "ATURDIDO", Vector2(cx, tele.position.y + 18), 18, Color("ffe38a"), 4)
+		elif state.spawn_delay <= 0:
+			var warn = state.attack_timer / state.attack_interval()
+			overlay.draw_rect(tele.grow(2), Color(0.02, 0.03, 0.05, 0.8))
+			var col = Color("ff7a4a") if warn > 0.8 else Color("8e9cab")
+			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * warn, tele.size.y)), col)
+			var label = "Golpe en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
+			if state.next_is_heavy():
+				label = "Prepara su Brasa en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
+			_text_center(body, label, Vector2(cx, tele.end.y + 18), 14, Color("ffb08a") if warn > 0.8 else Color("aab6c1"), 3)
+	# Combo and fury near the bearer.
+	var hero_top = stage_to_screen(HERO_FEET + Vector2(0, -hero.height() - 18))
+	if state.combo >= 3 and not state.dead:
+		var k = state.combo_time / 1.5
+		var txt = "CADENA ×%d" % state.combo
+		_text_center(font, txt, hero_top + Vector2(0, -12), 20 + mini(state.combo, 20) / 2, Color("ffcf7b"), 5)
+		overlay.draw_rect(Rect2(hero_top + Vector2(-44, -4), Vector2(88 * k, 4)), Color("ffcf7b"))
+	if state.fury_time > 0:
+		_text_center(font, "FURIA %.0f s" % state.fury_time, hero_top + Vector2(0, -40), 18, Color("ff8a3d"), 4)
+	# Damage numbers.
+	for n in numbers:
+		var p = stage_to_screen(n.pos)
+		var a = clampf(n.life * 2.0, 0, 1)
+		_text_center(font, n.text, p, n.size, Color(n.color, a), 6, Color(0.05, 0.03, 0.02, a))
+	# First-steps hint.
+	if hint_alpha > 0 and state.total_kills < 3 and state.active():
+		var pulse = 0.65 + 0.35 * sin(ambient_time * 4.0)
+		_text_center(font, "HAZ CLIC PARA ATACAR  ·  ESPACIO", Vector2(w * 0.5, size.y - 28), 22, Color(1, 0.85, 0.55, hint_alpha * pulse), 5)
+	if state.ember_active:
+		var p = stage_to_screen(ember_stage_pos())
+		_text_center(body, "¡Ascua errante!", p + Vector2(0, -44), 14, Color(1, 0.88, 0.6, 0.9), 3)
+	# Banner.
+	if not banner.is_empty():
+		var t: float = banner.t
+		var a = clampf(t / 0.35, 0, 1) * clampf((banner.dur - t) / 0.6, 0, 1)
+		var y = size.y * 0.24
+		overlay.draw_rect(Rect2(0, y - 52, w, 92), Color(0.02, 0.02, 0.04, 0.55 * a))
+		overlay.draw_rect(Rect2(0, y - 52, w, 2), Color(banner.color, 0.6 * a))
+		overlay.draw_rect(Rect2(0, y + 38, w, 2), Color(banner.color, 0.6 * a))
+		_text_center(font, banner.title, Vector2(w * 0.5, y), 40, Color(banner.color, a), 7)
+		_text_center(body, banner.subtitle, Vector2(w * 0.5, y + 26), 16, Color(0.92, 0.9, 0.85, a), 3)
+
+func _frame_glow(color: Color) -> void:
+	var steps = 10
+	for i in range(steps):
+		var k = float(i) / steps
+		var c = Color(color, color.a * (1.0 - k) * 0.35)
+		var inset = k * 70.0
+		overlay.draw_rect(Rect2(inset, inset, size.x - inset * 2, size.y - inset * 2), c, false, 8.0)
+
+func _text_center(font: Font, text: String, pos: Vector2, font_size: int, color: Color, outline: int = 0, outline_color: Color = Color(0.03, 0.03, 0.05, 1)) -> void:
+	if font == lib.heading_font:
+		font_size = int(font_size * 1.22)
+	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var at = Vector2(pos.x - width * 0.5, pos.y)
+	if outline > 0:
+		overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, outline, Color(outline_color, outline_color.a * color.a))
+	overlay.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 func compact_number(value: float) -> String:
-	if value >= 1e12:
+	if value >= 1e15:
 		var exponent = floor(log(value) / log(10))
-		return "%.1fe%d" % [value / pow(10, exponent), int(exponent)]
+		return "%.2fe%d" % [value / pow(10, exponent), int(exponent)]
+	if value >= 1e12: return "%.1fT" % (value / 1e12)
 	if value >= 1e9: return "%.1fB" % (value / 1e9)
 	if value >= 1e6: return "%.1fM" % (value / 1e6)
 	if value >= 10000: return "%.1fk" % (value / 1000)
-	return str(int(value))
+	if value < 10 and not is_equal_approx(value, round(value)):
+		return "%.1f" % value
+	return str(int(round(value)))

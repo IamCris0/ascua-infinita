@@ -2,79 +2,112 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art original, compañeros automáticos y progresión permanente. Primera versión jugable **0.1.0**.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.2.0**.
 
 ![Partida de Ascua Infinita](docs/preview.png)
 
 ## Jugar
 
-En Windows, abre **Jugar.cmd**. El lanzador encuentra Godot en `PATH`, en `GODOT_BIN` o en la carpeta Descargas del usuario. Requiere una instalación de Godot 4; no es un ejecutable independiente.
+En Windows, abre **Jugar.cmd**. El lanzador encuentra Godot en `PATH`, en `GODOT_BIN` o en la carpeta Descargas del usuario e importa los recursos antes de abrir el juego. Requiere una instalación de Godot 4; no es un ejecutable independiente.
 
-También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con **Godot 4.7.2**, renderizador Compatibility (OpenGL). No necesita complementos ni paquetes externos. La ventana inicial es de 1280 × 800.
+También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con **Godot 4.7.2**, renderizador Compatibility (OpenGL). No necesita complementos. La ventana inicial es de 1280 × 800 y la interfaz se adapta a pantallas 16:10 y 16:9.
 
 | Control | Acción |
 |---|---|
 | Clic sobre el escenario / Espacio | Atacar |
-| E | Destello: 8 veces el daño del clic, más un aporte de los luceros |
-| 1 / 2 / 3 | Comprar filo / lucero / armadura |
-| Esc | Pausar o continuar |
-| Volver a la hoguera | Terminar la expedición y conservar las ascuas |
+| Clic sobre una ascua errante / F | Atraparla |
+| E | Destello (y, contra el Rey, interrumpir su Brasa) |
+| 1 · 2 · 3 · 4 | Comprar filo, lucero, armadura u ojo de brasa |
+| Q | Cambiar la cantidad de compra: ×1, ×10 o máximo |
+| 1 · 2 · 3 en el pacto | Elegir reliquia |
+| 1 – 6 / Enter en la hoguera | Comprar legado / renacer |
+| Esc | Menú de pausa |
+| F11 | Pantalla completa |
 
-## La expedición
+## Novedades de la versión 0.2.0
 
-- **Ataca y mejora:** el oro compra daño por clic, luceros automáticos y armadura que también cura.
-- **Construye una combinación:** cada cinco enemigos superados aparecen tres reliquias aleatorias, sin opciones repetidas. Siete reliquias acumulables modifican clics, críticos, automatización, vida, curación, oro o recarga.
-- **Derrota al jefe:** cada diez cámaras aparece el Rey sin Brasa. Sus recompensas son mayores y superar al jefe recupera vida.
-- **Explora tres ambientes:** Jardín de las Cenizas, Criptas del Eco y Forja del Eclipse alternan a medida que desciendes. La salud de los enemigos aumenta con la profundidad.
-- **Renace:** al morir o retirarte conservas todas las ascuas obtenidas. Compra tres tipos de mejoras permanentes y empieza otro viaje. El oro, la armadura, el filo, los luceros y las reliquias se reinician.
-- **Regresa cuando quieras:** cada lucero consigue 2 de oro por minuto de ausencia, hasta cuatro horas. No recibes daño ni avanzas cámaras mientras el juego está cerrado.
+**Arte de Gemini integrado.** Los once dibujos de `assets/source/gemini/` ya están en el juego: los tres escenarios como fondos de combate, el portador y los cuatro enemigos con animaciones de reposo, avance, ataque, daño y muerte, los siete iconos de reliquias, los efectos de tajo, crítico, magia y brasas, y de la referencia de interfaz el botón de piedra, el retrato del guardián y los objetos de inventario. Los enemigos cambian de color en cada ambiente.
 
-Las cadenas de clics añaden hasta un 30% de daño. Los críticos duplican el golpe. Los enemigos anuncian su próximo ataque con una barra y una cuenta regresiva; la pausa congela el combate. No hace falta pulsar a velocidades extremas: los luceros sostienen el daño automático.
+**Combate con más vida.** Cada golpe tiene tajo, destello blanco sobre el enemigo, chispas, números flotantes y sacudida. Los enemigos anuncian y ejecutan su ataque; el portador se resiente, se ilumina en rojo y el borde de la pantalla avisa cuando le queda poca vida. Los enemigos vencidos se desintegran y sueltan monedas y ascuas que vuelan hasta los contadores. Los luceros orbitan alrededor del portador y disparan en cada ataque automático.
+
+**Nuevas reglas.**
+- **El Rey sin Brasa** prepara cada tercer golpe una Brasa cargada que hace el triple de daño. Si usas Destello mientras carga, lo interrumpes, lo aturdes y recibe un 50% más de daño.
+- **Enemigos élite** a partir de la cámara 6: más vida y daño, mucho más oro y una ascua extra.
+- **Ascuas errantes** cruzan el escenario de vez en cuando. Atrápalas para conseguir oro, furia (doble daño de clic), vida o un Destello inmediato.
+- **Ambientes con reglas propias**: en las Criptas del Eco los enemigos se curan si dejas de golpearlos; en la Forja del Eclipse ganas más oro pero te golpean más fuerte.
+- **Cuarta mejora de forja** (Ojo de brasa: crítico y daño crítico) y compra ×10 o al máximo.
+- **Seis mejoras permanentes** en la hoguera; tres nuevas: Fortuna heredada, Chispa temprana y Tormenta contenida. Las ascuas por enemigo y por jefe aumentan con la profundidad.
+- Equilibrio revisado con un bot de simulación (`tools/simulate.gd`).
+
+**Menús e interfaz nuevos.** Pantalla de título animada, menú de pausa, opciones (volumen general, música y efectos, sacudidas, números de daño, reducir movimiento, pantalla completa), guía «Cómo jugar», pacto de reliquias con tarjetas e iconos, resumen al final de cada expedición y hoguera con el guardián y las seis mejoras. Paneles de piedra con correas remachadas inspirados en la referencia de Gemini, barra de progreso de cámaras con el jefe marcado, reliquias con descripción al pasar el ratón, crónica del viaje y tipografía pixelada Jersey 10.
+
+**Sonido.** 27 efectos nuevos (golpes con variaciones, críticos, Destello, muertes distintas por enemigo, llegada y carga del Rey, interrupción, ascuas, compras, reliquias, interfaz) y seis piezas de música en bucle: menú, un tema por ambiente, jefe y hoguera, con transiciones suaves. Todo está sintetizado por `tools/audio/synth.py`.
 
 ## Guardado
 
-Guardado automático cada ocho segundos, al comprar, elegir reliquia, descansar y cerrar. Se conserva también una copia de respaldo para recuperar un archivo corrupto. Los datos se almacenan en `user://ascua_save.json`, normalmente `%APPDATA%\Godot\app_userdata\Ascua Infinita\` en Windows, fuera del repositorio. Se conserva el estado de la expedición, las ofertas pendientes, el legado y las preferencias de sonido y movimiento.
+Guardado automático cada ocho segundos y al comprar, elegir reliquia, pausar y cerrar, con copia de respaldo ante un archivo dañado. Los datos se guardan en `user://ascua_save.json`, normalmente `%APPDATA%\Godot\app_userdata\Ascua Infinita\` en Windows. Las partidas de la versión 0.1.0 se convierten solas: conservan cámara, oro, reliquias, legado y estadísticas, y el sonido silenciado pasa a volumen 0.
 
-## Arte y sonido originales
+Mientras el juego está cerrado, cada lucero reúne 2 de oro por minuto, hasta cuatro horas. No recibes daño ni avanzas cámaras.
 
-Cinco hojas de sprites SVG de **16 fotogramas** cada una: portador, gelatina, lucero, centinela y jefe. Incluyen reposo, movimiento, ataque, impacto y disolución. Los dibujos se definen píxel por píxel y se rasterizan con filtrado nearest. Escenario, partículas, antorchas, órbitas y efectos de golpe están dibujados dentro de Godot. Seis sonidos WAV sintetizados acompañan golpes, críticos, recompensas, reliquias, derrota y ambiente.
-
-Los assets no provienen de packs de terceros. El generador fuente reproducible está en `tools/create_assets.gd`; se incluyen los archivos generados para abrir el proyecto directamente. Consulta [el inventario](assets/README.md).
+El guardado conserva también la carga del jefe, los aturdimientos, la furia y las ascuas visibles con sus tiempos restantes. Tormenta contenida tiene un máximo de 10 niveles: al alcanzarlo, su compra queda desactivada.
 
 ## Estructura
 
 ```text
-scenes/main.tscn          Escena de entrada
-scripts/run_state.gd     Combate, economía, legado y guardado
-scripts/main.gd          Interfaz, controles, audio y ventanas
-scripts/arena.gd         Escenario pixelado y animaciones
-assets/                  Sprites SVG, icono y efectos WAV
-tools/create_assets.gd   Generador reproducible de assets
-tests/                   Pruebas de progresión e integración
-docs/                    Captura y decisiones de diseño
+scenes/main.tscn            Escena de entrada
+scripts/run_state.gd        Reglas: combate, economía, jefe, élites, ascuas, legado, guardado
+scripts/main.gd             Pantallas, HUD, menús, controles y guardado
+scripts/arena.gd            Escenario, animaciones, efectos y HUD dentro del combate
+scripts/actor.gd            Personaje animado con color por ambiente y destello de golpe
+scripts/art_library.gd      Carga de atlas, iconos y fuentes
+scripts/audio_director.gd   Música con transiciones y efectos con variación de tono
+scripts/ui_kit.gd           Paleta, tema y estilos
+scripts/stone_panel.gd      Paneles de piedra con correas
+scripts/title_art.gd        Fondo animado de la pantalla de título
+scripts/fly_layer.gd        Monedas y ascuas que vuelan al HUD
+assets/art/                 Atlas y texturas preparados a partir de Gemini (+ atlas.json)
+assets/gemini/              Fondos y hoja del portador con transparencia
+assets/source/gemini/       Originales de Gemini (no se importan)
+assets/audio/sfx|music/     Efectos WAV y música Ogg Vorbis
+assets/fonts/               Jersey 10 (licencia OFL)
+assets/shaders/actor.gdshader
+tools/sprites/              Preparación de sprites (Python)
+tools/audio/synth.py        Síntesis de efectos y música (Python)
+tools/simulate.gd           Bot de equilibrio
+tests/                      Pruebas de reglas, de interfaz y de resistencia
+legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se usan)
 ```
 
 ## Comprobar el proyecto
-
-Con `godot` disponible en la terminal:
 
 ```powershell
 godot --headless --path . --editor --import --quit
 godot --headless --path . --script tests/test_progression.gd
 godot --headless --path . --script tests/test_ui.gd -- --qa
+godot --headless --path . --script tests/test_assets.gd
+godot --headless --path . --script tests/test_audio.gd
+godot --path . --script tests/soak.gd -- --qa
+godot --headless --path . --script tools/simulate.gd
 ```
 
-La prueba de progresión usa un archivo de guardado independiente y lo elimina al terminar. La prueba de interfaz utiliza `--qa` para no tocar la partida real. La captura reproducible se obtiene con `godot --path . -- --capture` y se guarda en `docs/preview.png`; tampoco modifica la partida real.
+Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`).
 
-Para regenerar los assets:
+Para una futura exportación, incluye `assets/art/atlas.json` en el filtro de archivos no reconocidos como recursos. Esta versión se ha validado desde Godot; todavía no incluye un ejecutable independiente verificado.
+
+## Regenerar el arte y el sonido
+
+Requiere Python 3 con `numpy`, `scipy` y `Pillow`, y `ffmpeg` para la música.
 
 ```powershell
-godot --headless --path . --script tools/create_assets.gd
+python tools/sprites/build_art.py
+python tools/audio/synth.py
 godot --headless --path . --editor --import --quit
 ```
 
-## Alcance de esta versión
+`build_art.py` quita el tablero gris de las hojas de Gemini, corta cada fotograma, calcula el punto de apoyo de los pies, orienta a los enemigos hacia la izquierda y escribe los atlas con `assets/art/atlas.json`. El portador usa la hoja con transparencia `assets/gemini/hero.png`.
 
-El ciclo de jugar, caer, mejorar y renacer está implementado. El equilibrio a largo plazo sigue siendo de prototipo. Los tres ambientes comparten arquitectura, el jefe repite su patrón de ataque y todavía no hay rutas alternativas, eventos narrativos, música completa ni exportaciones independientes para distribución. El proyecto está preparado para ampliar esos sistemas sin mezclar las reglas del juego con la interfaz.
+## Créditos y licencias
+
+Imágenes generadas en Gemini por el autor del proyecto; la hoja transparente del portador se preparó con una edición de ImageGen de OpenAI. Música, efectos, shaders y código originales del proyecto. Tipografía Jersey 10 de The Soft Type Project, con licencia SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
 
 Proyecto privado. No se concede una licencia de distribución pública por defecto.

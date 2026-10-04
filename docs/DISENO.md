@@ -4,27 +4,30 @@
 
 **Ascua Infinita** sitúa al jugador en las ruinas de un mundo consumido por un eclipse. La última brasa vive en una armadura diminuta. La sensación principal es convertir una acción sencilla, un clic, en una expedición que desarrolla una identidad mediante reliquias y después deja una herencia permanente.
 
-El proyecto activo se ubica en la carpeta renombrada `AscuaInfinita`, anteriormente `PixelArt`. FragmentosDeLuz y SenalPerdida quedan fuera del alcance de este trabajo.
-
 ## Tres escalas de progreso
 
-1. **Segundos:** atacar, encadenar golpes y activar Destello mientras se anticipa el próximo golpe enemigo.
-2. **Minutos:** comprar daño, automatización y defensa; seleccionar una reliquia de tres opciones; superar jefes.
-3. **Expediciones:** conservar ascuas, mejorar tres atributos permanentes y regresar con una base más fuerte.
+1. **Segundos:** atacar, encadenar golpes, atrapar ascuas errantes y guardar el Destello para interrumpir al Rey.
+2. **Minutos:** comprar daño, automatización, defensa y críticos; elegir una reliquia cada cinco cámaras; superar al jefe de cada diez.
+3. **Expediciones:** conservar ascuas, mejorar seis atributos permanentes y regresar con una base más fuerte.
 
-La retirada voluntaria conserva las mismas ascuas que la derrota. Así se puede cerrar un viaje sin esperar a morir. El guardado permite continuar una expedición; la pausa se activa al perder el foco de la ventana.
+La retirada voluntaria conserva las mismas ascuas que la derrota.
+
+## Decisiones de la versión 0.2.0
+
+- **El jefe pide atención.** Cada tercer golpe del Rey es una Brasa cargada durante tres segundos con un aviso grande. Guardar el Destello para ese momento es la decisión táctica principal del combate.
+- **Ritmo entre enemigos.** Cada enemigo tarda 0,35 s en llegar y el jefe 1,6 s, con su nombre en pantalla. Da tiempo a ver la muerte del anterior y marca el avance.
+- **Atención intermitente.** Las ascuas errantes aparecen cada 35–70 s y duran 8 s; premian mirar la pantalla sin castigar a quien juega en segundo plano.
+- **Ambientes con identidad mecánica.** Las Criptas castigan dejar de golpear; la Forja intercambia riesgo por oro.
+- **Equilibrio.** Con el bot de `tools/simulate.gd`, una primera expedición a 3 clics por segundo llega a la cámara 20 en unos dos minutos de simulación; tras doce expediciones, a la 33–40. El Rey de la Forja (cámara 30) actúa como primer muro.
 
 ## Dirección visual
 
-Fondo azul carbón, paneles discretos, acentos ámbar y menta. Portador pequeño, enemigo legible y amplio espacio entre ambos para efectos. Escenario con arcos rotos, luna eclipsada, musgo, antorchas y plataforma ritual. Los sprites comparten escala y paleta. La interfaz está en español y mantiene visibles vida, daño, oro y ascuas.
+Pixel art de Gemini a resolución alta, filtrado lineal al escalar. Paleta de pizarra, hierro y cobre de la referencia de interfaz, con acentos verde menta (la brasa del portador), violeta rúnico y ámbar. Paneles de piedra con correas remachadas dibujados en código para que escalen sin deformarse. Tipografía Jersey 10 para títulos y cifras; la fuente integrada de Godot para textos largos.
 
 ## Siguientes ampliaciones propuestas
 
 - Rutas con decisiones entre combate, descanso y evento.
-- Jefes con patrones diferenciados e interacciones con reliquias.
-- Nuevas siluetas y arquitectura propia para cada ambiente.
-- Más sinergias entre luceros, críticos y cadenas.
-- Música y opciones de volumen independientes.
-- Exportación de Windows, evaluación del ritmo y pruebas largas de equilibrio.
-
-Estas ampliaciones no forman parte de la versión 0.1.0.
+- Un jefe distinto por ambiente.
+- Sinergias entre reliquias (por ejemplo, críticos que alimentan a los luceros).
+- Logros y estadísticas por expedición.
+- Exportación de Windows y pruebas largas de equilibrio con jugadores.
