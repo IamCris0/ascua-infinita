@@ -2,7 +2,9 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.2.0**.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.3.0-dev**: primer bloque de Caminos del Eclipse.
+
+Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de los enemigos, jefe, reliquias y exportación aún pendientes.
 
 ![Partida de Ascua Infinita](docs/preview.png)
 
@@ -14,12 +16,14 @@ También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con *
 
 | Control | Acción |
 |---|---|
-| Clic sobre el escenario / Espacio | Atacar |
+| Clic sobre el escenario / mantener Espacio | Atacar; Espacio repite al mismo ritmo máximo |
 | Clic sobre una ascua errante / F | Atraparla |
 | E | Destello (y, contra el Rey, interrumpir su Brasa) |
 | 1 · 2 · 3 · 4 | Comprar filo, lucero, armadura u ojo de brasa |
 | Q | Cambiar la cantidad de compra: ×1, ×10 o máximo |
 | 1 · 2 · 3 en el pacto | Elegir reliquia |
+| 1 · 2 · 3 en rutas | Descansar, desafiar al élite o visitar el evento |
+| 1 · 2 en eventos | Aceptar o marcharse sin pagar |
 | 1 – 6 / Enter en la hoguera | Comprar legado / renacer |
 | Esc | Menú de pausa |
 | F11 | Pantalla completa |
@@ -86,8 +90,10 @@ godot --headless --path . --script tests/test_progression.gd
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_assets.gd
 godot --headless --path . --script tests/test_audio.gd
+godot --headless --path . --script tests/test_journey.gd
 godot --path . --script tests/soak.gd -- --qa
 godot --headless --path . --script tools/simulate.gd
+godot --headless --path . --script tools/simulate.gd -- --sample
 ```
 
 Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`).

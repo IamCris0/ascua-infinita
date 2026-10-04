@@ -9,7 +9,7 @@ const StonePanel = preload("res://scripts/stone_panel.gd")
 const AudioDirector = preload("res://scripts/audio_director.gd")
 const FlyLayer = preload("res://scripts/fly_layer.gd")
 const TitleArt = preload("res://scripts/title_art.gd")
-const VERSION = "0.2.0"
+const VERSION = "0.3.0-dev"
 const BUY_MODES = [1, 10, 0]
 const BUY_LABELS = ["×1", "×10", "MÁX"]
 const STAT_KEYS = ["click", "auto", "crit", "burst", "reward"]
@@ -170,6 +170,8 @@ func _process(delta: float) -> void:
 	time += delta
 	if screen == "game":
 		state.tick(minf(delta, 0.1))
+		if modal_type.is_empty() and Input.is_physical_key_pressed(KEY_SPACE):
+			state.click()
 		refresh()
 		auto_save += delta
 		if auto_save >= 8.0:
@@ -781,6 +783,8 @@ func refresh() -> void:
 			show_camp()
 		elif not state.offers.is_empty() and modal_type != "relic" and not state.dead:
 			show_relics()
+		elif state.offers.is_empty() and state.journey_phase != "" and not state.dead and modal_type != state.journey_phase:
+			show_journey()
 	if state.room != last_room:
 		last_room = state.room
 
@@ -927,10 +931,10 @@ func show_howto(return_to: String) -> void:
 	var welcome = return_to == "welcome"
 	var v = modal("howto", "ROGUELIKE CLICKER  ·  " + ("PRIMERA EXPEDICIÓN" if welcome else "CÓMO JUGAR"), "Hasta la última ascua.", "El eclipse devoró el mundo. Tú llevas la chispa que queda.", 780)
 	var tips = [
-		[lib.fx_icon("slash", 2, 0.12), "Haz clic en el escenario o pulsa ESPACIO para atacar. Encadenar golpes suma hasta un 30% de daño."],
-		[lib.upgrade_icon(1), "Gasta el oro en la forja: filo, luceros que atacan solos, armadura y críticos. Usa Q para comprar ×10 o al máximo."],
+		[lib.fx_icon("slash", 2, 0.12), "Haz clic o mantén ESPACIO para atacar sin pulsar repetidamente. Ritmo máximo: un golpe cada 0,3 s. Encadenarlos suma hasta un 30% de daño."],
+		[lib.upgrade_icon(1), "Empiezas con un lucero que ataca solo. Compra más en la forja; los clics aceleran el combate. Usa Q para comprar ×10 o al máximo."],
 		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Contra el Rey sin Brasa, úsalo mientras carga su ataque para interrumpirlo."],
-		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia. Se acumulan y cambian tu forma de jugar."],
+		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y una ruta: descansar, desafiar a un élite o visitar un evento. El combate espera tu decisión."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]
 	]
@@ -1060,6 +1064,58 @@ func show_relics() -> void:
 func choose_relic(index: int) -> void:
 	if state.choose_relic(index):
 		audio.play("relic")
+		close_modal()
+		persist()
+
+func show_journey() -> void:
+	var route = state.journey_phase == "route"
+	var v = modal(state.journey_phase, "CAMINOS DEL ECLIPSE  ·  CÁMARA %d" % state.room,
+		"Elige tu camino" if route else state.encounter_name(),
+		"El combate está detenido. Puedes decidir con calma." , 880)
+	if route:
+		var choices = [
+			["SENDERO TRANQUILO  [1]", "Recuperas hasta un 20% de vida. El siguiente enemigo no será élite.", lib.relics.heart],
+			["DESAFÍO ÉLITE  [2]", "Siguiente enemigo: ×2,2 vida y ×1,3 daño. Recompensa: ×2,5 oro y una ascua extra.", lib.relics.fang],
+			["VISITAR: " + state.encounter_name().to_upper() + "  [3]", "Un encuentro opcional. Verás el trato antes de aceptarlo; puedes marcharte gratis.", lib.ui.keeper]]
+		for i in range(choices.size()):
+			var row = HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			v.add_child(row)
+			icon_slot(row, choices[i][2], 62)
+			var col = VBoxContainer.new()
+			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(col)
+			button(col, choices[i][0], func(): choose_journey(i), 44, 17)
+			wrap_label(col, choices[i][1], 15, Kit.MUTED)
+	else:
+		var description = "Recupera hasta un 45% de tu vida máxima, sin coste."
+		var portrait = lib.relics.heart
+		if state.encounter_kind == "merchant":
+			description = "Un lucero adicional por %d de oro (20%% menos que en la forja). Tienes %d de oro." % [state.encounter_cost(), int(state.gold)]
+			portrait = lib.ui.keeper
+		elif state.encounter_kind == "altar":
+			description = "Entrega %d de vida actual para ganar +20%% al daño de clics y luceros durante esta expedición. Los pactos se suman. Debes sobrevivir al pago." % state.encounter_cost()
+			portrait = lib.relics.ash
+		icon(v, portrait, 96).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		wrap_label(v, description, 18, Kit.TEXT)
+		label(v, "Vida: %d / %d   ·   Pactos: %d" % [int(state.hp), int(state.max_hp()), state.altar_pacts], 16, Kit.TEAL)
+		button(v, "ACEPTAR  [1]", func(): resolve_journey(true), 52).disabled = not state.can_accept_encounter()
+		button(v, "SEGUIR SIN ACEPTAR  [2]", func(): resolve_journey(false), 48)
+	separator(v)
+	button(v, "GUARDAR Y VOLVER AL MENÚ", func():
+		persist()
+		show_title()
+	, 42, 15)
+
+func choose_journey(index: int) -> void:
+	if state.choose_route(index):
+		audio.play("ui_click")
+		close_modal()
+		persist()
+
+func resolve_journey(accept: bool) -> void:
+	if state.resolve_encounter(accept):
+		audio.play("relic" if accept else "ui_close")
 		close_modal()
 		persist()
 
@@ -1207,6 +1263,12 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		if i < state.offers.size():
 			choose_relic(state.offers[i])
 		return
+	if modal_type == "route" and key >= KEY_1 and key <= KEY_3:
+		choose_journey(key - KEY_1)
+		return
+	if modal_type == "event" and key in [KEY_1, KEY_2]:
+		resolve_journey(key == KEY_1)
+		return
 	if modal_type == "camp":
 		if key >= KEY_1 and key <= KEY_6:
 			buy_legacy(key - KEY_1)
@@ -1251,6 +1313,11 @@ func capture() -> void:
 		start_game(false)
 		refresh()
 		match shot:
+			"route", "event":
+				state.offers.clear()
+				state.journey_phase = shot
+				state.encounter_kind = "merchant"
+				show_journey()
 			"relic": show_relics()
 			"camp":
 				state.finish_run()
@@ -1279,6 +1346,9 @@ func capture() -> void:
 			out = a.substr(6)
 	get_viewport().get_texture().get_image().save_png(out)
 	print("CAPTURE_OK " + out)
+	set_process(false)
+	audio.queue_free()
+	await get_tree().create_timer(0.15).timeout
 	get_tree().quit()
 
 func demo_state(shot: String) -> void:
@@ -1287,7 +1357,7 @@ func demo_state(shot: String) -> void:
 	state.wisps = 3
 	state.armor = 2
 	state.focus = 1
-	state.room = {"boss": 10, "crypt": 14, "forge": 24}.get(shot, 8)
+	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6}.get(shot, 8)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--room="):
 			state.room = int(a.substr(7))

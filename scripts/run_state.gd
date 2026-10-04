@@ -15,7 +15,7 @@ signal ember_collected(kind: String, amount: float)
 signal relic_offered
 signal purchased(kind: int, count: int)
 
-const SAVE_VERSION = 2
+const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
 const RELICS = [
 	{"id": "fang", "name": "Colmillo de rubí", "tag": "OFENSIVA", "description": "+30% al daño de tus clics.", "color": "f77878"},
@@ -29,7 +29,7 @@ const RELICS = [
 const RELIC_IDS = ["fang", "clock", "eye", "heart", "coin", "ash", "storm"]
 const UPGRADES = [
 	{"name": "Filo de ascua", "description": "+3,5 daño por clic", "base": 15, "growth": 1.52},
-	{"name": "Lucero guardián", "description": "Un lucero ataca solo: +2,5 daño / s", "base": 25, "growth": 1.55},
+	{"name": "Lucero guardián", "description": "Un lucero ataca solo: +4 daño / s", "base": 25, "growth": 1.55},
 	{"name": "Piel de obsidiana", "description": "+15 vida máxima, cura 30 y bloquea 2 de daño", "base": 30, "growth": 1.58},
 	{"name": "Ojo de brasa", "description": "+3% crítico y +10% daño crítico", "base": 60, "growth": 1.7}
 ]
@@ -58,6 +58,7 @@ const SPAWN_DELAY = 0.35
 const BOSS_INTRO = 1.6
 const CHARGE_TIME = 3.0
 const STORM_LEGACY_MAX = 10
+const CLICK_INTERVAL = 0.3
 
 var rng = RandomNumberGenerator.new()
 # Expedition
@@ -90,6 +91,9 @@ var armor: int = 0
 var focus: int = 0
 var relics: Array = []
 var offers: Array = []
+var journey_phase: String = ""
+var encounter_kind: String = ""
+var altar_pacts: int = 0
 var run_essence: int = 0
 var run_kills: int = 0
 var run_gold: float = 0
@@ -132,14 +136,14 @@ func max_hp() -> float:
 	return 120.0 + legacy_level(1) * 20 + count_relic("heart") * 35 + armor * 15
 
 func power_multiplier() -> float:
-	return 1.0 + legacy_level(0) * 0.08
+	return (1.0 + legacy_level(0) * 0.08) * (1.0 + altar_pacts * 0.2)
 
 func click_damage() -> float:
 	var base = (5.0 + blade * 3.5 + legacy_level(0) * 2) * (1.0 + count_relic("fang") * 0.3) * power_multiplier()
 	return base * (2.0 if fury_time > 0 else 1.0)
 
 func wisp_damage() -> float:
-	return (2.5 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier()
+	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier()
 
 func auto_damage() -> float:
 	return wisps * wisp_damage()
@@ -225,7 +229,7 @@ func legacy_price(kind: int) -> int:
 	return LEGACY[kind].base + legacy_level(kind) * LEGACY[kind].step
 
 func active() -> bool:
-	return not dead and not paused and offers.is_empty()
+	return not dead and not paused and offers.is_empty() and journey_phase.is_empty()
 
 func can_strike() -> bool:
 	return active() and spawn_delay <= 0
@@ -343,7 +347,7 @@ func collect_ember() -> String:
 func click() -> bool:
 	if not can_strike() or click_cooldown > 0:
 		return false
-	click_cooldown = 0.075
+	click_cooldown = CLICK_INTERVAL
 	combo = mini(20, combo + 1)
 	combo_time = 1.5
 	var critical = rng.randf() < critical_chance()
@@ -372,8 +376,7 @@ func burst() -> bool:
 func damage_enemy(amount: float, critical: bool = false, automatic: bool = false) -> void:
 	if not active():
 		return
-	if not automatic:
-		idle_time = 0
+	idle_time = 0
 	enemy_hp = maxf(0, enemy_hp - amount)
 	struck.emit(amount, critical, automatic)
 	if enemy_hp <= 0:
@@ -406,6 +409,8 @@ func defeat_enemy() -> void:
 	best = maxi(best, room)
 	spawn_enemy()
 	if grant_relic:
+		journey_phase = "route"
+		encounter_kind = ["shrine", "merchant", "altar"][rng.randi_range(0, 2)]
 		var pool: Array = range(RELICS.size())
 		offers.clear()
 		for i in range(3):
@@ -440,6 +445,58 @@ func choose_relic(index: int) -> bool:
 	changed.emit()
 	return true
 
+# Routes are resolved only after the relic choice. Both decisions suspend combat.
+func choose_route(index: int) -> bool:
+	if journey_phase != "route" or not offers.is_empty() or dead or paused or index < 0 or index > 2:
+		return false
+	journey_phase = "event" if index == 2 else ""
+	enemy_elite = index == 1
+	spawn_enemy(false)
+	if index == 0:
+		hp = minf(max_hp(), hp + max_hp() * 0.2)
+		event.emit("Sendero tranquilo · recuperas hasta un 20% de vida. Siguiente rival sin élite.")
+	elif index == 1:
+		event.emit("Desafío élite · más peligro a cambio de oro y ascuas.")
+	if index != 2:
+		encounter_kind = ""
+	changed.emit()
+	return true
+
+func encounter_name() -> String:
+	return {"shrine": "Santuario de la brasa", "merchant": "Mercader de cenizas", "altar": "Altar del eclipse"}.get(encounter_kind, "Encuentro")
+
+func encounter_cost() -> int:
+	return maxi(1, int(price(1) * 0.8)) if encounter_kind == "merchant" else int(ceil(max_hp() * 0.25))
+
+func can_accept_encounter() -> bool:
+	if journey_phase != "event" or dead or paused:
+		return false
+	match encounter_kind:
+		"shrine": return true
+		"merchant": return gold >= encounter_cost()
+		"altar": return hp > encounter_cost()
+	return false
+
+func resolve_encounter(accept: bool) -> bool:
+	if journey_phase != "event" or dead or paused or (accept and not can_accept_encounter()):
+		return false
+	if accept:
+		match encounter_kind:
+			"shrine": hp = minf(max_hp(), hp + max_hp() * 0.45)
+			"merchant":
+				gold -= encounter_cost()
+				wisps += 1
+			"altar":
+				hp -= encounter_cost()
+				altar_pacts += 1
+		event.emit(encounter_name() + " · trato completado")
+	else:
+		event.emit(encounter_name() + " · sigues tu camino")
+	journey_phase = ""
+	encounter_kind = ""
+	changed.emit()
+	return true
+
 func buy(kind: int, count: int = 1) -> int:
 	if kind < 0 or kind >= UPGRADES.size() or not active() or count < 1:
 		return 0
@@ -469,6 +526,8 @@ func finish_run() -> void:
 	charging = false
 	ember_active = false
 	offers.clear()
+	journey_phase = ""
+	encounter_kind = ""
 	runs += 1
 	fallen.emit()
 	changed.emit()
@@ -485,11 +544,14 @@ func restart() -> void:
 	room = 1
 	gold = legacy_level(4) * 30.0
 	blade = 0
-	wisps = 0
+	wisps = 1
 	armor = 0
 	focus = 0
 	relics.clear()
 	offers.clear()
+	journey_phase = ""
+	encounter_kind = ""
+	altar_pacts = 0
 	run_essence = 0
 	run_kills = 0
 	run_gold = 0
@@ -515,7 +577,7 @@ func restart() -> void:
 const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor", "focus", "essence", "run_essence",
 	"best", "runs", "total_kills", "total_bosses", "total_elites", "total_embers", "total_gold", "saved_at",
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
-	"master_volume", "music_volume", "sfx_volume", "ember_cooldown"]
+	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -523,7 +585,7 @@ const COMBAT_DEFAULTS = {"auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"auto_timer": 1.0, "click_cooldown": 0.075, "combo": 20,
+const COMBAT_LIMITS = {"auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 
@@ -538,6 +600,8 @@ func snapshot() -> Dictionary:
 	for key in COMBAT_DEFAULTS:
 		data[key] = get(key)
 	data.ember_pos = [ember_pos.x, ember_pos.y]
+	data.journey_phase = journey_phase
+	data.encounter_kind = encounter_kind
 	return data
 
 func save_game(path: String = SAVE_PATH) -> bool:
@@ -555,6 +619,10 @@ func save_game(path: String = SAVE_PATH) -> bool:
 	return error == OK
 
 static func _migrate(data: Dictionary) -> Dictionary:
+	if data.get("version") in [1, 2]:
+		data.journey_phase = ""
+		data.encounter_kind = ""
+		data.altar_pacts = 0
 	# Version 1 had three legacy upgrades, a single mute flag and no run statistics.
 	if data.get("version") == 1:
 		var muted = data.get("muted", false)
@@ -589,10 +657,14 @@ func _read_save(path: String) -> Variant:
 	if parser.parse(f.get_as_text()) != OK:
 		return null
 	var data = parser.data
-	if not data is Dictionary or not data.get("version") in [1, 2, 1.0, 2.0]:
+	if not data is Dictionary or not data.get("version") in [1, 2, 3, 1.0, 2.0, 3.0]:
 		return null
 	data.version = int(data.version)
 	data = _migrate(data)
+	if not data.get("journey_phase") in ["", "route", "event"] or not data.get("encounter_kind") in ["", "shrine", "merchant", "altar"]:
+		return null
+	if data.journey_phase.is_empty() != data.encounter_kind.is_empty():
+		return null
 	for key in NUMBER_KEYS:
 		if not data.has(key) or not (data[key] is float or data[key] is int) or not is_finite(float(data[key])) or float(data[key]) < 0:
 			return null
@@ -619,6 +691,12 @@ func _read_save(path: String) -> Variant:
 	for key in ["legacy", "relics", "offers"]:
 		if not data.get(key) is Array:
 			return null
+	if data.altar_pacts != floor(data.altar_pacts) or data.altar_pacts > 10000:
+		return null
+	if data.journey_phase == "event" and not data.offers.is_empty():
+		return null
+	if not data.journey_phase.is_empty() and (data.dead or int(data.room) <= 1 or (int(data.room) - 1) % 5 != 0):
+		return null
 	if data.legacy.size() != LEGACY.size() or data.room < 1 or data.room > 10000:
 		return null
 	for level in data.legacy:
@@ -653,6 +731,8 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	legacy = data.legacy.map(func(v): return int(v))
 	relics = data.relics.duplicate()
 	offers = data.offers.map(func(v): return int(v))
+	journey_phase = data.journey_phase
+	encounter_kind = data.encounter_kind
 	var boss_count = boss_attacks
 	spawn_enemy(false)
 	boss_attacks = boss_count

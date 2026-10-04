@@ -5,7 +5,7 @@ const State = preload("res://scripts/run_state.gd")
 
 func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary:
 	var dt = 0.05
-	var click_every = 1.0 / cps
+	var click_every = 1.0 / cps if cps > 0 else INF
 	var click_acc = 0.0
 	var t = 0.0
 	while not s.dead and t < max_minutes * 60:
@@ -14,6 +14,8 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary
 		click_acc += dt
 		if not s.offers.is_empty():
 			s.choose_relic(s.offers[s.rng.randi_range(0, s.offers.size() - 1)])
+		if s.journey_phase == "route":
+			s.choose_route(0)
 		if s.ember_active and s.rng.randf() < 0.02:
 			s.collect_ember()
 		while click_acc >= click_every:
@@ -34,7 +36,21 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary
 	return {"room": s.room, "minutes": t / 60.0, "essence": s.run_essence}
 
 func _initialize() -> void:
-	for cps in [3.0, 5.0]:
+	if "--sample" in OS.get_cmdline_user_args():
+		for cps in [0.0, 1.0, 3.0, 5.0]:
+			var rooms: Array = []
+			var minutes = 0.0
+			for seed_value in [7, 19, 42, 73, 101]:
+				var sample = State.new()
+				sample.rng.seed = seed_value
+				sample.restart()
+				var result = play(sample, cps, "balanced", 40)
+				rooms.append(result.room)
+				minutes += result.minutes
+			print("SAMPLE cps %.0f: rooms %s, mean minutes %.2f" % [cps, rooms, minutes / 5])
+		quit()
+		return
+	for cps in [0.0, 1.0, 3.0, 5.0]:
 		var s = State.new()
 		s.rng.seed = 42
 		var line = "cps %.0f:" % cps
@@ -49,7 +65,7 @@ func _initialize() -> void:
 				bought = false
 				var best_k = -1
 				for k in range(s.LEGACY.size()):
-					if s.essence >= s.legacy_price(k) and (best_k < 0 or s.legacy_price(k) < s.legacy_price(best_k)):
+					if not s.legacy_maxed(k) and s.essence >= s.legacy_price(k) and (best_k < 0 or s.legacy_price(k) < s.legacy_price(best_k)):
 						best_k = k
 				if best_k >= 0:
 					bought = s.buy_legacy(best_k)

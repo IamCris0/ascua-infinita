@@ -23,6 +23,10 @@ func run() -> void:
 			get_root().get_viewport().get_texture().get_image().save_png("user://soak_%04d.png" % frames)
 		if game.modal_type == "relic":
 			game.choose_relic(s.offers[randi() % s.offers.size()])
+		elif game.modal_type == "route":
+			game.choose_journey(s.run_kills % 3)
+		elif game.modal_type == "event":
+			game.resolve_journey(s.can_accept_encounter())
 		elif game.modal_type == "summary":
 			game.show_camp()
 		elif game.modal_type == "camp":

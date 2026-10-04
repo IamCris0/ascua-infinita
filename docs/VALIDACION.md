@@ -1,4 +1,22 @@
-# Validación de la versión 0.2.0
+# Validación del proyecto
+
+## Primer bloque 0.3.0-dev — 4 de octubre de 2026
+
+- **71 comprobaciones de progresión, 33 de interfaz y 36 de rutas/eventos**, cero fallos. Incluyen mantener Espacio, pausa, compra del mercader, imposibilidad de pagar dos veces, altar no letal, curación limitada, compañero inicial, guardado en una decisión y migración de versión 2.
+- Importación en Godot 4.7.2 completada sin errores. Rutas, mercader y guía revisados a 1100 × 700. La captura de rutas final también cerró sin avisos de audio; se permite que el hilo de audio libere sus recursos antes de cerrar la captura.
+- Prueba gráfica de 70 segundos a velocidad ×3: 10.073 fotogramas, mejor cámara 25, una expedición terminada y 28 bajas. Sin errores ni avisos. El bot elige rutas y resuelve los eventos.
+- Veinte primeras expediciones simuladas (cinco semillas por ritmo), con compras, Destello y ruta segura:
+
+| Intentos de clic por segundo | Cámaras alcanzadas | Duración media |
+|---|---|---|
+| 0 | 10, 10, 10, 10, 10 | 2,27 min |
+| 1 | 19, 18, 20, 18, 20 | 3,20 min |
+| 3 | 20, 20, 20, 23, 20 | 2,55 min |
+| 5 | 20, 27, 20, 20, 23 | 2,44 min |
+
+Son intentos: la regla limita los ataques aceptados a uno cada 0,3 s. Cero clics sigue incluyendo habilidades y compras; no representa un juego totalmente desatendido. Es una muestra pequeña, no una garantía de equilibrio definitivo. Faltan sesiones humanas y validar las rutas de riesgo en profundidad. No se ha exportado un ejecutable independiente.
+
+## Historial 0.2.0
 
 ## Revisión del 4 de octubre de 2026 (Windows)
 

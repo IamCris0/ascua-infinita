@@ -2,6 +2,8 @@
 
 ## Identidad
 
+La dirección actual es **equilibrada**: compañeros para sostener el combate y participación manual para acelerarlo y reaccionar. El primer bloque 0.3 permite mantener Espacio, añade un compañero inicial y rutas y eventos cada cinco victorias. Véase [el plan de 0.3](PLAN_0_3.md); los números y decisiones de 0.2 que siguen son el punto de partida histórico.
+
 **Ascua Infinita** sitúa al jugador en las ruinas de un mundo consumido por un eclipse. La última brasa vive en una armadura diminuta. La sensación principal es convertir una acción sencilla, un clic, en una expedición que desarrolla una identidad mediante reliquias y después deja una herencia permanente.
 
 ## Tres escalas de progreso

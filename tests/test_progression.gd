@@ -114,7 +114,8 @@ func _initialize() -> void:
 	check(s.hp == s.max_hp() and not s.burst(), "Pause freezes damage and abilities")
 	s.paused = false
 	s.gold = 100
-	check(s.buy(1) == 1 and s.wisps == 1 and s.gold == 75, "Companion purchase uses its price")
+	var companion_price = s.price(1)
+	check(s.buy(1) == 1 and s.wisps == 2 and s.gold == 100 - companion_price, "Companion purchase uses its price")
 	s.tick(1.0)
 	check(s.enemy_hp < hp, "Companions attack automatically")
 	check(s.buy(-1) == 0 and s.buy(4) == 0, "Invalid upgrades cannot be bought")
@@ -134,10 +135,13 @@ func _initialize() -> void:
 	check(not s.click() and s.enemy_hp == hp, "Relic choice blocks battle")
 	check(not s.choose_relic(999), "Unknown relic rejected")
 	check(s.choose_relic(s.offers[0]) and s.relics.size() == 1, "Chosen relic equipped")
+	check(s.choose_route(0), "A milestone also offers a route")
 	while s.room < 10:
 		s.damage_enemy(1e9)
 		if not s.offers.is_empty():
 			s.choose_relic(s.offers[0])
+		if s.journey_phase == "route":
+			s.choose_route(0)
 	check(s.is_boss() and s.enemy_kind() == "boss", "Every tenth room is a boss")
 	s.tick(2.0)
 	# Boss: every third blow is a charged ember that Destello interrupts.
@@ -162,6 +166,8 @@ func _initialize() -> void:
 	check(s.run_essence >= bank + 5 and s.biome() == 1 and s.run_bosses == 1, "Boss rewards and biome transition")
 	if not s.offers.is_empty():
 		s.choose_relic(s.offers[0])
+	if s.journey_phase == "route":
+		s.choose_route(0)
 	# Echo of the crypts: idle enemies recover health.
 	s.spawn_delay = 0
 	s.enemy_hp = s.enemy_max * 0.5
@@ -199,7 +205,7 @@ func _initialize() -> void:
 	var permanent = s.essence
 	s.restart()
 	check(is_equal_approx(s.click_damage(), 7 * 1.08) and s.essence == permanent and s.gold == 30, "Rebirth preserves permanent power and currency")
-	check(s.room == 1 and s.relics.is_empty() and s.wisps == 0 and s.focus == 0 and s.run_essence == 0, "Rebirth clears temporary upgrades")
+	check(s.room == 1 and s.relics.is_empty() and s.wisps == 1 and s.focus == 0 and s.run_essence == 0, "Rebirth clears upgrades and restores the starting companion")
 	check(s.hp == s.max_hp() and s.active(), "Rebirth restores full health")
 	s.spawn_delay = 0
 	check(s.burst() and not s.burst(), "Burst has a cooldown")

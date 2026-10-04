@@ -33,7 +33,7 @@ func run() -> void:
 	s.gold = 100
 	game.refresh()
 	game.upgrade_buttons[1].pressed.emit()
-	check(s.wisps == 1, "Upgrade button is wired")
+	check(s.wisps == 2, "Upgrade button adds to the starting companion")
 	s.gold = 5000
 	game.set_buy_mode(2)
 	var before = s.blade
@@ -50,7 +50,17 @@ func run() -> void:
 	s.damage_enemy(1e9)
 	game.refresh()
 	check(game.modal_type == "relic" and game.overlay.visible, "Relic chooser opens")
-	check(press(game, "ELEGIR") and s.relics.size() == 1 and not game.overlay.visible, "Relic button applies selection")
+	check(press(game, "ELEGIR") and s.relics.size() == 1 and game.modal_type == "route", "Relic button opens the route choice")
+	check(not s.active() and press(game, "GUARDAR Y VOLVER") and game.screen == "title", "Route choice can be suspended at the title")
+	game.start_game(false)
+	check(game.modal_type == "route", "Continue returns to the pending route")
+	check(press(game, "SENDERO TRANQUILO") and s.active() and not game.overlay.visible, "Safe route returns to combat")
+	s.journey_phase = "route"
+	s.encounter_kind = "merchant"
+	game.refresh()
+	check(press(game, "VISITAR:") and game.modal_type == "event", "Event route opens the announced encounter")
+	var companions = s.wisps
+	check(press(game, "ACEPTAR") and s.wisps == companions + 1 and s.active(), "Merchant purchase grants one companion and resumes combat")
 	s.spawn_delay = 0
 	s.burst_cooldown = 0
 	game.try_burst()
@@ -106,6 +116,23 @@ func run() -> void:
 	game.refresh()
 	check(game.burst_button.modulate == Color.WHITE, "Reduced motion removes the burst button pulse")
 	game.close_modal()
+	s.spawn_delay = 0
+	s.wisps = 0
+	s.enemy_hp = 100000
+	s.click_cooldown = 0
+	var held = InputEventKey.new()
+	held.keycode = KEY_SPACE
+	held.physical_keycode = KEY_SPACE
+	held.pressed = true
+	Input.parse_input_event(held)
+	await create_timer(0.75).timeout
+	check(s.enemy_hp <= 100000 - 2 * s.click_damage(), "Holding Space repeats attacks without repeated key presses")
+	s.paused = true
+	var paused_hp = s.enemy_hp
+	await create_timer(0.35).timeout
+	check(s.enemy_hp == paused_hp, "Held attack cannot bypass pause")
+	held.pressed = false
+	Input.parse_input_event(held)
 	print("UI: %d checks, %d failures" % [checks, failures])
 	game.queue_free()
 	await process_frame
