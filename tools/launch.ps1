@@ -1,4 +1,4 @@
-param([switch]$Editor, [switch]$Check)
+param([switch]$Editor, [switch]$Check, [switch]$Animations)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $engine = $null
@@ -33,5 +33,6 @@ if (-not $Editor) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 if ($Editor) { & $engine --path $projectRoot --editor }
+elseif ($Animations) { & $engine --path $projectRoot --script res://tools/preview_animations.gd }
 else { & $engine --path $projectRoot }
 exit $LASTEXITCODE

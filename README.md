@@ -10,6 +10,8 @@ Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin
 
 ## Jugar
 
+**Personajes renovados:** portador y cuatro enemigos creados con ImageGen, con poses de combate más marcadas y ataques que no se reinician a mitad con cada clic. Abre **VerAnimaciones.cmd** para ver reposo, carrera, ataque, daño y muerte, con pausa y cámara lenta. [Archivos y prompts](assets/art/imagegen/README.md).
+
 En Windows, abre **Jugar.cmd**. El lanzador encuentra Godot en `PATH`, en `GODOT_BIN` o en la carpeta Descargas del usuario e importa los recursos antes de abrir el juego. Requiere una instalación de Godot 4; no es un ejecutable independiente.
 
 También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con **Godot 4.7.2**, renderizador Compatibility (OpenGL). No necesita complementos. La ventana inicial es de 1280 × 800 y la interfaz se adapta a pantallas 16:10 y 16:9.
@@ -98,7 +100,7 @@ godot --headless --path . --script tools/simulate.gd -- --sample
 
 Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`).
 
-Para una futura exportación, incluye `assets/art/atlas.json` en el filtro de archivos no reconocidos como recursos. Esta versión se ha validado desde Godot; todavía no incluye un ejecutable independiente verificado.
+Para una futura exportación, incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos. Esta versión se ha validado desde Godot; todavía no incluye un ejecutable independiente verificado.
 
 ## Regenerar el arte y el sonido
 

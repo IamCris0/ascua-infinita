@@ -3,6 +3,7 @@ extends RefCounted
 ## The atlas is produced by tools/sprites/build_art.py from the Gemini sheets.
 
 const MANIFEST = "res://assets/art/atlas.json"
+const CHARACTER_OVERRIDES = "res://assets/art/imagegen/characters.json"
 const BACKGROUNDS = ["res://assets/gemini/backgrounds/garden.png", "res://assets/gemini/backgrounds/crypt.png", "res://assets/gemini/backgrounds/forge.png"]
 
 static var _shared = null
@@ -28,6 +29,9 @@ static func release() -> void:
 func _init() -> void:
 	var file = FileAccess.open(MANIFEST, FileAccess.READ)
 	var data: Dictionary = JSON.parse_string(file.get_as_text())
+	if FileAccess.file_exists(CHARACTER_OVERRIDES):
+		var overrides = JSON.parse_string(FileAccess.get_file_as_string(CHARACTER_OVERRIDES))
+		data.characters.merge(overrides, true)
 	for key in data.characters:
 		var c: Dictionary = data.characters[key]
 		characters[key] = c
@@ -82,6 +86,15 @@ func frame_height(key: String) -> float:
 	return float(characters[key].frames[0][3]) * float(characters[key].scale)
 
 func draw_frame(canvas: CanvasItem, key: String, frame: Array, feet: Vector2, scale: float, color: Color = Color.WHITE) -> void:
+	var parts: Dictionary = characters[key].get("parts", {})
+	var index = str(characters[key].frames.find(frame))
+	if parts.has(index):
+		for part in parts[index]:
+			_draw_region(canvas, key, part, feet, scale, color)
+	else:
+		_draw_region(canvas, key, frame, feet, scale, color)
+
+func _draw_region(canvas: CanvasItem, key: String, frame: Array, feet: Vector2, scale: float, color: Color) -> void:
 	var s = scale * float(characters[key].scale)
 	var size = Vector2(frame[2], frame[3]) * s
 	var pivot = Vector2(frame[4], frame[5]) * s
@@ -119,6 +132,12 @@ func fx_icon(name: String, index: int, inset: float = 0.18) -> AtlasTexture:
 	return a
 
 func upgrade_icon(kind: int) -> Texture2D:
+	if kind == 2 and characters.hero.has("portrait"):
+		var region: Array = characters.hero.portrait
+		var portrait = AtlasTexture.new()
+		portrait.atlas = textures.hero
+		portrait.region = Rect2(region[0], region[1], region[2], region[3])
+		return portrait
 	match kind:
 		0: return fx_icon("slash", 2, 0.12)
 		1: return frame_icon("companion", 0)

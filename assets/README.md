@@ -1,5 +1,11 @@
 # Recursos
 
+## Renovación de personajes con ImageGen
+
+El juego utiliza ahora cinco hojas nuevas en `art/imagegen/`: portador, gelatina, lucero, centinela y Rey. Se generaron con ImageGen de OpenAI con alfa real y se integran mediante `characters.json`, sin sobrescribir los originales. Las secuencias tienen poses más diferenciadas de preparación, golpe, recuperación y muerte. Los prompts completos y las decisiones de recorte están en [art/imagegen/README.md](art/imagegen/README.md).
+
+`VerAnimaciones.cmd` abre un visor con selección de animación, pausa y cámara lenta. Los recursos anteriores de la tabla siguiente se conservan, y siguen usándose fondos, interfaz, reliquias, efectos y el pequeño compañero.
+
 | Carpeta | Contenido | Origen |
 |---|---|---|
 | `art/characters/` | Atlas del portador, gelatina, lucero, centinela, Rey sin Brasa y lucero compañero (verde menta) | Hojas de Gemini preparadas con `tools/sprites/build_art.py` |

@@ -43,6 +43,8 @@ func run() -> void:
 		quit(1)
 		return
 	var data = JSON.parse_string(FileAccess.get_file_as_string(Library.MANIFEST))
+	if FileAccess.file_exists(Library.CHARACTER_OVERRIDES):
+		data.characters.merge(JSON.parse_string(FileAccess.get_file_as_string(Library.CHARACTER_OVERRIDES)), true)
 	check(data is Dictionary, "Atlas manifest contains a dictionary")
 	if not data is Dictionary:
 		quit(1)
@@ -80,6 +82,9 @@ func run() -> void:
 			check(not overlaps, "Frame does not contain pixels of a neighbour: " + label)
 			regions.append(region)
 		var expected = ["idle"] if key == "companion" else ["idle", "walk", "attack", "hurt", "death"]
+		for parts in entry.get("parts", {}).values():
+			for part in parts:
+				check(bounds.encloses(Rect2i(part[0], part[1], part[2], part[3])), "Multipart frame stays within the source: " + key)
 		for name in expected:
 			check(entry.animations.has(name), "Animation exists: %s/%s" % [key, name])
 		for name in entry.animations:
@@ -112,6 +117,24 @@ func run() -> void:
 		if image != null:
 			check(image.get_size() == Vector2i(1024, 800), "Backdrop matches stage coordinates: " + path)
 	check(lib.heading_font.has_char(0x00F1) and lib.heading_font.has_char(0x00E1), "Font renders Spanish accents")
+	var actor = load("res://scripts/actor.gd").new(lib, "hero")
+	root.add_child(actor)
+	actor.set_process(false)
+	actor.request_attack()
+	actor._process(0.12)
+	actor.request_attack()
+	check(is_equal_approx(actor.anim_time, 0.12) and actor.attack_queued, "Repeated clicks queue a swing without rewinding anticipation")
+	actor._process(lib.anim_length("hero", "attack"))
+	check(actor.playing("attack") and not actor.attack_queued, "A complete swing consumes one queued attack")
+	actor._process(lib.anim_length("hero", "attack"))
+	check(actor.playing("idle"), "Queued attacks drain instead of looping forever")
+	actor.request_attack()
+	actor.request_attack()
+	actor.play("death", "death", true)
+	actor.request_attack()
+	actor._process(1.0)
+	check(actor.playing("death") and not actor.attack_queued, "Death cancels queued attacks and cannot be interrupted")
+	actor.queue_free()
 
 	# An enemy defeated during its lunge must not move the next enemy.
 	var state = State.new()

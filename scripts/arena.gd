@@ -213,8 +213,7 @@ func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 		enemy.flash = maxf(enemy.flash, 0.25)
 		enemy.flash_color = Color("c8ffe9")
 	else:
-		hero.play("attack")
-		hero.anim_time = 0.08
+		hero.request_attack()
 		hero.offset = Vector2(14, 0)
 		var rot = randf_range(-0.7, 0.5)
 		effects.append({"name": "slash", "t": 0.0, "pos": at, "size": 230.0 if critical else 170.0, "rot": rot, "color": Color(1, 1, 1)})
@@ -235,7 +234,7 @@ func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 	hint_alpha = maxf(0.0, hint_alpha - 0.12)
 
 func on_burst(interrupted: bool) -> void:
-	hero.play("attack")
+	hero.request_attack()
 	flash = 0.0 if reduced_motion else 0.55
 	add_shake(9.0)
 	var at = enemy_center()
@@ -366,7 +365,8 @@ func _process(delta: float) -> void:
 	# Enemy wind-up: start the attack animation just before the blow lands.
 	if state.active() and state.spawn_delay <= 0 and not state.charging and state.stun_time <= 0:
 		var left = state.attack_interval() - state.attack_timer
-		if left < 0.32 and not enemy_attacking:
+		var windup = lib.anim_length(enemy.key, "attack") * 0.5
+		if left < windup and not enemy_attacking:
 			enemy_attacking = true
 			enemy.play("attack")
 			if enemy.key in ["slime", "wisp"]:

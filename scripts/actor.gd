@@ -22,6 +22,7 @@ var saturation: float = 1.0
 var offset: Vector2 = Vector2.ZERO
 var bob: float = 0.0
 var clock: float = 0.0
+var attack_queued: bool = false
 
 func _init(library, character: String = "hero") -> void:
 	lib = library
@@ -29,17 +30,26 @@ func _init(library, character: String = "hero") -> void:
 	var m = ShaderMaterial.new()
 	m.shader = SHADER
 	material = m
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func set_character(character: String) -> void:
 	key = character
 	play("idle")
 
 func play(name: String, then: String = "idle", keep_last: bool = false) -> void:
+	attack_queued = false
 	anim = name
 	anim_time = 0.0
 	after = then
 	hold = keep_last
+
+func request_attack() -> void:
+	if anim == "death":
+		return
+	if anim == "attack" and not finished():
+		attack_queued = true
+	else:
+		play("attack")
 
 func playing(name: String) -> bool:
 	return anim == name
@@ -57,7 +67,9 @@ func _process(delta: float) -> void:
 	flash = maxf(0.0, flash - delta * 5.0)
 	offset = offset.lerp(Vector2.ZERO, minf(1.0, delta * 9.0))
 	if finished() and not hold:
-		anim = after
+		var repeat_attack = attack_queued and anim == "attack"
+		anim = "attack" if repeat_attack else after
+		attack_queued = false
 		anim_time = 0.0
 		after = "idle"
 	var m: ShaderMaterial = material

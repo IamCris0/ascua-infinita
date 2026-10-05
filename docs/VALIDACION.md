@@ -1,5 +1,13 @@
 # Validación del proyecto
 
+## Renovación de personajes — 4 de octubre de 2026
+
+- Cinco hojas PNG nuevas con transparencia real, integradas mediante regiones y puntos de apoyo. Conservados los assets anteriores. Filtrado nearest en los actores.
+- **1.011 comprobaciones de assets y animación**, cero fallos: alfa, límites de regiones, regiones compuestas, secuencias y ataques encolados sin reiniciar el golpe. **33 comprobaciones de interfaz**, cero fallos.
+- Importación y capturas del combate, jefe, título y visor de animaciones con renderizador Compatibility/NVIDIA RTX 4050. Se corrigieron fragmentos de capas y llamas que invadían celdas vecinas mediante regiones de dibujo. El visor permite examinar cada secuencia, pausarla y ralentizarla.
+- Partida gráfica automática de 70 segundos: 10.075 fotogramas, mejor cámara 20, una expedición finalizada y 38 bajas; sin errores del motor. Ajustes finales posteriores limitados a regiones de dibujo, verificados en el visor y con las pruebas de assets.
+- No se modificó el equilibrio ni la partida real. Este lote reemplaza personajes; fondos, interfaz, reliquias, efectos y compañero mantienen los recursos anteriores.
+
 ## Primer bloque 0.3.0-dev — 4 de octubre de 2026
 
 - **71 comprobaciones de progresión, 33 de interfaz y 36 de rutas/eventos**, cero fallos. Incluyen mantener Espacio, pausa, compra del mercader, imposibilidad de pagar dos veces, altar no letal, curación limitada, compañero inicial, guardado en una decisión y migración de versión 2.
