@@ -24,7 +24,7 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 | Jefe de Criptas · mecánicas implementadas | Campanera Vacía: Silencio y Toque Fúnebre; apariencia provisional | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
 | Reliquias · implementado | Cuatro combinaciones entre reliquias existentes | Efectos acotados, estados guardados, descripción al elegir y panel de combinaciones activas |
 | Colección · implementado | 18 entradas de enemigos, reliquias y sinergias | Desconocidos ocultos, progreso permanente, migración y navegación verificadas |
-| Distribución | Exportación Windows con atlas.json incluido | Arranca fuera del editor, encuentra todos los assets y guarda/carga desde una instalación limpia |
+| Distribución · implementado | ZIP portátil Windows x64 con ambos manifiestos | Arranque, recursos, renderizado y persistencia verificados fuera del proyecto |
 
 Los números del primer bloque son parámetros iniciales sujetos a pruebas. La versión completa 0.3 todavía no está terminada.
 
@@ -101,3 +101,9 @@ El registro sobrevive a renacer y se guarda con la partida. La migración de gua
 Validación: 16 comprobaciones nuevas; 1243 en todas las suites, sin fallos. Captura gráfica revisada en Godot.
 
 Pendientes: diseños y animaciones definitivos de enemigos/eventos, y exportación Windows con comprobación del juego fuera del editor.
+
+## Distribución Windows — 5 de octubre de 2026
+
+Implementada y comprobada una build portátil de desarrollo para Windows x64. Véase WINDOWS.md: paquete ZIP, reproducción de la exportación, recursos completos, arranque independiente, guardado/carga entre procesos y captura del renderizador. Los archivos generados permanecen en builds/ y no se añaden al historial Git.
+
+Pendiente principal: arte y animaciones definitivos de los nuevos enemigos y objetos de eventos. La versión permanece como 0.3.0-dev.

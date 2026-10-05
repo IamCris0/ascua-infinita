@@ -119,3 +119,7 @@ godot --headless --path . --editor --import --quit
 Imágenes generadas en Gemini por el autor del proyecto; la hoja transparente del portador se preparó con una edición de ImageGen de OpenAI. Música, efectos, shaders y código originales del proyecto. Tipografía Jersey 10 de The Soft Type Project, con licencia SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
 
 Proyecto privado. No se concede una licencia de distribución pública por defecto.
+
+## Versión portátil Windows
+
+La compilación está documentada en [docs/WINDOWS.md](docs/WINDOWS.md). Ejecuta `tools/export_windows.ps1` para generar el ZIP en `builds/`. Incluye sus recursos y no requiere instalar Godot en el equipo del jugador.

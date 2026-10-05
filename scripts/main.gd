@@ -81,7 +81,7 @@ var hp_low_state: int = -1
 func _ready() -> void:
 	var args = OS.get_cmdline_user_args()
 	capture_mode = "--capture" in args
-	qa_mode = capture_mode or "--qa" in args
+	qa_mode = capture_mode or "--qa" in args or "--verify-build" in args or "--verify-build-reload" in args
 	lib = load("res://scripts/art_library.gd").shared()
 	coin_tex = Kit.coin_texture()
 	var restored = state.load_game() if not qa_mode else false
@@ -108,12 +108,19 @@ func _ready() -> void:
 		if state.offline_reward > 0:
 			add_log("Tus luceros reunieron %d de oro durante tu ausencia." % int(state.offline_reward))
 		state.save_game()
-	if capture_mode:
+	if "--verify-build" in args or "--verify-build-reload" in args:
+		start_game(false)
+		_verify_build.call_deferred()
+	elif capture_mode:
 		capture.call_deferred()
 	elif "--qa" in args:
 		start_game(false)
 	else:
 		show_title()
+
+func _verify_build() -> void:
+	var checker = load("res://scripts/build_check.gd").new()
+	await checker.run(self)
 
 func _exit_tree() -> void:
 	load("res://scripts/art_library.gd").release()
