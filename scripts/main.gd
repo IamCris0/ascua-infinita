@@ -977,11 +977,41 @@ func show_howto(return_to: String) -> void:
 func _return_from(where: String) -> void:
 	if where == "pause":
 		toggle_pause_menu()
+	elif where == "camp":
+		show_camp()
 	elif screen == "title":
 		close_modal(false)
 	else:
 		close_modal()
 		persist()
+
+func show_collection(return_to: String, category: String = "Enemigos") -> void:
+	modal_return = return_to
+	state.paused = true
+	var catalog: Array = state.collection_catalog()
+	var v = modal("collection", "MEMORIAS DEL ECLIPSE", "Colección · %d / %d" % [state.discoveries.size(), catalog.size()], "Tus descubrimientos permanecen al renacer. Lo desconocido se revela al encontrarlo.", 820)
+	var tabs = HBoxContainer.new()
+	v.add_child(tabs)
+	for section in ["Enemigos", "Reliquias", "Sinergias"]:
+		var tab = button(tabs, section, func(): show_collection(return_to, section), 42, 16)
+		tab.disabled = section == category
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 320)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	var list = VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 12)
+	scroll.add_child(list)
+	for entry in catalog:
+		if entry.category != category:
+			continue
+		var found: bool = state.discoveries.has(entry.id)
+		label(list, entry.name if found else "Sin descubrir", 20, Kit.GOLD if found else Kit.MUTED, true)
+		wrap_label(list, entry.description if found else "???", 15, Kit.TEXT if found else Kit.MUTED)
+		separator(list)
+	button(v, "VOLVER", func(): _return_from(modal_return), 48)
+	persist()
 
 func show_options(return_to: String) -> void:
 	modal_return = return_to
@@ -1049,6 +1079,7 @@ func toggle_pause_menu() -> void:
 	button(v, "CONTINUAR", func(): close_modal(), 56, 21)
 	button(v, "OPCIONES", func(): show_options("pause"), 50)
 	button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
+	button(v, "COLECCIÓN", func(): show_collection("pause"), 50)
 	button(v, "MENÚ PRINCIPAL", func():
 		persist()
 		show_title()
@@ -1200,6 +1231,7 @@ func show_camp() -> void:
 	row.add_child(left)
 	var portrait = icon_slot(left, lib.ui.keeper, 220, Color("6b5a44"))
 	portrait.custom_minimum_size = Vector2(206, 206)
+	button(left, "COLECCIÓN", func(): show_collection("camp"), 40, 16)
 	label(left, "EL GUARDIÁN DE LA HOGUERA", 14, Kit.COPPER, true)
 	wrap_label(left, KEEPER_LINES[(state.runs + state.total_kills) % KEEPER_LINES.size()], 15, Color("d6d0c4"))
 	spacer(left)
@@ -1276,7 +1308,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if key == KEY_ESCAPE:
 		match modal_type:
 			"pause": close_modal()
-			"options", "howto": _return_from(modal_return)
+			"options", "howto", "collection": _return_from(modal_return)
 			"retreat", "confirm": close_modal(screen == "game")
 			"":
 				if screen == "game": toggle_pause()

@@ -117,6 +117,7 @@ var run_gold: float = 0
 var run_time: float = 0
 var run_bosses: int = 0
 # Permanent
+var discoveries: Array = []
 var essence: int = 0
 var legacy: Array = [0, 0, 0, 0, 0, 0]
 var best: int = 1
@@ -143,6 +144,41 @@ func _init() -> void:
 	rng.randomize()
 
 # ---------------------------------------------------------------- derived stats
+func collection_catalog() -> Array:
+	var entries: Array = []
+	var enemies = [
+		["slime", "Gelatina", "Una criatura de las ruinas que ataca con embestidas."],
+		["wisp", "Lucero extraviado", "Un espíritu errante; cambia de aspecto entre biomas."],
+		["sentinel", "Centinela hueco", "Armadura pesada y golpes lentos."],
+		["guardian", "Guardián del Umbral", "Cuatro impactos rompen su escudo. Destello lo rompe de inmediato."],
+		["acolyte", "Acólito del Eco", "Canaliza durante tres segundos. Destello cancela su ataque."],
+		["king", "Rey sin Brasa", "Cada tercer ataque prepara su Brasa. Interrúmpelo con Destello."],
+		["bell", "Campanera Vacía", "Silencio castiga los ataques manuales; Toque Fúnebre se interrumpe con Destello."]]
+	for entry in enemies:
+		entries.append({"id": "enemy:" + entry[0], "category": "Enemigos", "name": entry[1], "description": entry[2]})
+	for relic in RELICS:
+		entries.append({"id": "relic:" + relic.id, "category": "Reliquias", "name": relic.name, "description": relic.description})
+	for synergy in SYNERGIES:
+		entries.append({"id": "synergy:" + synergy.id, "category": "Sinergias", "name": synergy.name, "description": synergy.description})
+	return entries
+
+func remember(id: String) -> void:
+	if not discoveries.has(id):
+		discoveries.append(id)
+
+func remember_relics() -> void:
+	for relic in relics:
+		remember("relic:" + relic)
+	for synergy in SYNERGIES:
+		if has_synergy(synergy.id):
+			remember("synergy:" + synergy.id)
+
+func remember_enemy() -> void:
+	if dead:
+		return
+	var id = "bell" if is_bell_keeper() else ("king" if is_boss() else (enemy_role() if not enemy_role().is_empty() else enemy_kind()))
+	remember("enemy:" + id)
+
 func count_relic(id: String) -> int:
 	return relics.count(id)
 
@@ -555,6 +591,7 @@ func spawn_enemy(roll_elite: bool = true) -> void:
 	boss_attacks = 0
 	idle_time = 0
 	spawn_delay = BOSS_INTRO if is_boss() else SPAWN_DELAY
+	remember_enemy()
 	enemy_changed.emit()
 
 func choose_relic(index: int) -> bool:
@@ -562,6 +599,7 @@ func choose_relic(index: int) -> bool:
 		return false
 	var relic: Dictionary = RELICS[index]
 	relics.append(relic.id)
+	remember_relics()
 	if relic.id == "heart":
 		hp = minf(max_hp(), hp + 35)
 	offers.clear()
@@ -719,7 +757,7 @@ const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 
 func snapshot() -> Dictionary:
-	var data := {"version": SAVE_VERSION, "relics": relics, "offers": offers, "legacy": legacy,
+	var data := {"version": SAVE_VERSION, "discoveries": discoveries.duplicate(), "relics": relics, "offers": offers, "legacy": legacy,
 		"saved_at": Time.get_unix_time_from_system()}
 	for key in NUMBER_KEYS:
 		if key != "saved_at":
@@ -790,6 +828,14 @@ func _read_save(path: String) -> Variant:
 		return null
 	data.version = int(data.version)
 	data = _migrate(data)
+	if not data.has("discoveries"):
+		data.discoveries = []
+	if not data.discoveries is Array:
+		return null
+	var known: Array = collection_catalog().map(func(entry): return entry.id)
+	for id in data.discoveries:
+		if not id is String or not known.has(id):
+			return null
 	if not data.get("journey_phase") in ["", "route", "event"] or not data.get("encounter_kind") in ["", "shrine", "merchant", "altar"]:
 		return null
 	if data.journey_phase.is_empty() != data.encounter_kind.is_empty():
@@ -857,8 +903,12 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	master_volume = clampf(master_volume, 0, 1)
 	music_volume = clampf(music_volume, 0, 1)
 	sfx_volume = clampf(sfx_volume, 0, 1)
+	discoveries = []
+	for id in data.discoveries:
+		remember(id)
 	legacy = data.legacy.map(func(v): return int(v))
 	relics = data.relics.duplicate()
+	remember_relics()
 	offers = data.offers.map(func(v): return int(v))
 	journey_phase = data.journey_phase
 	encounter_kind = data.encounter_kind

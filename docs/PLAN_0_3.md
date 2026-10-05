@@ -23,7 +23,7 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 | Enemigos · implementado | Guardián con escudo y Acólito con ataque canalizado; arte provisional | Avisos, contador, interrupción, guardado y combate automático verificados; pendiente valoración humana |
 | Jefe de Criptas · mecánicas implementadas | Campanera Vacía: Silencio y Toque Fúnebre; apariencia provisional | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
 | Reliquias · implementado | Cuatro combinaciones entre reliquias existentes | Efectos acotados, estados guardados, descripción al elegir y panel de combinaciones activas |
-| Colección | Registro persistente de descubrimientos | Muestra únicamente lo encontrado y sobrevive a renacer y migrar un guardado |
+| Colección · implementado | 18 entradas de enemigos, reliquias y sinergias | Desconocidos ocultos, progreso permanente, migración y navegación verificadas |
 | Distribución | Exportación Windows con atlas.json incluido | Arranca fuera del editor, encuentra todos los assets y guarda/carga desde una instalación limpia |
 
 Los números del primer bloque son parámetros iniciales sujetos a pruebas. La versión completa 0.3 todavía no está terminada.
@@ -91,3 +91,13 @@ Los duplicados conservan su mejora base, pero no multiplican estos efectos. Desc
 Validación: 17 pruebas específicas. La simulación de cinco semillas mantiene la llegada al primer jefe sin clics; a cinco intentos por segundo obtiene cámaras 24/29/20/26/27, frente a 23/28/20/26/27 antes de las sinergias. El bot no optimiza las combinaciones; queda pendiente la valoración humana.
 
 Próximo bloque: colección persistente de descubrimientos, seguido del arte definitivo y la distribución Windows.
+
+## Colección persistente — 5 de octubre de 2026
+
+Accesible mediante COLECCIÓN en el menú de pausa y la hoguera. Incluye siete tipos de enemigos, siete reliquias y cuatro sinergias. Los enemigos se registran al aparecer, las reliquias al elegirlas y las sinergias al completar su pareja. Los duplicados no aumentan el contador. Las entradas sin descubrir ocultan nombre y descripción.
+
+El registro sobrevive a renacer y se guarda con la partida. La migración de guardados anteriores recupera solo las reliquias y combinaciones presentes y el enemigo actual si la expedición sigue viva; no deduce encuentros pasados a partir de la mejor cámara. La lectura valida los identificadores. Consultar la colección pausa el combate; Volver y Escape respetan el menú de origen.
+
+Validación: 16 comprobaciones nuevas; 1243 en todas las suites, sin fallos. Captura gráfica revisada en Godot.
+
+Pendientes: diseños y animaciones definitivos de enemigos/eventos, y exportación Windows con comprobación del juego fuera del editor.
