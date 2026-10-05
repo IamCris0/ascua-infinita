@@ -119,6 +119,13 @@ func _exit_tree() -> void:
 	load("res://scripts/art_library.gd").release()
 
 func connect_state() -> void:
+	state.attack_started.connect(arena.on_attack_started)
+	state.burst_released.connect(func(interrupted):
+		arena.on_burst(interrupted)
+		audio.play("burst", 0.04)
+		if interrupted:
+			audio.duck(6.0, 0.6)
+	)
 	state.struck.connect(func(damage, critical, automatic):
 		arena.on_struck(damage, critical, automatic)
 		if not automatic:
@@ -447,6 +454,9 @@ func start_game(new_run: bool) -> void:
 	game_root.show()
 	state.paused = false
 	close_modal(false)
+	if state.pending_damage > 0:
+		arena.on_attack_started()
+		arena.hero.anim_time = state.HIT_DELAY - state.pending_hit
 	refresh()
 	if state.offline_reward > 0:
 		arena.show_banner("LOS LUCEROS VELARON POR TI", "+%s de oro durante tu ausencia" % fmt(state.offline_reward), Kit.GOLD, 3.0)
@@ -715,12 +725,7 @@ func purchase(kind: int) -> void:
 func try_burst() -> void:
 	if screen != "game":
 		return
-	var interrupting = state.charging
-	if state.burst():
-		arena.on_burst(interrupting)
-		audio.play("burst", 0.04)
-		if interrupting:
-			audio.duck(6.0, 0.6)
+	state.burst()
 
 func refresh() -> void:
 	if arena == null or status_label == null:

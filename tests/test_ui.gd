@@ -29,7 +29,9 @@ func run() -> void:
 	s.spawn_delay = 0
 	var initial: float = s.enemy_hp
 	game.arena.clicked.emit()
-	check(s.enemy_hp < initial, "Arena click is wired to combat")
+	check(s.enemy_hp == initial and game.arena.hero.playing("attack"), "Click starts anticipation before damage")
+	s.tick(s.HIT_DELAY)
+	check(s.enemy_hp < initial, "Arena click lands at contact")
 	s.gold = 100
 	game.refresh()
 	game.upgrade_buttons[1].pressed.emit()

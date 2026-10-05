@@ -43,3 +43,14 @@ Para cada lote: adjuntar referencias existentes, aprobar un fotograma, pedir cad
 `tools/simulate.gd -- --sample` compara cinco semillas a 0, 1, 3 y 5 intentos de clic por segundo. El bot compra mejoras, recoge ascuas, usa Destello y elige siempre la ruta segura: cero clics **no significa ausencia de decisiones**. La simulación orienta; no demuestra diversión ni sustituye a jugadores.
 
 Para probar manualmente: una expedición dejando trabajar a los luceros y usando habilidades; otra manteniendo Espacio; otra alternando rutas y rechazando tratos. Comprobar cuánto tarda el primer jefe, por qué termina el viaje y si cada compra se nota.
+
+## Pulido de combate — 4 de octubre de 2026
+
+- Ataque del portador: seis poses a 20 fps; preparación de 0,15 s, contacto y recuperación dentro de la cadencia existente de 0,3 s. Desplazamiento hacia el objetivo y sombra ligada a los pies.
+- Daño, destello del enemigo, número y sonido se activan en el mismo contacto. Estela verde coherente con la espada.
+- Proyectiles de compañeros y carga del Rey salen antes del daño. Interrumpir la carga retira su proyectil.
+- Destello activa sus efectos antes de resolver una muerte, conservando el objetivo correcto.
+- Pausar o elegir recompensas congela personajes y efectos. Guardar a mitad de un ataque conserva el tiempo pendiente; morir o cambiar de objetivo lo cancela.
+- Pruebas: progresión (71), assets (1011), rutas (36), interfaz (34), sincronización (17). Prueba gráfica de 70 segundos, 10070 fotogramas, sin errores; mejor cámara 27.
+
+Se conserva el arte generado existente. Este bloque ajusta su reproducción y la respuesta del combate; la valoración de fluidez final sigue requiriendo una partida humana.

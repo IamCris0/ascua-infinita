@@ -294,7 +294,7 @@
 	"hero": {
 		"animations": {
 			"attack": {
-				"fps": 18,
+				"fps": 20,
 				"frames": [
 					12,
 					13,

@@ -14,6 +14,8 @@ signal ember_spawned
 signal ember_collected(kind: String, amount: float)
 signal relic_offered
 signal purchased(kind: int, count: int)
+signal attack_started
+signal burst_released(interrupted: bool)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -59,6 +61,7 @@ const BOSS_INTRO = 1.6
 const CHARGE_TIME = 3.0
 const STORM_LEGACY_MAX = 10
 const CLICK_INTERVAL = 0.3
+const HIT_DELAY = 0.15
 
 var rng = RandomNumberGenerator.new()
 # Expedition
@@ -71,6 +74,9 @@ var enemy_elite: bool = false
 var attack_timer: float = 0
 var auto_timer: float = 0
 var click_cooldown: float = 0
+var pending_hit: float = 0
+var pending_damage: float = 0
+var pending_critical: bool = false
 var burst_cooldown: float = 0
 var combo: int = 0
 var combo_time: float = 0
@@ -256,6 +262,14 @@ func tick(delta: float) -> void:
 		spawn_delay = maxf(0, spawn_delay - delta)
 		changed.emit()
 		return
+	if pending_damage > 0:
+		pending_hit = maxf(0, pending_hit - delta)
+		if pending_hit <= 0:
+			var damage = pending_damage
+			pending_damage = 0
+			damage_enemy(damage, pending_critical, false)
+			if not active() or spawn_delay > 0:
+				return
 	idle_time += delta
 	if biome() == 1 and idle_time > 2.0 and enemy_hp < enemy_max:
 		enemy_hp = minf(enemy_max, enemy_hp + enemy_max * 0.03 * delta)
@@ -350,9 +364,10 @@ func click() -> bool:
 	click_cooldown = CLICK_INTERVAL
 	combo = mini(20, combo + 1)
 	combo_time = 1.5
-	var critical = rng.randf() < critical_chance()
-	var damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if critical else 1.0)
-	damage_enemy(damage, critical, false)
+	pending_critical = rng.randf() < critical_chance()
+	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0)
+	pending_hit = HIT_DELAY
+	attack_started.emit()
 	return true
 
 func burst() -> bool:
@@ -360,6 +375,7 @@ func burst() -> bool:
 		return false
 	burst_cooldown = burst_max_cooldown()
 	var damage = burst_damage()
+	var interrupted = charging
 	if charging:
 		charging = false
 		boss_attacks += 1
@@ -370,6 +386,7 @@ func burst() -> bool:
 		boss_interrupted.emit()
 	else:
 		event.emit("DESTELLO · la llama despierta")
+	burst_released.emit(interrupted)
 	damage_enemy(damage, true, false)
 	return true
 
@@ -419,6 +436,8 @@ func defeat_enemy() -> void:
 		relic_offered.emit()
 
 func spawn_enemy(roll_elite: bool = true) -> void:
+	pending_hit = 0
+	pending_damage = 0
 	if roll_elite:
 		enemy_elite = not is_boss() and room >= 6 and rng.randf() < 0.12
 	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0)
@@ -523,6 +542,8 @@ func finish_run() -> void:
 		return
 	essence += run_essence
 	dead = true
+	pending_hit = 0
+	pending_damage = 0
 	charging = false
 	ember_active = false
 	offers.clear()
@@ -581,11 +602,11 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+const COMBAT_DEFAULTS = {"pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
+const COMBAT_LIMITS = {"pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 

@@ -57,6 +57,8 @@ var ash: Array = []
 var banner: Dictionary = {}
 var shown_kind: String = ""
 var enemy_attacking: bool = false
+var auto_launched: bool = false
+var heavy_launched: bool = false
 var hp_trail: float = 1.0
 var hovered: bool = false
 var last_hurt_anim: float = 0.0
@@ -149,7 +151,7 @@ func enemy_center() -> Vector2:
 	return enemy.position + Vector2(enemy.offset.x, -enemy.height() * 0.5)
 
 func hero_center() -> Vector2:
-	return hero.position + Vector2(10, -hero.height() * 0.5)
+	return hero.position + Vector2(hero.offset.x + 10, -hero.height() * 0.5)
 
 func ember_stage_pos() -> Vector2:
 	var r = visible_stage_rect()
@@ -166,6 +168,9 @@ func _gui_input(e: InputEvent) -> void:
 
 # ---------------------------------------------------------------- reactions
 func sync_enemy(walk_in: bool = true) -> void:
+	projectiles.clear()
+	auto_launched = false
+	heavy_launched = false
 	var kind: String = state.enemy_kind()
 	# A new actor must not inherit the defeated enemy's lunge or arrival.
 	for tag in ["lunge", "walk_in", "walking"]:
@@ -203,20 +208,23 @@ func sync_enemy(walk_in: bool = true) -> void:
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
 	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
 
+func on_attack_started() -> void:
+	hero.play("attack")
+
 func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 	var at = enemy_center() + Vector2(randf_range(-18, 18), randf_range(-24, 18))
 	if automatic:
 		effects.append({"name": "magic", "t": 0.0, "pos": at, "size": 120.0, "rot": 0.0, "color": Color(1, 1, 1, 0.9)})
-		for i in range(mini(state.wisps, 6)):
-			var from = companion_pos(i)
-			projectiles.append({"from": from, "to": at, "t": 0.0, "dur": 0.22, "color": Color("86e0bd"), "size": 4.0})
+		auto_launched = false
 		enemy.flash = maxf(enemy.flash, 0.25)
 		enemy.flash_color = Color("c8ffe9")
 	else:
-		hero.request_attack()
-		hero.offset = Vector2(14, 0)
+		if not hero.playing("attack"):
+			hero.play("attack")
+		hero.anim_time = state.HIT_DELAY
+		hero.offset = Vector2(ENEMY_FEET.x - HERO_FEET.x - 125, 0)
 		var rot = randf_range(-0.7, 0.5)
-		effects.append({"name": "slash", "t": 0.0, "pos": at, "size": 230.0 if critical else 170.0, "rot": rot, "color": Color(1, 1, 1)})
+		effects.append({"name": "blade_arc", "t": 0.0, "pos": at, "size": 150.0 if critical else 110.0, "rot": rot, "color": Color("baffd9")})
 		if critical:
 			effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 210.0, "rot": 0.0, "color": Color(1, 1, 1)})
 			add_shake(5.0)
@@ -234,22 +242,24 @@ func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 	hint_alpha = maxf(0.0, hint_alpha - 0.12)
 
 func on_burst(interrupted: bool) -> void:
-	hero.request_attack()
+	hero.play("attack")
+	hero.anim_time = state.HIT_DELAY
 	flash = 0.0 if reduced_motion else 0.55
 	add_shake(9.0)
 	var at = enemy_center()
 	effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 380.0, "rot": 0.0, "color": Color(1, 1, 1)})
 	effects.append({"name": "embers", "t": 0.0, "pos": at + Vector2(0, -30), "size": 300.0, "rot": 0.0, "color": Color(1, 1, 1)})
 	rings.append({"pos": at, "t": 0.0, "dur": 0.6, "radius": 260.0, "color": Color("ffcf7b")})
-	projectiles.append({"from": hero_center(), "to": at, "t": 0.0, "dur": 0.12, "color": Color("fff1cf"), "size": 9.0})
+	rings.append({"pos": hero_center(), "t": 0.0, "dur": 0.2, "radius": 100.0, "color": Color("fff1cf")})
 	burst_particles(at, [Color("ffcf7b"), Color("ff8a3d"), Color("fff1cf")], 34, 520.0)
 	if interrupted:
+		projectiles = projectiles.filter(func(p): return not p.get("fire", false))
 		enemy.play("hurt")
 		show_banner("¡INTERRUMPIDO!", "El Rey queda aturdido", Color("ffcf7b"), 1.6)
 
 func on_hero_hit(damage: float, heavy: bool) -> void:
-	if heavy:
-		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": 0.32, "color": Color("ff9a4a"), "size": 26.0, "fire": true})
+	enemy.play("attack")
+	enemy.anim_time = lib.anim_length(enemy.key, "attack") * 0.5
 	hero.play("hurt")
 	hero.flash = 0.75
 	hero.flash_color = Color(1, 0.3, 0.25)
@@ -332,6 +342,19 @@ func companion_pos(i: int) -> Vector2:
 func _process(delta: float) -> void:
 	if state == null:
 		return
+	var frozen: bool = not state.active() and not state.dead
+	if reduced_motion:
+		enemy.bob = 0
+		shake = 0
+		flash = 0
+	hero.animation_paused = frozen
+	enemy.animation_paused = frozen
+	corpse.animation_paused = frozen
+	if frozen:
+		return
+	if hero.playing("attack"):
+		var phase = clampf(hero.anim_time / state.CLICK_INTERVAL, 0, 1)
+		hero.offset.x = sin(phase * PI) * (ENEMY_FEET.x - HERO_FEET.x - 125)
 	time += delta
 	if not reduced_motion:
 		ambient_time += delta
@@ -362,6 +385,22 @@ func _process(delta: float) -> void:
 			enemy.remove_meta("walk_in")
 			enemy.remove_meta("walking")
 			enemy.play("idle")
+	for p in projectiles:
+		p.t += delta
+	projectiles = projectiles.filter(func(p): return p.t < p.dur)
+	# Travel precedes damage; remaining simulation time determines arrival.
+	if state.can_strike():
+		if state.auto_timer < 0.7:
+			auto_launched = false
+		if state.auto_timer >= 0.78 and not auto_launched and state.auto_damage() > 0:
+			auto_launched = true
+			for i in range(mini(state.wisps, 6)):
+				projectiles.append({"from": companion_pos(i), "to": enemy_center(), "t": 0.0, "dur": maxf(0.01, 1.0 - state.auto_timer), "color": Color("86e0bd"), "size": 4.0})
+	if not state.charging:
+		heavy_launched = false
+	elif state.charge_timer <= 0.32 and not heavy_launched:
+		heavy_launched = true
+		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": maxf(0.01, state.charge_timer), "color": Color("ff9a4a"), "size": 26.0, "fire": true})
 	# Enemy wind-up: start the attack animation just before the blow lands.
 	if state.active() and state.spawn_delay <= 0 and not state.charging and state.stun_time <= 0:
 		var left = state.attack_interval() - state.attack_timer
@@ -371,18 +410,20 @@ func _process(delta: float) -> void:
 			enemy.play("attack")
 			if enemy.key in ["slime", "wisp"]:
 				enemy.set_meta("lunge", 0.0)
+		if left < windup:
+			enemy.anim_time = maxf(0, windup - left)
 		elif left > 0.5:
 			enemy_attacking = false
 	if state.charging and not enemy.playing("attack"):
 		enemy.play("attack")
 	if state.charging:
-		enemy.anim_time = fmod(enemy.anim_time, 0.36)
+		enemy.anim_time = 0.1 if state.charge_timer > 0.32 else 0.3 + (0.32 - state.charge_timer)
 		enemy.flash = maxf(enemy.flash, 0.25 + 0.2 * sin(ambient_time * 14.0))
 		enemy.flash_color = Color(1, 0.55, 0.2)
 	if enemy.has_meta("lunge"):
 		var t: float = enemy.get_meta("lunge") + delta
 		enemy.set_meta("lunge", t)
-		enemy.offset.x = -sin(clampf(t / 0.45, 0, 1) * PI) * 150
+		enemy.offset.x = -sin(clampf(t / 0.45, 0, 1) * PI) * (55 if reduced_motion else 110)
 		if t >= 0.45:
 			enemy.remove_meta("lunge")
 	if state.stun_time > 0:
@@ -405,9 +446,6 @@ func _process(delta: float) -> void:
 	for r in rings:
 		r.t += delta
 	rings = rings.filter(func(r): return r.t < r.dur)
-	for p in projectiles:
-		p.t += delta
-	projectiles = projectiles.filter(func(p): return p.t < p.dur)
 	for n in numbers:
 		n.life -= delta
 		n.pos += n.vel * delta
@@ -432,7 +470,7 @@ func _draw_backdrop() -> void:
 	if bg_fade > 0:
 		backdrop.draw_texture_rect(lib.backgrounds[bg_prev], rect, false, Color(1, 1, 1, bg_fade))
 	# Ground shadows under the actors.
-	_ellipse(backdrop, HERO_FEET + Vector2(0, 2), Vector2(62, 12), Color(0, 0, 0, 0.45))
+	_ellipse(backdrop, HERO_FEET + Vector2(hero.offset.x, 2), Vector2(62, 12), Color(0, 0, 0, 0.45))
 	var ew = 70.0 if enemy.key != "boss" else 110.0
 	_ellipse(backdrop, ENEMY_FEET + Vector2(enemy.offset.x, 2), Vector2(ew, 14), Color(0, 0, 0, 0.45))
 
@@ -480,7 +518,11 @@ func _draw_fx() -> void:
 		else:
 			fx_layer.draw_line(p.from.lerp(p.to, maxf(0, k - 0.25)), pos, Color(p.color, 0.8), p.size)
 	for e in effects:
-		lib.draw_fx(fx_layer, e.name, e.t, e.pos, e.size, e.color, 16.0 if e.name == "slash" else 13.0, e.rot)
+		if e.name == "blade_arc":
+			var opacity = maxf(0, 1.0 - e.t / 0.18)
+			fx_layer.draw_arc(e.pos - Vector2(e.size * 0.3, 0), e.size * 0.4, -1.1 + e.rot, 1.1 + e.rot, 16, Color(e.color, opacity), 4.0)
+		else:
+			lib.draw_fx(fx_layer, e.name, e.t, e.pos, e.size, e.color, 13.0, e.rot)
 	for p in particles:
 		var a = clampf(p.life / 0.4, 0, 1)
 		fx_layer.draw_rect(Rect2(p.pos - Vector2.ONE * p.size * 0.5, Vector2.ONE * p.size), Color(p.color, a))

@@ -23,6 +23,7 @@ var offset: Vector2 = Vector2.ZERO
 var bob: float = 0.0
 var clock: float = 0.0
 var attack_queued: bool = false
+var animation_paused: bool = false
 
 func _init(library, character: String = "hero") -> void:
 	lib = library
@@ -62,6 +63,8 @@ func height() -> float:
 	return lib.frame_height(key) * base_scale
 
 func _process(delta: float) -> void:
+	if animation_paused:
+		return
 	clock += delta
 	anim_time += delta * speed
 	flash = maxf(0.0, flash - delta * 5.0)

@@ -4,7 +4,7 @@ Cinco hojas nuevas creadas con la herramienta integrada ImageGen de OpenAI, sin 
 
 Cada hoja tiene 24 poses: seis de reposo, seis de movimiento, seis de ataque, tres de daño y tres de muerte. En la gelatina se excluyen dos poses de ataque donde los ojos cambian de orientación. `characters.json` contiene recortes, puntos de apoyo y secuencias; `tools/import_imagegen.gd` reconstruye solo estos metadatos. Algunos golpes se dibujan por partes para separar capas y efectos que invaden el espacio entre celdas. El motor usa filtro nearest para conservar bordes definidos.
 
-Los clics encolan como máximo un ataque visual y no reinician un golpe a mitad. Daño y muerte pueden interrumpirlo. Los fondos, iconos, efectos y compañeros conservan el arte anterior; este lote renueva al portador y los cuatro enemigos.
+Cada clic aceptado inicia un ataque de 0,3 s: el contacto a los 0,15 s aplica daño, sonido y efectos juntos. La recuperación termina antes del siguiente clic. Una muerte cancela el daño pendiente contra ese objetivo. Los fondos, iconos, efectos y compañeros conservan el arte anterior; este lote renueva al portador y los cuatro enemigos.
 
 ## Prompts de producción (registro de las especificaciones)
 

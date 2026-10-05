@@ -42,7 +42,7 @@ func _initialize() -> void:
 		var animations = {
 			"idle": {"frames": [0, 1, 2, 3, 4, 5], "fps": 8, "loop": true},
 			"walk": {"frames": [6, 7, 8, 9, 10, 11], "fps": 12, "loop": true},
-			"attack": {"frames": [12, 13, 14, 15, 16, 17], "fps": 18 if key == "hero" else 10, "loop": false},
+			"attack": {"frames": [12, 13, 14, 15, 16, 17], "fps": 20 if key == "hero" else 10, "loop": false},
 			"hurt": {"frames": [18, 19, 20], "fps": 12, "loop": false},
 			"death": {"frames": [21, 22, 23], "fps": 5, "loop": false}}
 		if key == "slime":

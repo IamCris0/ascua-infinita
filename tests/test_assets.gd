@@ -167,6 +167,7 @@ func run() -> void:
 	check(arena.companion_pos(0) == companion and arena.ember_stage_pos() == ember and arena.ash[0].pos == ash, "Reduced motion stops ambient movement")
 	check(arena.enemy.bob == 0 and arena.shake == 0 and arena.flash == 0, "Reduced motion removes hovering, screen shake and full-screen flashes")
 	arena.reduced_motion = false
+	state.paused = false
 	arena._process(0.2)
 	check(arena.companion_pos(0) != companion and arena.ash[0].pos != ash, "Ambient movement resumes when enabled")
 	arena.queue_free()
