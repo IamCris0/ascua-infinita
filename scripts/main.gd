@@ -119,6 +119,10 @@ func _exit_tree() -> void:
 	load("res://scripts/art_library.gd").release()
 
 func connect_state() -> void:
+	state.shield_broken.connect(func():
+		arena.on_shield_broken()
+		audio.play("interrupt")
+	)
 	state.attack_started.connect(arena.on_attack_started)
 	state.burst_released.connect(func(interrupted):
 		arena.on_burst(interrupted)
@@ -143,6 +147,7 @@ func connect_state() -> void:
 		audio.play("die_" + kind, 0.06)
 	)
 	state.enemy_changed.connect(func():
+		arena.sync_enemy(true)
 		if state.is_boss() and screen == "game":
 			audio.play("boss_appear")
 	)
@@ -596,7 +601,7 @@ func build_center(body: Node) -> void:
 	burst_button.custom_minimum_size.y = 64
 	burst_button.focus_mode = Control.FOCUS_NONE
 	burst_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	burst_button.tooltip_text = "Destello: un golpe enorme. Contra el Rey, interrumpe su Brasa."
+	burst_button.tooltip_text = "Destello: rompe escudos e interrumpe los ataques canalizados del Rey y del Acólito."
 	burst_button.add_theme_stylebox_override("normal", Kit.button_texture(lib, Color(1.25, 0.86, 0.62)))
 	burst_button.add_theme_stylebox_override("hover", Kit.button_texture(lib, Color(1.45, 1.0, 0.7)))
 	burst_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(1.0, 0.7, 0.5)))
@@ -938,7 +943,7 @@ func show_howto(return_to: String) -> void:
 	var tips = [
 		[lib.fx_icon("slash", 2, 0.12), "Haz clic o mantén ESPACIO para atacar sin pulsar repetidamente. Ritmo máximo: un golpe cada 0,3 s. Encadenarlos suma hasta un 30% de daño."],
 		[lib.upgrade_icon(1), "Empiezas con un lucero que ataca solo. Compra más en la forja; los clics aceleran el combate. Usa Q para comprar ×10 o al máximo."],
-		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Contra el Rey sin Brasa, úsalo mientras carga su ataque para interrumpirlo."],
+		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián e interrumpe la carga del Rey o del Acólito."],
 		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y una ruta: descansar, desafiar a un élite o visitar un evento. El combate espera tu decisión."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]

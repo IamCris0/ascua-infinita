@@ -183,6 +183,10 @@ func sync_enemy(walk_in: bool = true) -> void:
 	enemy.hue = variant[0]
 	enemy.tint = variant[1]
 	enemy.saturation = variant[2]
+	if state.enemy_role() == "guardian":
+		enemy.tint = Color("94c9ed")
+	elif state.enemy_role() == "acolyte":
+		enemy.tint = Color("d4a4ff")
 	enemy.alpha = 1.0
 	enemy.brightness = 1.12 if state.enemy_elite else 1.0
 	enemy.base_scale = 1.15 if kind == "boss" else (1.12 if state.enemy_elite else 1.0)
@@ -207,6 +211,11 @@ func sync_enemy(walk_in: bool = true) -> void:
 
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
 	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
+
+func on_shield_broken() -> void:
+	var at = enemy_center()
+	rings.append({"pos": at, "t": 0.0, "dur": 0.4, "radius": 120.0, "color": Color("82bcf5")})
+	burst_particles(at, [Color("82bcf5"), Color("e0f4ff")], 16, 250.0)
 
 func on_attack_started() -> void:
 	hero.play("attack")
@@ -255,7 +264,7 @@ func on_burst(interrupted: bool) -> void:
 	if interrupted:
 		projectiles = projectiles.filter(func(p): return not p.get("fire", false))
 		enemy.play("hurt")
-		show_banner("¡INTERRUMPIDO!", "El Rey queda aturdido", Color("ffcf7b"), 1.6)
+		show_banner("¡INTERRUMPIDO!", state.enemy_name() + " queda aturdido", Color("ffcf7b"), 1.6)
 
 func on_hero_hit(damage: float, heavy: bool) -> void:
 	enemy.play("attack")
@@ -400,7 +409,7 @@ func _process(delta: float) -> void:
 		heavy_launched = false
 	elif state.charge_timer <= 0.32 and not heavy_launched:
 		heavy_launched = true
-		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": maxf(0.01, state.charge_timer), "color": Color("ff9a4a"), "size": 26.0, "fire": true})
+		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": maxf(0.01, state.charge_timer), "color": Color("c9a6f5") if state.enemy_role() == "acolyte" else Color("ff9a4a"), "size": 26.0, "fire": true})
 	# Enemy wind-up: start the attack animation just before the blow lands.
 	if state.active() and state.spawn_delay <= 0 and not state.charging and state.stun_time <= 0:
 		var left = state.attack_interval() - state.attack_timer
@@ -505,6 +514,14 @@ func _draw_lights() -> void:
 		lights.draw_texture_rect(glow, Rect2(ember_stage_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.7, 0.3, 0.9))
 
 func _draw_fx() -> void:
+	# Provisional magical shield; its four segments mirror the remaining hits.
+	if state.shield_hits > 0:
+		var center = enemy_center()
+		for i in range(state.shield_hits):
+			var angle = -PI * 0.75 + i * PI * 0.5
+			fx_layer.draw_arc(center, 85, angle, angle + PI * 0.4, 12, Color("82bcf5"), 5)
+	if state.enemy_role() == "acolyte":
+		fx_layer.draw_arc(enemy_center(), 74, 0, TAU, 6, Color(0.75, 0.5, 1, 0.7), 2)
 	# Companions orbiting the bearer.
 	for i in range(mini(state.wisps, 6)):
 		var pos = companion_pos(i)
@@ -514,7 +531,7 @@ func _draw_fx() -> void:
 		var k = clampf(p.t / p.dur, 0, 1)
 		var pos = p.from.lerp(p.to, k) + Vector2(0, -sin(k * PI) * (40 if p.get("fire", false) else 12))
 		if p.get("fire", false):
-			lib.draw_fx(fx_layer, "critical", fmod(time, 0.2), pos, p.size * 5, Color(1, 0.75, 0.5), 20.0, time * 6.0)
+			lib.draw_fx(fx_layer, "critical", fmod(time, 0.2), pos, p.size * 5, p.color, 20.0, time * 6.0)
 		else:
 			fx_layer.draw_line(p.from.lerp(p.to, maxf(0, k - 0.25)), pos, Color(p.color, 0.8), p.size)
 	for e in effects:
@@ -571,6 +588,8 @@ func _draw_overlay() -> void:
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
 		_text_center(body, "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))], Vector2(cx, bar.end.y + 17), 13, Color("c3cbd3"), 3)
+		if not state.enemy_hint().is_empty():
+			_text_center(body, state.enemy_hint(), Vector2(cx, top_y - 24), 13, Color("acd5ff"), 3)
 		# Telegraph.
 		var feet = stage_to_screen(ENEMY_FEET)
 		var tele_w = plate_w * 0.8
@@ -581,7 +600,7 @@ func _draw_overlay() -> void:
 			tele = Rect2(w * 0.5 - w * 0.3, size.y * 0.16, w * 0.6, 12)
 			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
-			_text_center(font, "¡BRASA DEL REY!  Interrumpe con DESTELLO  [E]", Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
+			_text_center(font, state.charge_name() + " · DESTELLO [E]", Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
 		elif state.stun_time > 0:
 			_text_center(font, "ATURDIDO", Vector2(cx, tele.position.y + 18), 18, Color("ffe38a"), 4)
 		elif state.spawn_delay <= 0:
@@ -591,7 +610,7 @@ func _draw_overlay() -> void:
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * warn, tele.size.y)), col)
 			var label = "Golpe en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
 			if state.next_is_heavy():
-				label = "Prepara su Brasa en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
+				label = "Canaliza en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
 			_text_center(body, label, Vector2(cx, tele.end.y + 18), 14, Color("ffb08a") if warn > 0.8 else Color("aab6c1"), 3)
 	# Combo and fury near the bearer.
 	var hero_top = stage_to_screen(HERO_FEET + Vector2(0, -hero.height() - 18))

@@ -20,7 +20,7 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 | Entrega | Trabajo | Criterio para darla por terminada |
 |---|---|---|
 | Ritmo | Probar sesiones humanas de 10–15 minutos y comparar las tres rutas | Descanso útil sin ser obligatorio, élite con recompensa suficiente, eventos comprensibles y sin bloqueos |
-| Enemigos | Guardián con escudo y Acólito con ataque canalizado, primero con representaciones provisionales | El aviso permite reaccionar; el contador y Destello tienen efectos claros; automatización sigue siendo viable |
+| Enemigos · implementado | Guardián con escudo y Acólito con ataque canalizado; arte provisional | Avisos, contador, interrupción, guardado y combate automático verificados; pendiente valoración humana |
 | Jefe de Criptas | Campanera Vacía, con patrones propios | Al menos dos decisiones de combate diferentes al Rey, sin exigir clics rápidos |
 | Reliquias | Cuatro sinergias de clics, compañeros, habilidad y defensa | Cada una cambia una decisión; ninguna combinación impide progresar o produce daño ilimitado |
 | Colección | Registro persistente de descubrimientos | Muestra únicamente lo encontrado y sobrevive a renacer y migrar un guardado |
@@ -54,3 +54,13 @@ Para probar manualmente: una expedición dejando trabajar a los luceros y usando
 - Pruebas: progresión (71), assets (1011), rutas (36), interfaz (34), sincronización (17). Prueba gráfica de 70 segundos, 10070 fotogramas, sin errores; mejor cámara 27.
 
 Se conserva el arte generado existente. Este bloque ajusta su reproducción y la respuesta del combate; la valoración de fluidez final sigue requiriendo una partida humana.
+
+## Enemigos con habilidades — 4 de octubre de 2026
+
+- Guardián del Umbral en cámaras terminadas en 6: cuatro segmentos de escudo. Los tres primeros impactos hacen un 65% de daño; el cuarto rompe el escudo y hace daño completo. Los luceros también consumen segmentos. Destello rompe el escudo antes de aplicar todo su daño. No regenera el escudo durante ese encuentro.
+- Acólito del Eco en cámaras terminadas en 8: tras preparar su ataque durante 4,8 s, canaliza durante 3 s. Destello interrumpe y aturde 2 s. Si completa el Eco, hace 1,6 veces su daño normal.
+- Variantes provisionales del centinela y lucero, con color, escudo segmentado, sello y avisos propios. Los nuevos diseños definitivos continúan pendientes.
+- El guardado conserva escudo y canalización. Las partidas anteriores sin el campo de escudo cargan con cero segmentos, para no añadir defensa a un combate ya empezado.
+- 20 pruebas específicas de habilidades aprobadas. Comparación de cinco semillas: sin clics, cámara 10 antes y después (2,27 frente a 2,30 minutos de media); a 1/3/5 intentos por segundo no aparece un bloqueo de progreso. Estos resultados corresponden a un bot que compra mejoras y usa Destello; no sustituyen pruebas humanas.
+
+Pendientes del plan: Campanera Vacía, cuatro sinergias de reliquias, colección persistente, assets definitivos de enemigos/eventos y exportación Windows.

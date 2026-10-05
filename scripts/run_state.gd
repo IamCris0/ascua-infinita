@@ -14,6 +14,7 @@ signal ember_spawned
 signal ember_collected(kind: String, amount: float)
 signal relic_offered
 signal purchased(kind: int, count: int)
+signal shield_broken
 signal attack_started
 signal burst_released(interrupted: bool)
 
@@ -71,6 +72,7 @@ var hp: float = 100
 var enemy_hp: float = 24
 var enemy_max: float = 24
 var enemy_elite: bool = false
+var shield_hits: int = 0
 var attack_timer: float = 0
 var auto_timer: float = 0
 var click_cooldown: float = 0
@@ -181,13 +183,44 @@ func biome() -> int:
 func cycle() -> int:
 	return int((room - 1) / 30.0)
 
+func enemy_role() -> String:
+	if not is_boss():
+		if room % 10 == 6:
+			return "guardian"
+		if room % 10 == 8:
+			return "acolyte"
+	return ""
+
+func enemy_index() -> int:
+	return 2 if enemy_role() == "guardian" else (1 if enemy_role() == "acolyte" else (room - 1) % 3)
+
 func enemy_kind() -> String:
-	return "boss" if is_boss() else ["slime", "wisp", "sentinel"][(room - 1) % 3]
+	return "boss" if is_boss() else ["slime", "wisp", "sentinel"][enemy_index()]
+
+func charge_name() -> String:
+	return "ECO ABISAL" if enemy_role() == "acolyte" else "BRASA DEL REY"
+
+func enemy_hint() -> String:
+	if shield_hits > 0:
+		return "Escudo: %d golpes · Destello lo rompe" % shield_hits
+	if enemy_role() == "guardian":
+		return "Escudo roto · daño completo"
+	if enemy_role() == "acolyte":
+		return "Canaliza Eco · interrumpe con Destello"
+	return ""
+
+func break_shield() -> void:
+	if shield_hits <= 0:
+		return
+	shield_hits = 0
+	shield_broken.emit()
+	event.emit("¡Escudo roto! El Guardián recibe daño completo.")
 
 func enemy_name() -> String:
 	if is_boss():
 		return "EL REY SIN BRASA"
-	return ("Élite · " if enemy_elite else "") + ENEMY_NAMES[biome()][(room - 1) % 3]
+	var title = "Guardián del Umbral" if enemy_role() == "guardian" else ("Acólito del Eco" if enemy_role() == "acolyte" else ENEMY_NAMES[biome()][enemy_index()])
+	return ("Élite · " if enemy_elite else "") + title
 
 func boss_title() -> String:
 	return BOSS_TITLES[biome()]
@@ -195,15 +228,15 @@ func boss_title() -> String:
 func attack_interval() -> float:
 	if is_boss():
 		return 4.0
-	return [5.6, 4.8, 6.6][(room - 1) % 3]
+	return [5.6, 4.8, 6.6][enemy_index()]
 
 func enemy_damage() -> float:
 	var raw = (5 + room * 1.35) * (1.7 if is_boss() else 1.0) * (1.3 if enemy_elite else 1.0) * (1.15 if biome() == 2 else 1.0)
-	raw *= [1.0, 0.85, 1.25][(room - 1) % 3] if not is_boss() else 1.0
+	raw *= [1.0, 0.85, 1.25][enemy_index()] if not is_boss() else 1.0
 	return maxf(1, raw - armor * 2)
 
 func heavy_damage() -> float:
-	return enemy_damage() * 3.0
+	return enemy_damage() * (1.6 if enemy_role() == "acolyte" else 3.0)
 
 func kill_reward() -> float:
 	return (16 + room * 6.5) * gold_multiplier() * (3.0 if is_boss() else 1.0) * (2.5 if enemy_elite else 1.0)
@@ -244,7 +277,7 @@ func charge_progress() -> float:
 	return 1.0 - charge_timer / CHARGE_TIME if charging else 0.0
 
 func next_is_heavy() -> bool:
-	return is_boss() and boss_attacks % 3 == 2
+	return enemy_role() == "acolyte" or (is_boss() and boss_attacks % 3 == 2)
 
 # ---------------------------------------------------------------- simulation
 func tick(delta: float) -> void:
@@ -296,7 +329,7 @@ func tick(delta: float) -> void:
 			if next_is_heavy():
 				charging = true
 				charge_timer = CHARGE_TIME
-				event.emit("¡El Rey reúne su brasa! Interrúmpelo con Destello.")
+				event.emit(charge_name() + " · 3 s para interrumpir con Destello [E].")
 				boss_charge_started.emit()
 			else:
 				boss_attacks += 1
@@ -306,7 +339,7 @@ func tick(delta: float) -> void:
 func _hit_hero(amount: float, heavy: bool) -> void:
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
-	event.emit(("Brasa del Rey" if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
+	event.emit((charge_name().capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
 	if hp <= 0:
 		finish_run()
 
@@ -382,10 +415,11 @@ func burst() -> bool:
 		stun_time = 2.0
 		attack_timer = 0
 		damage *= 1.5
-		event.emit("¡INTERRUMPIDO! El Rey queda aturdido")
+		event.emit("¡INTERRUMPIDO! " + enemy_name() + " queda aturdido")
 		boss_interrupted.emit()
 	else:
 		event.emit("DESTELLO · la llama despierta")
+	break_shield()
 	burst_released.emit(interrupted)
 	damage_enemy(damage, true, false)
 	return true
@@ -393,6 +427,12 @@ func burst() -> bool:
 func damage_enemy(amount: float, critical: bool = false, automatic: bool = false) -> void:
 	if not active():
 		return
+	if shield_hits > 0:
+		if shield_hits == 1:
+			break_shield()
+		else:
+			shield_hits -= 1
+			amount *= 0.65
 	idle_time = 0
 	enemy_hp = maxf(0, enemy_hp - amount)
 	struck.emit(amount, critical, automatic)
@@ -436,12 +476,13 @@ func defeat_enemy() -> void:
 		relic_offered.emit()
 
 func spawn_enemy(roll_elite: bool = true) -> void:
+	shield_hits = 4 if enemy_role() == "guardian" else 0
 	pending_hit = 0
 	pending_damage = 0
 	if roll_elite:
 		enemy_elite = not is_boss() and room >= 6 and rng.randf() < 0.12
 	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0)
-	enemy_max *= [1.0, 0.85, 1.3][(room - 1) % 3] if not is_boss() else 1.0
+	enemy_max *= [1.0, 0.85, 1.3][enemy_index()] if not is_boss() else 1.0
 	enemy_hp = enemy_max
 	attack_timer = 0
 	charging = false
@@ -602,11 +643,11 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+const COMBAT_DEFAULTS = {"shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
+const COMBAT_LIMITS = {"shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 
