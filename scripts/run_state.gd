@@ -29,6 +29,12 @@ const RELICS = [
 	{"id": "ash", "name": "Ceniza hambrienta", "tag": "VAMPIRISMO", "description": "Recuperas 4 de vida al vencer a un enemigo.", "color": "be99ea"},
 	{"id": "storm", "name": "Frasco de tormenta", "tag": "DESTELLO", "description": "Destello recarga un 20% más rápido y golpea un 25% más fuerte.", "color": "82bcf5"}
 ]
+const SYNERGIES = [
+	{"id": "precision", "pair": ["fang", "eye"], "name": "Filo del cometa", "description": "Cada crítico manual que impacta reduce 0,4 s la recarga de Destello."},
+	{"id": "chorus", "pair": ["clock", "coin"], "name": "Coro dorado", "description": "Tras 2 s sin atacar manualmente, los luceros hacen un 30% más de daño. Destello no rompe el coro."},
+	{"id": "stormcall", "pair": ["storm", "eye"], "name": "Tormenta certera", "description": "Interrumpir una canalización con Destello reduce un 25% su nueva recarga."},
+	{"id": "shelter", "pair": ["heart", "ash"], "name": "Refugio de musgo", "description": "Vencer a un enemigo protege del 40% del siguiente golpe recibido. No acumula cargas."}
+]
 const RELIC_IDS = ["fang", "clock", "eye", "heart", "coin", "ash", "storm"]
 const UPGRADES = [
 	{"name": "Filo de ascua", "description": "+3,5 daño por clic", "base": 15, "growth": 1.52},
@@ -74,6 +80,8 @@ var enemy_max: float = 24
 var enemy_elite: bool = false
 var shield_hits: int = 0
 var bell_resonance: int = 0
+var manual_rest: float = 0
+var shelter_ready: bool = false
 var attack_timer: float = 0
 var auto_timer: float = 0
 var click_cooldown: float = 0
@@ -138,6 +146,22 @@ func _init() -> void:
 func count_relic(id: String) -> int:
 	return relics.count(id)
 
+func has_synergy(id: String) -> bool:
+	for synergy in SYNERGIES:
+		if synergy.id == id:
+			return relics.has(synergy.pair[0]) and relics.has(synergy.pair[1])
+	return false
+
+func synergy_hint(relic_id: String) -> String:
+	var hints: Array[String] = []
+	for synergy in SYNERGIES:
+		if relic_id not in synergy.pair:
+			continue
+		var other: String = synergy.pair[1] if synergy.pair[0] == relic_id else synergy.pair[0]
+		var other_name: String = RELICS[RELIC_IDS.find(other)].name
+		hints.append(("ACTIVA " if relics.has(other) else "Con " + other_name + ": ") + synergy.name + " · " + synergy.description)
+	return "\n".join(hints)
+
 func legacy_level(kind: int) -> int:
 	return int(legacy[kind]) if kind < legacy.size() else 0
 
@@ -155,7 +179,7 @@ func wisp_damage() -> float:
 	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier()
 
 func auto_damage() -> float:
-	return wisps * wisp_damage()
+	return wisps * wisp_damage() * (1.3 if has_synergy("chorus") and manual_rest >= 2.0 else 1.0)
 
 func critical_chance() -> float:
 	return minf(0.65, 0.08 + count_relic("eye") * 0.12 + focus * 0.03)
@@ -304,6 +328,7 @@ func tick(delta: float) -> void:
 	if not active():
 		return
 	run_time += delta
+	manual_rest = minf(2, manual_rest + delta)
 	click_cooldown = maxf(0, click_cooldown - delta)
 	burst_cooldown = maxf(0, burst_cooldown - delta)
 	fury_time = maxf(0, fury_time - delta)
@@ -320,6 +345,8 @@ func tick(delta: float) -> void:
 		if pending_hit <= 0:
 			var damage = pending_damage
 			pending_damage = 0
+			if pending_critical and has_synergy("precision"):
+				burst_cooldown = maxf(0, burst_cooldown - 0.4)
 			damage_enemy(damage, pending_critical, false)
 			if not active() or spawn_delay > 0:
 				return
@@ -361,6 +388,10 @@ func tick(delta: float) -> void:
 	changed.emit()
 
 func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
+	if shelter_ready and has_synergy("shelter"):
+		amount *= 0.6
+		shelter_ready = false
+		event.emit("Refugio de musgo · protege del 40% del golpe")
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
 	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
@@ -419,6 +450,7 @@ func click() -> bool:
 	if not can_strike() or click_cooldown > 0:
 		return false
 	click_cooldown = CLICK_INTERVAL
+	manual_rest = 0
 	combo = mini(20, combo + 1)
 	combo_time = 1.5
 	if charging and bell_silence():
@@ -442,6 +474,8 @@ func burst() -> bool:
 		stun_time = 2.0
 		attack_timer = 0
 		damage *= 1.5
+		if has_synergy("stormcall"):
+			burst_cooldown *= 0.75
 		event.emit("¡INTERRUMPIDO! " + enemy_name() + " queda aturdido")
 		boss_interrupted.emit()
 	else:
@@ -474,6 +508,8 @@ func _gain_gold(amount: float) -> void:
 
 func defeat_enemy() -> void:
 	var boss = is_boss()
+	if has_synergy("shelter"):
+		shelter_ready = true
 	var reward = kill_reward()
 	_gain_gold(reward)
 	var depth = int(room / 10.0)
@@ -639,6 +675,8 @@ func restart() -> void:
 	armor = 0
 	focus = 0
 	relics.clear()
+	manual_rest = 0
+	shelter_ready = false
 	offers.clear()
 	journey_phase = ""
 	encounter_kind = ""
@@ -672,11 +710,11 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"bell_resonance": 0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+const COMBAT_DEFAULTS = {"manual_rest": 0.0, "shelter_ready": false, "bell_resonance": 0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
+const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 

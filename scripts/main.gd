@@ -801,6 +801,21 @@ func refresh() -> void:
 		last_room = state.room
 
 func refresh_relics() -> void:
+	var active_names: Array[String] = []
+	var descriptions: Array[String] = []
+	for synergy in state.SYNERGIES:
+		if state.has_synergy(synergy.id):
+			var suffix = ""
+			if synergy.id == "chorus":
+				suffix = " · +30%" if state.manual_rest >= 2 else " · preparando"
+			elif synergy.id == "shelter":
+				suffix = " · protegido" if state.shelter_ready else " · sin carga"
+			active_names.append("• " + synergy.name + suffix)
+			descriptions.append(synergy.name + ": " + synergy.description)
+	relic_hint.visible = state.relics.is_empty() or not active_names.is_empty()
+	relic_hint.text = "Tu primera reliquia espera al superar la cámara 5." if state.relics.is_empty() else "SINERGIAS\n" + "\n".join(active_names)
+	relic_hint.tooltip_text = "\n\n".join(descriptions)
+	relic_hint.mouse_filter = Control.MOUSE_FILTER_STOP
 	var signature = "|" + ",".join(state.relics)
 	if signature == relic_signature:
 		return
@@ -808,14 +823,13 @@ func refresh_relics() -> void:
 	for child in relic_grid.get_children():
 		relic_grid.remove_child(child)
 		child.queue_free()
-	relic_hint.visible = state.relics.is_empty()
 	for relic in state.RELICS:
 		var n: int = state.count_relic(relic.id)
 		if n == 0:
 			continue
 		var holder = Control.new()
 		holder.custom_minimum_size = Vector2(48, 48)
-		holder.tooltip_text = "%s%s\n%s" % [relic.name, " ×%d" % n if n > 1 else "", relic.description]
+		holder.tooltip_text = "%s%s\n%s" % [relic.name, " ×%d" % n if n > 1 else "", relic.description + "\n" + state.synergy_hint(relic.id)]
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		relic_grid.add_child(holder)
 		var slot = PanelContainer.new()
@@ -1066,9 +1080,10 @@ func show_relics() -> void:
 		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		label(cv, relic.tag, 14, color, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label(cv, relic.name, 22, Kit.TEXT, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var d = wrap_label(cv, relic.description, 16, Color("d6d0c4"))
+		var d = wrap_label(cv, relic.description + "\n\n" + state.synergy_hint(relic.id), 16, Color("d6d0c4"))
 		d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		d.custom_minimum_size.y = 64
+		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var owned = state.count_relic(relic.id)
 		label(cv, "Ya tienes ×%d" % owned if owned > 0 else "Nueva", 13, Kit.MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button(cv, "ELEGIR  [%d]" % n, func(): choose_relic(index), 52)

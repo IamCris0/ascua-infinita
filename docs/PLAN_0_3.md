@@ -22,7 +22,7 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 | Ritmo | Probar sesiones humanas de 10–15 minutos y comparar las tres rutas | Descanso útil sin ser obligatorio, élite con recompensa suficiente, eventos comprensibles y sin bloqueos |
 | Enemigos · implementado | Guardián con escudo y Acólito con ataque canalizado; arte provisional | Avisos, contador, interrupción, guardado y combate automático verificados; pendiente valoración humana |
 | Jefe de Criptas · mecánicas implementadas | Campanera Vacía: Silencio y Toque Fúnebre; apariencia provisional | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
-| Reliquias | Cuatro sinergias de clics, compañeros, habilidad y defensa | Cada una cambia una decisión; ninguna combinación impide progresar o produce daño ilimitado |
+| Reliquias · implementado | Cuatro combinaciones entre reliquias existentes | Efectos acotados, estados guardados, descripción al elegir y panel de combinaciones activas |
 | Colección | Registro persistente de descubrimientos | Muestra únicamente lo encontrado y sobrevive a renacer y migrar un guardado |
 | Distribución | Exportación Windows con atlas.json incluido | Arranca fuera del editor, encuentra todos los assets y guarda/carga desde una instalación limpia |
 
@@ -76,3 +76,18 @@ Aparece en la cámara 20 y cada vuelta posterior por las Criptas (50, 80…). Co
 - 21 pruebas específicas aprobadas, además de las suites de progresión, assets, interfaz, rutas, sincronización y enemigos: 1210 comprobaciones en total. Prueba gráfica: 10072 fotogramas, mejor cámara 24, sin errores. Revisadas las capturas de ambas fases.
 
 Siguiente bloque: las cuatro sinergias de reliquias. Después, colección persistente y exportación; el arte definitivo sigue pendiente.
+
+## Sinergias de reliquias — 5 de octubre de 2026
+
+| Combinación | Sinergia | Efecto |
+|---|---|---|
+| Colmillo + Ojo | Filo del cometa | Un crítico manual que impacta resta 0,4 s de recarga de Destello, sin bajar de cero. |
+| Reloj + Moneda | Coro dorado | Tras 2 s sin ataques manuales aceptados, los luceros hacen +30% de daño. Destello conserva el coro. |
+| Frasco + Ojo | Tormenta certera | Interrumpir con Destello reduce un 25% su nueva recarga. Usarlo sin interrumpir no concede el bonus. |
+| Corazón + Ceniza | Refugio de musgo | Vencer otorga una carga que reduce un 40% el siguiente golpe recibido. No acumula cargas. |
+
+Los duplicados conservan su mejora base, pero no multiplican estos efectos. Descanso y protección se guardan; la pausa no los avanza y renacer los reinicia. Los guardados anteriores usan valores neutrales. Las cartas explican sus parejas y el panel muestra las sinergias activas, con detalles al pasar el cursor.
+
+Validación: 17 pruebas específicas. La simulación de cinco semillas mantiene la llegada al primer jefe sin clics; a cinco intentos por segundo obtiene cámaras 24/29/20/26/27, frente a 23/28/20/26/27 antes de las sinergias. El bot no optimiza las combinaciones; queda pendiente la valoración humana.
+
+Próximo bloque: colección persistente de descubrimientos, seguido del arte definitivo y la distribución Windows.
