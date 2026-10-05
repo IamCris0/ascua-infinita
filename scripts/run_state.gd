@@ -73,6 +73,7 @@ var enemy_hp: float = 24
 var enemy_max: float = 24
 var enemy_elite: bool = false
 var shield_hits: int = 0
+var bell_resonance: int = 0
 var attack_timer: float = 0
 var auto_timer: float = 0
 var click_cooldown: float = 0
@@ -183,6 +184,12 @@ func biome() -> int:
 func cycle() -> int:
 	return int((room - 1) / 30.0)
 
+func is_bell_keeper() -> bool:
+	return is_boss() and biome() == 1
+
+func bell_silence() -> bool:
+	return is_bell_keeper() and boss_attacks % 4 == 1
+
 func enemy_role() -> String:
 	if not is_boss():
 		if room % 10 == 6:
@@ -198,9 +205,18 @@ func enemy_kind() -> String:
 	return "boss" if is_boss() else ["slime", "wisp", "sentinel"][enemy_index()]
 
 func charge_name() -> String:
+	if is_bell_keeper():
+		return "SILENCIO" if bell_silence() else "TOQUE FÚNEBRE"
 	return "ECO ABISAL" if enemy_role() == "acolyte" else "BRASA DEL REY"
 
+func charge_hint() -> String:
+	if bell_silence():
+		return "Suelta clic / Espacio · luceros seguros"
+	return "Interrumpe con Destello [E]"
+
 func enemy_hint() -> String:
+	if is_bell_keeper():
+		return "Silencio: suelta el ataque · Toque: Destello"
 	if shield_hits > 0:
 		return "Escudo: %d golpes · Destello lo rompe" % shield_hits
 	if enemy_role() == "guardian":
@@ -218,12 +234,12 @@ func break_shield() -> void:
 
 func enemy_name() -> String:
 	if is_boss():
-		return "EL REY SIN BRASA"
+		return "CAMPANERA VACÍA" if is_bell_keeper() else "EL REY SIN BRASA"
 	var title = "Guardián del Umbral" if enemy_role() == "guardian" else ("Acólito del Eco" if enemy_role() == "acolyte" else ENEMY_NAMES[biome()][enemy_index()])
 	return ("Élite · " if enemy_elite else "") + title
 
 func boss_title() -> String:
-	return BOSS_TITLES[biome()]
+	return "GUARDIANA DEL ECO" if is_bell_keeper() else BOSS_TITLES[biome()]
 
 func attack_interval() -> float:
 	if is_boss():
@@ -236,6 +252,8 @@ func enemy_damage() -> float:
 	return maxf(1, raw - armor * 2)
 
 func heavy_damage() -> float:
+	if is_bell_keeper():
+		return enemy_damage() * (0.7 + bell_resonance * 0.25 if bell_silence() else 2.4)
 	return enemy_damage() * (1.6 if enemy_role() == "acolyte" else 3.0)
 
 func kill_reward() -> float:
@@ -277,6 +295,8 @@ func charge_progress() -> float:
 	return 1.0 - charge_timer / CHARGE_TIME if charging else 0.0
 
 func next_is_heavy() -> bool:
+	if is_bell_keeper():
+		return boss_attacks % 2 == 1
 	return enemy_role() == "acolyte" or (is_boss() and boss_attacks % 3 == 2)
 
 # ---------------------------------------------------------------- simulation
@@ -319,27 +339,31 @@ func tick(delta: float) -> void:
 	elif charging:
 		charge_timer = maxf(0, charge_timer - delta)
 		if charge_timer <= 0:
+			var damage = heavy_damage()
+			var spell = charge_name()
 			charging = false
 			boss_attacks += 1
-			_hit_hero(heavy_damage(), true)
+			bell_resonance = 0
+			_hit_hero(damage, true, spell)
 	else:
 		attack_timer += delta
 		if attack_timer >= attack_interval():
 			attack_timer = 0
 			if next_is_heavy():
 				charging = true
+				bell_resonance = 0
 				charge_timer = CHARGE_TIME
-				event.emit(charge_name() + " · 3 s para interrumpir con Destello [E].")
+				event.emit(charge_name() + " · " + charge_hint())
 				boss_charge_started.emit()
 			else:
 				boss_attacks += 1
 				_hit_hero(enemy_damage(), false)
 	changed.emit()
 
-func _hit_hero(amount: float, heavy: bool) -> void:
+func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
-	event.emit((charge_name().capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
+	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
 	if hp <= 0:
 		finish_run()
 
@@ -397,6 +421,8 @@ func click() -> bool:
 	click_cooldown = CLICK_INTERVAL
 	combo = mini(20, combo + 1)
 	combo_time = 1.5
+	if charging and bell_silence():
+		bell_resonance = mini(3, bell_resonance + 1)
 	pending_critical = rng.randf() < critical_chance()
 	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0)
 	pending_hit = HIT_DELAY
@@ -411,6 +437,7 @@ func burst() -> bool:
 	var interrupted = charging
 	if charging:
 		charging = false
+		bell_resonance = 0
 		boss_attacks += 1
 		stun_time = 2.0
 		attack_timer = 0
@@ -476,6 +503,7 @@ func defeat_enemy() -> void:
 		relic_offered.emit()
 
 func spawn_enemy(roll_elite: bool = true) -> void:
+	bell_resonance = 0
 	shield_hits = 4 if enemy_role() == "guardian" else 0
 	pending_hit = 0
 	pending_damage = 0
@@ -583,6 +611,7 @@ func finish_run() -> void:
 		return
 	essence += run_essence
 	dead = true
+	bell_resonance = 0
 	pending_hit = 0
 	pending_damage = 0
 	charging = false
@@ -643,11 +672,11 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+const COMBAT_DEFAULTS = {"bell_resonance": 0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
+const COMBAT_LIMITS = {"bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 

@@ -420,7 +420,7 @@ func show_title() -> void:
 	button(title_menu, "CÓMO JUGAR", func(): show_howto(""), 50)
 	button(title_menu, "OPCIONES", func(): show_options(""), 50)
 	button(title_menu, "SALIR", quit_game, 50)
-	var s = "Mejor cámara: %d   ·   Expediciones: %d   ·   Enemigos vencidos: %d   ·   Reyes caídos: %d" % [state.best, state.runs, state.total_kills, state.total_bosses]
+	var s = "Mejor cámara: %d   ·   Expediciones: %d   ·   Enemigos vencidos: %d   ·   Jefes vencidos: %d" % [state.best, state.runs, state.total_kills, state.total_bosses]
 	title_stats.text = s if state.total_kills > 0 else "Tu primera expedición te espera."
 	update_music()
 
@@ -777,7 +777,9 @@ func refresh() -> void:
 	var ready = state.burst_cooldown <= 0 and state.active()
 	burst_fill.max_value = state.burst_max_cooldown()
 	burst_fill.value = state.burst_max_cooldown() - state.burst_cooldown
-	if state.charging:
+	if state.charging and state.bell_silence():
+		burst_label.text = "DESTELLO · CANCELAR SILENCIO [E]" if state.burst_cooldown <= 0 else "DESTELLO · %.1f s" % state.burst_cooldown
+	elif state.charging:
 		burst_label.text = "¡INTERRUMPIR!  DESTELLO  [E]" if state.burst_cooldown <= 0 else "DESTELLO  ·  %.1f s" % state.burst_cooldown
 	elif state.burst_cooldown > 0:
 		burst_label.text = "DESTELLO  ·  %.1f s" % state.burst_cooldown
@@ -1157,7 +1159,7 @@ func show_summary() -> void:
 	v.add_child(grid)
 	var minutes = int(state.run_time / 60.0)
 	var rows = [["Cámara alcanzada", str(state.room) + ("  · ¡nuevo récord!" if record else "")], ["Enemigos vencidos", str(state.run_kills)],
-		["Reyes derrotados", str(state.run_bosses)], ["Oro reunido", fmt(state.run_gold)],
+		["Jefes derrotados", str(state.run_bosses)], ["Oro reunido", fmt(state.run_gold)],
 		["Reliquias", str(state.relics.size())], ["Duración", "%d min %02d s" % [minutes, int(state.run_time) % 60]]]
 	for r in rows:
 		label(grid, r[0], 17, Kit.MUTED)

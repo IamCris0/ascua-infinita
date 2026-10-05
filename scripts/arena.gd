@@ -187,6 +187,9 @@ func sync_enemy(walk_in: bool = true) -> void:
 		enemy.tint = Color("94c9ed")
 	elif state.enemy_role() == "acolyte":
 		enemy.tint = Color("d4a4ff")
+	if state.is_bell_keeper():
+		enemy.tint = Color("a9c9ff")
+		enemy.hue = 0.6
 	enemy.alpha = 1.0
 	enemy.brightness = 1.12 if state.enemy_elite else 1.0
 	enemy.base_scale = 1.15 if kind == "boss" else (1.12 if state.enemy_elite else 1.0)
@@ -207,7 +210,7 @@ func sync_enemy(walk_in: bool = true) -> void:
 		bg_fade = 1.0
 		show_banner(state.BIOMES[bg_index], state.BIOME_RULES[bg_index], Color("84cdb7"))
 	if kind == "boss":
-		show_banner("EL REY SIN BRASA", state.boss_title(), Color("ff8a5c"), 1.9)
+		show_banner(state.enemy_name(), state.boss_title(), Color("ff8a5c"), 1.9)
 
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
 	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
@@ -409,7 +412,7 @@ func _process(delta: float) -> void:
 		heavy_launched = false
 	elif state.charge_timer <= 0.32 and not heavy_launched:
 		heavy_launched = true
-		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": maxf(0.01, state.charge_timer), "color": Color("c9a6f5") if state.enemy_role() == "acolyte" else Color("ff9a4a"), "size": 26.0, "fire": true})
+		projectiles.append({"from": enemy_center() + Vector2(-60, -10), "to": hero_center(), "t": 0.0, "dur": maxf(0.01, state.charge_timer), "color": Color("c9a6f5") if state.enemy_role() == "acolyte" or state.is_bell_keeper() else Color("ff9a4a"), "size": 26.0, "fire": true, "echo": state.is_bell_keeper()})
 	# Enemy wind-up: start the attack animation just before the blow lands.
 	if state.active() and state.spawn_delay <= 0 and not state.charging and state.stun_time <= 0:
 		var left = state.attack_interval() - state.attack_timer
@@ -428,7 +431,7 @@ func _process(delta: float) -> void:
 	if state.charging:
 		enemy.anim_time = 0.1 if state.charge_timer > 0.32 else 0.3 + (0.32 - state.charge_timer)
 		enemy.flash = maxf(enemy.flash, 0.25 + 0.2 * sin(ambient_time * 14.0))
-		enemy.flash_color = Color(1, 0.55, 0.2)
+		enemy.flash_color = Color("c9a6f5") if state.is_bell_keeper() else Color(1, 0.55, 0.2)
 	if enemy.has_meta("lunge"):
 		var t: float = enemy.get_meta("lunge") + delta
 		enemy.set_meta("lunge", t)
@@ -505,7 +508,7 @@ func _draw_lights() -> void:
 		lights.draw_texture_rect(glow, Rect2(enemy_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.75, 0.25, 0.55))
 	if state.charging:
 		var r = 120.0 + 160.0 * state.charge_progress()
-		lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(-70, -10) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.45, 0.1, 0.7))
+		lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(-70, -10) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(0.65, 0.4, 1.0, 0.5) if state.is_bell_keeper() else Color(1.0, 0.45, 0.1, 0.7))
 	if state.fury_time > 0:
 		var r = 130.0
 		lights.draw_texture_rect(glow, Rect2(hero_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.5, 0.2, 0.45))
@@ -514,6 +517,13 @@ func _draw_lights() -> void:
 		lights.draw_texture_rect(glow, Rect2(ember_stage_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.7, 0.3, 0.9))
 
 func _draw_fx() -> void:
+	if state.is_bell_keeper():
+		var center = enemy_center() + Vector2(0, -enemy.height() * 0.52)
+		fx_layer.draw_arc(center, 30, PI, TAU, 20, Color("c9a6f5"), 4)
+		fx_layer.draw_line(center + Vector2(-30, 0), center + Vector2(-38, 16), Color("c9a6f5"), 4)
+		fx_layer.draw_line(center + Vector2(30, 0), center + Vector2(38, 16), Color("c9a6f5"), 4)
+		fx_layer.draw_line(center + Vector2(-38, 16), center + Vector2(38, 16), Color("c9a6f5"), 4)
+		fx_layer.draw_circle(center + Vector2(0, 24), 5, Color("c9a6f5"))
 	# Provisional magical shield; its four segments mirror the remaining hits.
 	if state.shield_hits > 0:
 		var center = enemy_center()
@@ -530,7 +540,9 @@ func _draw_fx() -> void:
 	for p in projectiles:
 		var k = clampf(p.t / p.dur, 0, 1)
 		var pos = p.from.lerp(p.to, k) + Vector2(0, -sin(k * PI) * (40 if p.get("fire", false) else 12))
-		if p.get("fire", false):
+		if p.get("echo", false):
+			fx_layer.draw_arc(pos, 20 + k * 35, 0, TAU, 24, Color(p.color, 0.85), 4)
+		elif p.get("fire", false):
 			lib.draw_fx(fx_layer, "critical", fmod(time, 0.2), pos, p.size * 5, p.color, 20.0, time * 6.0)
 		else:
 			fx_layer.draw_line(p.from.lerp(p.to, maxf(0, k - 0.25)), pos, Color(p.color, 0.8), p.size)
@@ -588,7 +600,7 @@ func _draw_overlay() -> void:
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
 		_text_center(body, "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))], Vector2(cx, bar.end.y + 17), 13, Color("c3cbd3"), 3)
-		if not state.enemy_hint().is_empty():
+		if not state.enemy_hint().is_empty() and not state.is_boss():
 			_text_center(body, state.enemy_hint(), Vector2(cx, top_y - 24), 13, Color("acd5ff"), 3)
 		# Telegraph.
 		var feet = stage_to_screen(ENEMY_FEET)
@@ -600,7 +612,9 @@ func _draw_overlay() -> void:
 			tele = Rect2(w * 0.5 - w * 0.3, size.y * 0.16, w * 0.6, 12)
 			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
-			_text_center(font, state.charge_name() + " · DESTELLO [E]", Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
+			_text_center(font, state.charge_name() + (" · SUELTA EL ATAQUE" if state.bell_silence() else " · DESTELLO [E]"), Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
+			if state.bell_silence():
+				_text_center(body, "Luceros seguros · Resonancia %d/3" % state.bell_resonance, Vector2(w * 0.5, tele.end.y + 22), 16, Color("c9a6f5"), 3)
 		elif state.stun_time > 0:
 			_text_center(font, "ATURDIDO", Vector2(cx, tele.position.y + 18), 18, Color("ffe38a"), 4)
 		elif state.spawn_delay <= 0:

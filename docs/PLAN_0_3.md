@@ -21,7 +21,7 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 |---|---|---|
 | Ritmo | Probar sesiones humanas de 10–15 minutos y comparar las tres rutas | Descanso útil sin ser obligatorio, élite con recompensa suficiente, eventos comprensibles y sin bloqueos |
 | Enemigos · implementado | Guardián con escudo y Acólito con ataque canalizado; arte provisional | Avisos, contador, interrupción, guardado y combate automático verificados; pendiente valoración humana |
-| Jefe de Criptas | Campanera Vacía, con patrones propios | Al menos dos decisiones de combate diferentes al Rey, sin exigir clics rápidos |
+| Jefe de Criptas · mecánicas implementadas | Campanera Vacía: Silencio y Toque Fúnebre; apariencia provisional | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
 | Reliquias | Cuatro sinergias de clics, compañeros, habilidad y defensa | Cada una cambia una decisión; ninguna combinación impide progresar o produce daño ilimitado |
 | Colección | Registro persistente de descubrimientos | Muestra únicamente lo encontrado y sobrevive a renacer y migrar un guardado |
 | Distribución | Exportación Windows con atlas.json incluido | Arranca fuera del editor, encuentra todos los assets y guarda/carga desde una instalación limpia |
@@ -64,3 +64,15 @@ Se conserva el arte generado existente. Este bloque ajusta su reproducción y la
 - 20 pruebas específicas de habilidades aprobadas. Comparación de cinco semillas: sin clics, cámara 10 antes y después (2,27 frente a 2,30 minutos de media); a 1/3/5 intentos por segundo no aparece un bloqueo de progreso. Estos resultados corresponden a un bot que compra mejoras y usa Destello; no sustituyen pruebas humanas.
 
 Pendientes del plan: Campanera Vacía, cuatro sinergias de reliquias, colección persistente, assets definitivos de enemigos/eventos y exportación Windows.
+
+## Campanera Vacía — 5 de octubre de 2026
+
+Aparece en la cámara 20 y cada vuelta posterior por las Criptas (50, 80…). Conserva las recompensas y la vida de jefe existentes. Secuencia: golpe normal, Silencio, golpe normal, Toque Fúnebre; cada preparación dura 4 s y las canalizaciones añaden 3 s de aviso.
+
+- **Silencio:** suelta clic/Espacio y deja trabajar a los luceros. Cada ataque manual aceptado durante el aviso suma una resonancia, hasta tres. El daño final es ×0,70 / ×0,95 / ×1,20 / ×1,45 del golpe normal. Destello también puede cancelarlo, a costa de usar su recarga.
+- **Toque Fúnebre:** daño ×2,4; Destello lo cancela y aturde durante 2 s, igual que las otras canalizaciones. Conviene reservarlo para esta amenaza.
+- Resonancia, fase y tiempo restante sobreviven al guardado y se congelan en pausa. Interrupción, muerte y cambio de enemigo limpian la resonancia. Los guardados anteriores reciben cero resonancia.
+- Avisos y botón de habilidad distinguen ambas fases. Campana y ondas violetas acompañan una variante provisional del sprite de jefe; todavía no es el diseño definitivo de la Campanera.
+- 21 pruebas específicas aprobadas, además de las suites de progresión, assets, interfaz, rutas, sincronización y enemigos: 1210 comprobaciones en total. Prueba gráfica: 10072 fotogramas, mejor cámara 24, sin errores. Revisadas las capturas de ambas fases.
+
+Siguiente bloque: las cuatro sinergias de reliquias. Después, colección persistente y exportación; el arte definitivo sigue pendiente.
