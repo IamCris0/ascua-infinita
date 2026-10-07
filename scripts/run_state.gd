@@ -121,6 +121,7 @@ var discoveries: Array = []
 var essence: int = 0
 var legacy: Array = [0, 0, 0, 0, 0, 0]
 var best: int = 1
+var run_start_best: int = 1
 var total_kills: int = 0
 var total_bosses: int = 0
 var total_elites: int = 0
@@ -706,6 +707,7 @@ func buy_legacy(kind: int) -> bool:
 	return true
 
 func restart() -> void:
+	run_start_best = best
 	room = 1
 	gold = legacy_level(4) * 30.0
 	blade = 0
@@ -744,7 +746,7 @@ func restart() -> void:
 const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor", "focus", "essence", "run_essence",
 	"best", "runs", "total_kills", "total_bosses", "total_elites", "total_embers", "total_gold", "saved_at",
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
-	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts"]
+	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -804,6 +806,10 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.fullscreen = false
 		data.enemy_elite = false
 		data.version = SAVE_VERSION
+	# Saves before records were tracked per expedition: assume the run began at
+	# the stored best, so a resumed run never claims a record it has not earned.
+	if not data.has("run_start_best"):
+		data.run_start_best = data.get("best", 1)
 	if data.get("legacy") is Array:
 		while data.legacy.size() < LEGACY.size():
 			data.legacy.append(0)
@@ -934,3 +940,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 
 func has_run() -> bool:
 	return not dead
+
+## Only surpassing the best room known when the expedition began is a record.
+func is_record() -> bool:
+	return runs > 1 and room > run_start_best

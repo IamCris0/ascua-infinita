@@ -35,6 +35,19 @@ func test_legacy_cap() -> void:
 	check(restored.legacy_maxed(5) and not restored.buy_legacy(5) and restored.essence == bank, "Old over-cap upgrades cannot be purchased again")
 	check(not s.legacy_maxed(0) and s.buy_legacy(0), "Other legacy upgrades remain available")
 
+func test_records() -> void:
+	var s = fresh()
+	s.best = 20
+	s.runs = 3
+	s.restart()
+	s.room = 20
+	check(not s.is_record(), "Tying the previous best is not a record")
+	s.room = 21
+	s.best = 21
+	check(s.is_record(), "Passing the previous best is a record")
+	var restored = State.new()
+	check(s.save_game(SAVE) and restored.load_game(SAVE, false) and restored.run_start_best == 20 and restored.is_record(), "A resumed expedition remembers the best it started from")
+
 func test_combat_persistence() -> void:
 	var s = fresh()
 	s.room = 3
@@ -248,8 +261,10 @@ func _initialize() -> void:
 	var migrated = State.new()
 	check(migrated.load_game(SAVE, false), "Version 1 save loads")
 	check(migrated.room == 7 and migrated.legacy.size() == 6 and migrated.legacy[1] == 2 and migrated.master_volume == 0.0, "Version 1 save migrated")
+	check(migrated.run_start_best == 9 and not migrated.is_record(), "Migrated expeditions start from the stored best")
 	test_legacy_cap()
 	test_combat_persistence()
+	test_records()
 	for suffix in ["", ".bak", ".tmp"]:
 		if FileAccess.file_exists(SAVE + suffix):
 			DirAccess.remove_absolute(SAVE + suffix)
