@@ -55,7 +55,7 @@ func run() -> void:
 		quit(1)
 		return
 	var lib = Library.shared()
-	for key in ["hero", "slime", "wisp", "sentinel", "boss", "companion"]:
+	for key in ["hero", "slime", "wisp", "sentinel", "boss", "bell", "forge", "guardian", "acolyte", "merchant", "companion"]:
 		check(data.characters.has(key), "Playable character exists: " + key)
 	for key in data.characters:
 		var entry: Dictionary = data.characters[key]
@@ -81,7 +81,10 @@ func run() -> void:
 				overlaps = overlaps or existing.intersects(region)
 			check(not overlaps, "Frame does not contain pixels of a neighbour: " + label)
 			regions.append(region)
-		var expected = ["idle"] if key == "companion" else ["idle", "walk", "attack", "hurt", "death"]
+		var expected = ["idle"] if key in ["companion", "merchant"] else ["idle", "walk", "attack", "hurt", "death"]
+		if entry.has("portrait"):
+			var p: Array = entry.portrait
+			check(bounds.encloses(Rect2i(p[0], p[1], p[2], p[3])), "Portrait stays inside its atlas: " + key)
 		for parts in entry.get("parts", {}).values():
 			for part in parts:
 				check(bounds.encloses(Rect2i(part[0], part[1], part[2], part[3])), "Multipart frame stays within the source: " + key)
@@ -112,6 +115,11 @@ func run() -> void:
 	for id in data.ui:
 		var entry = data.ui[id]
 		read_texture(entry.texture if entry is Dictionary else entry, id in ["button", "shard"])
+	var events = read_texture(Library.EVENTS, false)
+	if events != null:
+		check(events.get_size() == Vector2i(4, 2) * Library.EVENT_CELL, "Event illustrations hold four shrine and four altar states")
+		for i in range(8):
+			check(lib.event_art(i).get_image().get_used_rect().has_area(), "Event illustration %d is visible" % i)
 	for path in Library.BACKGROUNDS:
 		var image = read_texture(path, false)
 		if image != null:

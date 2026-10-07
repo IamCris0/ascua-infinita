@@ -29,7 +29,9 @@ $suites = @(
     @('tests/test_combat_timing.gd'),
     @('tests/test_enemy_roles.gd'),
     @('tests/test_bell_keeper.gd'),
+    @('tests/test_forge_keeper.gd'),
     @('tests/test_synergies.gd'),
+    @('tests/test_legacy_tree.gd'),
     @('tests/test_collection.gd', '--qa'),
     @('tests/test_ui.gd', '--qa')
 )

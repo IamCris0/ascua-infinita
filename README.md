@@ -4,7 +4,7 @@
 
 Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.3.0-dev**: primer bloque de Caminos del Eclipse.
 
-Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de los enemigos, jefe, reliquias y exportación aún pendientes.
+Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
 
 ![Partida de Ascua Infinita](docs/preview.png)
 
@@ -26,7 +26,7 @@ También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con *
 | 1 · 2 · 3 en el pacto | Elegir reliquia |
 | 1 · 2 · 3 en rutas | Descansar, desafiar al élite o visitar el evento |
 | 1 · 2 en eventos | Aceptar o marcharse sin pagar |
-| 1 – 6 / Enter en la hoguera | Comprar legado / renacer |
+| Enter en la hoguera | Renacer; el árbol de legado se compra con el ratón |
 | Esc | Menú de pausa |
 | F11 | Pantalla completa |
 
@@ -87,7 +87,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 10 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 12 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, synergies
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa
@@ -112,11 +112,13 @@ Requiere Python 3 con `numpy`, `scipy` y `Pillow`, y `ffmpeg` para la música.
 
 ```powershell
 python tools/sprites/build_art.py
+python tools/sprites/key_imagegen.py
 python tools/audio/synth.py
 godot --headless --path . --editor --import --quit
+godot --headless --path . --script tools/import_imagegen.gd
 ```
 
-`build_art.py` quita el tablero gris de las hojas de Gemini, corta cada fotograma, calcula el punto de apoyo de los pies, orienta a los enemigos hacia la izquierda y escribe los atlas con `assets/art/atlas.json`. El portador usa la hoja con transparencia `assets/gemini/hero.png`.
+`build_art.py` quita el tablero gris de las hojas de Gemini, corta cada fotograma, calcula el punto de apoyo de los pies, orienta a los enemigos hacia la izquierda y escribe los atlas con `assets/art/atlas.json`. El portador usa la hoja con transparencia `assets/gemini/hero.png`. `key_imagegen.py` prepara el lote de ImageGen del 7 de octubre (Forjador, Guardián, Acólito, mercader, santuario y altar) y `import_imagegen.gd` registra regiones y puntos de apoyo de todas las hojas de ImageGen.
 
 ## Créditos y licencias
 

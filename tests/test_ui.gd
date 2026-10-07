@@ -110,6 +110,17 @@ func run() -> void:
 	check(labels.size() >= 4, "Main menu lists its options")
 	game.start_game(false)
 	check(game.screen == "game" and s.active(), "Continue returns to the expedition")
+	# Late in an expedition the HUD holds every relic, all synergies and long
+	# chronicle lines; it must still fit the smallest logical viewport.
+	s.relics = ["fang", "eye", "clock", "coin", "storm", "heart", "ash"]
+	for line in ["¡INTERRUMPIDO! CAMPANERA VACÍA queda aturdido", "SILENCIO · Suelta clic / Espacio · luceros seguros", "Último aliento · la brasa se niega a apagarse. Destello listo y furia"]:
+		game.add_log(line)
+	game.refresh()
+	await process_frame
+	var limit: int = ProjectSettings.get_setting("display/window/size/viewport_height")
+	check(game.game_root.get_child(1).get_combined_minimum_size().y <= limit, "A busy HUD never pushes the footer off screen")
+	s.relics = []
+	game.refresh()
 	game.show_options("")
 	game.state.music_volume = 0.2
 	game.apply_settings()

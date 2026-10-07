@@ -15,6 +15,9 @@ signal ember_collected(kind: String, amount: float)
 signal relic_offered
 signal purchased(kind: int, count: int)
 signal shield_broken
+signal armor_broken
+signal last_breath
+signal echo_strike
 signal attack_started
 signal burst_released(interrupted: bool)
 
@@ -38,22 +41,38 @@ const SYNERGIES = [
 const RELIC_IDS = ["fang", "clock", "eye", "heart", "coin", "ash", "storm"]
 const UPGRADES = [
 	{"name": "Filo de ascua", "description": "+3,5 daño por clic", "base": 15, "growth": 1.52},
-	{"name": "Lucero guardián", "description": "Un lucero ataca solo: +4 daño / s", "base": 25, "growth": 1.55},
-	{"name": "Piel de obsidiana", "description": "+15 vida máxima, cura 30 y bloquea 2 de daño", "base": 30, "growth": 1.58},
-	{"name": "Ojo de brasa", "description": "+3% crítico y +10% daño crítico", "base": 60, "growth": 1.7}
+	{"name": "Lucero guardián", "description": "+1 lucero que ataca solo", "base": 25, "growth": 1.55},
+	{"name": "Piel de obsidiana", "description": "+15 vida y bloquea 2", "base": 30, "growth": 1.58},
+	{"name": "Ojo de brasa", "description": "+3% crítico, +10% al crítico", "base": 60, "growth": 1.7}
 ]
+# Constelación del Legado. Indices 0-5 are the original six upgrades and keep
+# their saved positions; requirements only gate buying, never owned levels.
+# Branches: "" shared, "filo" clicks, "luceros" companions, "brasa" survival.
+# Brasa interior raises all damage, so it is shared: the Filo nodes grow from it.
 const LEGACY = [
-	{"name": "Brasa interior", "description": "+2 al daño por clic y +8% a todo tu daño", "base": 5, "step": 5},
-	{"name": "Corazón eterno", "description": "+20 de vida máxima", "base": 5, "step": 5},
-	{"name": "Pacto estelar", "description": "+1 de daño por cada lucero", "base": 5, "step": 5},
-	{"name": "Fortuna heredada", "description": "+10% de oro obtenido", "base": 8, "step": 6},
-	{"name": "Chispa temprana", "description": "Empiezas cada viaje con 30 de oro", "base": 6, "step": 6},
-	{"name": "Tormenta contenida", "description": "Destello recarga un 6% más rápido", "base": 10, "step": 8}
+	{"name": "Brasa interior", "description": "+2 al daño por clic y +8% a todo tu daño", "base": 5, "step": 5, "max": 20, "branch": "", "requires": []},
+	{"name": "Corazón eterno", "description": "+20 de vida máxima", "base": 5, "step": 5, "max": 20, "branch": "brasa", "requires": []},
+	{"name": "Pacto estelar", "description": "+1 de daño por cada lucero", "base": 5, "step": 5, "max": 20, "branch": "luceros", "requires": []},
+	{"name": "Fortuna heredada", "description": "+10% de oro obtenido", "base": 8, "step": 6, "max": 15, "branch": "", "requires": []},
+	{"name": "Chispa temprana", "description": "Empiezas cada viaje con 30 de oro", "base": 6, "step": 6, "max": 10, "branch": "", "requires": []},
+	{"name": "Tormenta contenida", "description": "Destello recarga un 6% más rápido", "base": 10, "step": 8, "max": 10, "branch": "brasa", "requires": [[1, 3]]},
+	{"name": "Ojo templado", "description": "+2% de probabilidad crítica", "base": 12, "step": 8, "max": 5, "branch": "filo", "requires": [[0, 3]]},
+	{"name": "Cadena larga", "description": "+5 al tope de la cadena de golpes", "base": 20, "step": 15, "max": 3, "branch": "filo", "requires": [[0, 3]]},
+	{"name": "Golpe de eco", "description": "Cada 10.º golpe de una cadena hace el triple de daño", "base": 120, "step": 0, "max": 1, "branch": "filo", "requires": [[6, 1], [7, 1]], "oath": true},
+	{"name": "Lucero heredado", "description": "Empiezas cada viaje con un lucero más", "base": 40, "step": 40, "max": 2, "branch": "luceros", "requires": [[2, 3]]},
+	{"name": "Órbita veloz", "description": "Los luceros atacan un 5% más rápido", "base": 15, "step": 10, "max": 5, "branch": "luceros", "requires": [[2, 3]]},
+	{"name": "Enjambre", "description": "Un lucero más al empezar y ataques un 25% más rápidos; tus clics hacen un 10% menos", "base": 120, "step": 0, "max": 1, "branch": "luceros", "requires": [[9, 1], [10, 1]], "oath": true},
+	{"name": "Piel de ceniza", "description": "−4% de daño recibido", "base": 12, "step": 8, "max": 5, "branch": "brasa", "requires": [[1, 3]]},
+	{"name": "Último aliento", "description": "Una vez por viaje, un golpe mortal te deja con un 30% de vida, recarga Destello y desata la furia", "base": 150, "step": 0, "max": 1, "branch": "brasa", "requires": [[5, 1], [12, 1]], "oath": true}
 ]
+const OATH_ECHO = 8
+const OATH_SWARM = 11
+const OATH_LAST_BREATH = 13
+const COMBO_BASE = 20
 const BIOMES = ["JARDÍN DE LAS CENIZAS", "CRIPTAS DEL ECO", "FORJA DEL ECLIPSE"]
 const BIOME_RULES = [
 	"Las ruinas guardan silencio. Sin efectos de ambiente.",
-	"Eco: los enemigos recuperan vida si dejas de golpearlos.",
+	"Eco: si pasas 2 s sin atacar con clic o Espacio, los enemigos recuperan vida.",
 	"Calor: +25% de oro, pero los enemigos golpean un 15% más fuerte."
 ]
 const ENEMY_NAMES = [
@@ -69,6 +88,15 @@ const CHARGE_TIME = 3.0
 const STORM_LEGACY_MAX = 10
 const CLICK_INTERVAL = 0.3
 const HIT_DELAY = 0.15
+# Crypt echo: seconds without a manual attack before enemies heal, and the
+# share of their maximum health recovered per second.
+const ECHO_REST = 2.0
+const ECHO_REGEN = 0.03
+# Forjador Ciego: share of his maximum health covered by each molten armour,
+# Destello's bonus against it and the strength of the pour when it survives.
+const FORGE_ARMOR = 0.12
+const FORGE_BURST = 1.5
+const FORGE_POUR = 2.4
 
 var rng = RandomNumberGenerator.new()
 # Expedition
@@ -80,6 +108,7 @@ var enemy_max: float = 24
 var enemy_elite: bool = false
 var shield_hits: int = 0
 var bell_resonance: int = 0
+var forge_armor: float = 0
 var manual_rest: float = 0
 var shelter_ready: bool = false
 var attack_timer: float = 0
@@ -88,10 +117,11 @@ var click_cooldown: float = 0
 var pending_hit: float = 0
 var pending_damage: float = 0
 var pending_critical: bool = false
+var pending_echo: bool = false
+var last_breath_used: bool = false
 var burst_cooldown: float = 0
 var combo: int = 0
 var combo_time: float = 0
-var idle_time: float = 0
 var spawn_delay: float = 0
 var stun_time: float = 0
 var boss_attacks: int = 0
@@ -119,7 +149,8 @@ var run_bosses: int = 0
 # Permanent
 var discoveries: Array = []
 var essence: int = 0
-var legacy: Array = [0, 0, 0, 0, 0, 0]
+var legacy: Array = []
+var oath: int = -1
 var best: int = 1
 var run_start_best: int = 1
 var total_kills: int = 0
@@ -143,6 +174,8 @@ var offline_reward: float = 0
 
 func _init() -> void:
 	rng.randomize()
+	legacy.resize(LEGACY.size())
+	legacy.fill(0)
 
 # ---------------------------------------------------------------- derived stats
 func collection_catalog() -> Array:
@@ -154,7 +187,8 @@ func collection_catalog() -> Array:
 		["guardian", "Guardián del Umbral", "Cuatro impactos rompen su escudo. Destello lo rompe de inmediato."],
 		["acolyte", "Acólito del Eco", "Canaliza durante tres segundos. Destello cancela su ataque."],
 		["king", "Rey sin Brasa", "Cada tercer ataque prepara su Brasa. Interrúmpelo con Destello."],
-		["bell", "Campanera Vacía", "Silencio castiga los ataques manuales; Toque Fúnebre se interrumpe con Destello."]]
+		["bell", "Campanera Vacía", "Silencio castiga los ataques manuales; Toque Fúnebre se interrumpe con Destello."],
+		["forge", "Forjador Ciego", "Cada tercer ataque se cubre con una coraza fundida. Rómpela antes de que se vierta; Destello la golpea con más fuerza."]]
 	for entry in enemies:
 		entries.append({"id": "enemy:" + entry[0], "category": "Enemigos", "name": entry[1], "description": entry[2]})
 	for relic in RELICS:
@@ -177,7 +211,7 @@ func remember_relics() -> void:
 func remember_enemy() -> void:
 	if dead:
 		return
-	var id = "bell" if is_bell_keeper() else ("king" if is_boss() else (enemy_role() if not enemy_role().is_empty() else enemy_kind()))
+	var id = "bell" if is_bell_keeper() else ("forge" if is_forge_keeper() else ("king" if is_boss() else (enemy_role() if not enemy_role().is_empty() else enemy_kind())))
 	remember("enemy:" + id)
 
 func count_relic(id: String) -> int:
@@ -210,7 +244,7 @@ func power_multiplier() -> float:
 
 func click_damage() -> float:
 	var base = (5.0 + blade * 3.5 + legacy_level(0) * 2) * (1.0 + count_relic("fang") * 0.3) * power_multiplier()
-	return base * (2.0 if fury_time > 0 else 1.0)
+	return base * (2.0 if fury_time > 0 else 1.0) * (0.9 if oath == OATH_SWARM else 1.0)
 
 func wisp_damage() -> float:
 	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier()
@@ -218,8 +252,15 @@ func wisp_damage() -> float:
 func auto_damage() -> float:
 	return wisps * wisp_damage() * (1.3 if has_synergy("chorus") and manual_rest >= 2.0 else 1.0)
 
+## Seconds between companion volleys: Órbita veloz and the Enjambre oath.
+func wisp_interval() -> float:
+	return (1.0 - mini(legacy_level(10), LEGACY[10].max) * 0.05) * (0.75 if oath == OATH_SWARM else 1.0)
+
+func max_combo() -> int:
+	return COMBO_BASE + mini(legacy_level(7), LEGACY[7].max) * 5
+
 func critical_chance() -> float:
-	return minf(0.65, 0.08 + count_relic("eye") * 0.12 + focus * 0.03)
+	return minf(0.65, 0.08 + count_relic("eye") * 0.12 + focus * 0.03 + mini(legacy_level(6), LEGACY[6].max) * 0.02)
 
 func critical_multiplier() -> float:
 	return 2.0 + focus * 0.1
@@ -234,7 +275,27 @@ func burst_max_cooldown() -> float:
 	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX))
 
 func legacy_maxed(kind: int) -> bool:
-	return kind == 5 and legacy_level(kind) >= STORM_LEGACY_MAX
+	return legacy_level(kind) >= LEGACY[kind].max
+
+func legacy_unlocked(kind: int) -> bool:
+	for requirement in LEGACY[kind].requires:
+		if legacy_level(requirement[0]) < requirement[1]:
+			return false
+	return true
+
+func is_oath(kind: int) -> bool:
+	return kind >= 0 and kind < LEGACY.size() and LEGACY[kind].get("oath", false)
+
+func can_buy_legacy(kind: int) -> bool:
+	return kind >= 0 and kind < LEGACY.size() and dead and not legacy_maxed(kind) and legacy_unlocked(kind) and essence >= legacy_price(kind)
+
+## Oaths are chosen at the bonfire, between expeditions; only one is active.
+func set_oath(kind: int) -> bool:
+	if not dead or (kind != -1 and (not is_oath(kind) or legacy_level(kind) <= 0)):
+		return false
+	oath = kind
+	changed.emit()
+	return true
 
 func is_boss() -> bool:
 	return room % 10 == 0
@@ -247,6 +308,12 @@ func cycle() -> int:
 
 func is_bell_keeper() -> bool:
 	return is_boss() and biome() == 1
+
+func is_forge_keeper() -> bool:
+	return is_boss() and biome() == 2
+
+func forge_armor_max() -> float:
+	return enemy_max * FORGE_ARMOR
 
 func bell_silence() -> bool:
 	return is_bell_keeper() and boss_attacks % 4 == 1
@@ -268,16 +335,22 @@ func enemy_kind() -> String:
 func charge_name() -> String:
 	if is_bell_keeper():
 		return "SILENCIO" if bell_silence() else "TOQUE FÚNEBRE"
+	if is_forge_keeper():
+		return "CORAZA FUNDIDA"
 	return "ECO ABISAL" if enemy_role() == "acolyte" else "BRASA DEL REY"
 
 func charge_hint() -> String:
 	if bell_silence():
 		return "Suelta clic / Espacio · luceros seguros"
+	if is_forge_keeper():
+		return "Rómpela antes de que se vierta · Destello ×1,5"
 	return "Interrumpe con Destello [E]"
 
 func enemy_hint() -> String:
 	if is_bell_keeper():
 		return "Silencio: suelta el ataque · Toque: Destello"
+	if is_forge_keeper():
+		return "Coraza fundida: rómpela a golpes · Destello ×1,5"
 	if shield_hits > 0:
 		return "Escudo: %d golpes · Destello lo rompe" % shield_hits
 	if enemy_role() == "guardian":
@@ -295,6 +368,8 @@ func break_shield() -> void:
 
 func enemy_name() -> String:
 	if is_boss():
+		if is_forge_keeper():
+			return "FORJADOR CIEGO"
 		return "CAMPANERA VACÍA" if is_bell_keeper() else "EL REY SIN BRASA"
 	var title = "Guardián del Umbral" if enemy_role() == "guardian" else ("Acólito del Eco" if enemy_role() == "acolyte" else ENEMY_NAMES[biome()][enemy_index()])
 	return ("Élite · " if enemy_elite else "") + title
@@ -315,6 +390,8 @@ func enemy_damage() -> float:
 func heavy_damage() -> float:
 	if is_bell_keeper():
 		return enemy_damage() * (0.7 + bell_resonance * 0.25 if bell_silence() else 2.4)
+	if is_forge_keeper():
+		return enemy_damage() * FORGE_POUR
 	return enemy_damage() * (1.6 if enemy_role() == "acolyte" else 3.0)
 
 func kill_reward() -> float:
@@ -355,6 +432,12 @@ func can_strike() -> bool:
 func charge_progress() -> float:
 	return 1.0 - charge_timer / CHARGE_TIME if charging else 0.0
 
+## Crypt echo heals the enemy while the bearer rests the blade. Companion hits
+## and Destello do not stop it, so the rule works from the first lucero on.
+## The Campanera's Silence asks the player to rest, so it never heals her.
+func echo_healing() -> bool:
+	return biome() == 1 and manual_rest >= ECHO_REST and enemy_hp < enemy_max and not (charging and bell_silence())
+
 func next_is_heavy() -> bool:
 	if is_bell_keeper():
 		return boss_attacks % 2 == 1
@@ -382,17 +465,19 @@ func tick(delta: float) -> void:
 		if pending_hit <= 0:
 			var damage = pending_damage
 			pending_damage = 0
+			if pending_echo:
+				pending_echo = false
+				echo_strike.emit()
 			if pending_critical and has_synergy("precision"):
 				burst_cooldown = maxf(0, burst_cooldown - 0.4)
 			damage_enemy(damage, pending_critical, false)
 			if not active() or spawn_delay > 0:
 				return
-	idle_time += delta
-	if biome() == 1 and idle_time > 2.0 and enemy_hp < enemy_max:
-		enemy_hp = minf(enemy_max, enemy_hp + enemy_max * 0.03 * delta)
+	if echo_healing():
+		enemy_hp = minf(enemy_max, enemy_hp + enemy_max * ECHO_REGEN * delta)
 	auto_timer += delta
-	if auto_timer >= 1:
-		auto_timer = fmod(auto_timer, 1.0)
+	if auto_timer >= wisp_interval():
+		auto_timer = fmod(auto_timer, wisp_interval())
 		if auto_damage() > 0:
 			damage_enemy(auto_damage(), false, true)
 			if not active() or spawn_delay > 0:
@@ -408,6 +493,7 @@ func tick(delta: float) -> void:
 			charging = false
 			boss_attacks += 1
 			bell_resonance = 0
+			forge_armor = 0
 			_hit_hero(damage, true, spell)
 	else:
 		attack_timer += delta
@@ -417,6 +503,8 @@ func tick(delta: float) -> void:
 				charging = true
 				bell_resonance = 0
 				charge_timer = CHARGE_TIME
+				if is_forge_keeper():
+					forge_armor = forge_armor_max()
 				event.emit(charge_name() + " · " + charge_hint())
 				boss_charge_started.emit()
 			else:
@@ -429,9 +517,17 @@ func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 		amount *= 0.6
 		shelter_ready = false
 		event.emit("Refugio de musgo · protege del 40% del golpe")
+	amount *= 1.0 - mini(legacy_level(12), LEGACY[12].max) * 0.04
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
 	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
+	if hp <= 0 and oath == OATH_LAST_BREATH and not last_breath_used:
+		hp = max_hp() * 0.3
+		last_breath_used = true
+		burst_cooldown = 0
+		fury_time = 12.0
+		last_breath.emit()
+		event.emit("Último aliento · la brasa se niega a apagarse. Destello listo y furia")
 	if hp <= 0:
 		finish_run()
 
@@ -488,12 +584,15 @@ func click() -> bool:
 		return false
 	click_cooldown = CLICK_INTERVAL
 	manual_rest = 0
-	combo = mini(20, combo + 1)
+	combo = mini(max_combo(), combo + 1)
 	combo_time = 1.5
 	if charging and bell_silence():
 		bell_resonance = mini(3, bell_resonance + 1)
 	pending_critical = rng.randf() < critical_chance()
 	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0)
+	pending_echo = oath == OATH_ECHO and combo % 10 == 0
+	if pending_echo:
+		pending_damage *= 3
 	pending_hit = HIT_DELAY
 	attack_started.emit()
 	return true
@@ -503,8 +602,9 @@ func burst() -> bool:
 		return false
 	burst_cooldown = burst_max_cooldown()
 	var damage = burst_damage()
-	var interrupted = charging
-	if charging:
+	# The Forjador's armour is broken by damage, not cancelled by Destello.
+	var interrupted = charging and not is_forge_keeper()
+	if interrupted:
 		charging = false
 		bell_resonance = 0
 		boss_attacks += 1
@@ -516,11 +616,26 @@ func burst() -> bool:
 		event.emit("¡INTERRUMPIDO! " + enemy_name() + " queda aturdido")
 		boss_interrupted.emit()
 	else:
+		if forge_armor > 0:
+			damage *= FORGE_BURST
 		event.emit("DESTELLO · la llama despierta")
 	break_shield()
 	burst_released.emit(interrupted)
+	var armored = forge_armor > 0
 	damage_enemy(damage, true, false)
+	if armored and forge_armor <= 0 and has_synergy("stormcall"):
+		burst_cooldown *= 0.75
 	return true
+
+func break_forge_armor() -> void:
+	forge_armor = 0
+	charging = false
+	charge_timer = 0
+	boss_attacks += 1
+	stun_time = 2.0
+	attack_timer = 0
+	armor_broken.emit()
+	event.emit("¡Coraza rota! " + enemy_name() + " queda aturdido")
 
 func damage_enemy(amount: float, critical: bool = false, automatic: bool = false) -> void:
 	if not active():
@@ -531,9 +646,15 @@ func damage_enemy(amount: float, critical: bool = false, automatic: bool = false
 		else:
 			shield_hits -= 1
 			amount *= 0.65
-	idle_time = 0
+	var dealt = amount
+	if forge_armor > 0:
+		var absorbed = minf(amount, forge_armor)
+		forge_armor -= absorbed
+		amount -= absorbed
+		if forge_armor <= 0:
+			break_forge_armor()
 	enemy_hp = maxf(0, enemy_hp - amount)
-	struck.emit(amount, critical, automatic)
+	struck.emit(dealt, critical, automatic)
 	if enemy_hp <= 0:
 		defeat_enemy()
 	changed.emit()
@@ -577,6 +698,7 @@ func defeat_enemy() -> void:
 
 func spawn_enemy(roll_elite: bool = true) -> void:
 	bell_resonance = 0
+	forge_armor = 0
 	shield_hits = 4 if enemy_role() == "guardian" else 0
 	pending_hit = 0
 	pending_damage = 0
@@ -590,7 +712,6 @@ func spawn_enemy(roll_elite: bool = true) -> void:
 	charge_timer = 0
 	stun_time = 0
 	boss_attacks = 0
-	idle_time = 0
 	spawn_delay = BOSS_INTRO if is_boss() else SPAWN_DELAY
 	remember_enemy()
 	enemy_changed.emit()
@@ -687,6 +808,7 @@ func finish_run() -> void:
 	essence += run_essence
 	dead = true
 	bell_resonance = 0
+	forge_armor = 0
 	pending_hit = 0
 	pending_damage = 0
 	charging = false
@@ -699,10 +821,13 @@ func finish_run() -> void:
 	changed.emit()
 
 func buy_legacy(kind: int) -> bool:
-	if kind < 0 or kind >= LEGACY.size() or not dead or legacy_maxed(kind) or essence < legacy_price(kind):
+	if not can_buy_legacy(kind):
 		return false
 	essence -= legacy_price(kind)
 	legacy[kind] = legacy_level(kind) + 1
+	# A first oath is sworn at once; switching later is a free choice.
+	if is_oath(kind) and oath == -1:
+		oath = kind
 	changed.emit()
 	return true
 
@@ -711,7 +836,9 @@ func restart() -> void:
 	room = 1
 	gold = legacy_level(4) * 30.0
 	blade = 0
-	wisps = 1
+	wisps = 1 + mini(legacy_level(9), LEGACY[9].max) + (1 if oath == OATH_SWARM else 0)
+	last_breath_used = false
+	pending_echo = false
 	armor = 0
 	focus = 0
 	relics.clear()
@@ -750,11 +877,11 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"manual_rest": 0.0, "shelter_ready": false, "bell_resonance": 0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
-	"combo_time": 0.0, "idle_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
+const COMBAT_DEFAULTS = {"manual_rest": 0.0, "shelter_ready": false, "last_breath_used": false, "bell_resonance": 0, "forge_armor": 0.0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+	"combo_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
-const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": 20,
+const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 
@@ -769,6 +896,7 @@ func snapshot() -> Dictionary:
 	for key in COMBAT_DEFAULTS:
 		data[key] = get(key)
 	data.ember_pos = [ember_pos.x, ember_pos.y]
+	data.oath = oath
 	data.journey_phase = journey_phase
 	data.encounter_kind = encounter_kind
 	return data
@@ -808,6 +936,9 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.version = SAVE_VERSION
 	# Saves before records were tracked per expedition: assume the run began at
 	# the stored best, so a resumed run never claims a record it has not earned.
+	# Before the Constelación there were no oaths to swear.
+	if not data.has("oath"):
+		data.oath = -1
 	if not data.has("run_start_best"):
 		data.run_start_best = data.get("best", 1)
 	if data.get("legacy") is Array:
@@ -878,6 +1009,8 @@ func _read_save(path: String) -> Variant:
 		return null
 	if not data.journey_phase.is_empty() and (data.dead or int(data.room) <= 1 or (int(data.room) - 1) % 5 != 0):
 		return null
+	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
+		return null
 	if data.legacy.size() != LEGACY.size() or data.room < 1 or data.room > 10000:
 		return null
 	for level in data.legacy:
@@ -890,6 +1023,17 @@ func _read_save(path: String) -> Variant:
 		if not relic in RELIC_IDS:
 			return null
 	return data
+
+## A save this version cannot read (corrupt, or written by a newer version) is
+## copied aside before a fresh expedition overwrites it. Returns the copy.
+func preserve_unreadable_save(path: String = SAVE_PATH) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var copy = path.get_basename() + ".ilegible-%d.json" % int(Time.get_unix_time_from_system())
+	DirAccess.copy_absolute(path, copy)
+	if FileAccess.file_exists(path + ".bak"):
+		DirAccess.copy_absolute(path + ".bak", copy + ".bak")
+	return copy
 
 func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	var data = _read_save(path)
@@ -913,6 +1057,9 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	for id in data.discoveries:
 		remember(id)
 	legacy = data.legacy.map(func(v): return int(v))
+	oath = int(data.oath)
+	if oath != -1 and (not is_oath(oath) or legacy_level(oath) <= 0):
+		oath = -1
 	relics = data.relics.duplicate()
 	remember_relics()
 	offers = data.offers.map(func(v): return int(v))
@@ -924,6 +1071,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	for key in COMBAT_DEFAULTS:
 		set(key, int(data[key]) if COMBAT_DEFAULTS[key] is int else data[key])
 	ember_pos = Vector2(float(data.ember_pos[0]), float(data.ember_pos[1]))
+	forge_armor = clampf(forge_armor, 0, forge_armor_max()) if charging and is_forge_keeper() else 0.0
 	enemy_hp = clampf(data.enemy_hp, 0.01, enemy_max)
 	attack_timer = clampf(data.attack_timer, 0, attack_interval())
 	hp = clampf(data.hp, 0, max_hp())

@@ -6,7 +6,7 @@ Dirección acordada: los compañeros sostienen el combate; los clics aceleran el
 
 - Un lucero al comenzar cada expedición y 4 de daño base por lucero. Las partidas antiguas conservan sus compañeros; el inicial aparece al renacer.
 - Ataques manuales con intervalo mínimo de 0,3 segundos. Mantener Espacio permite repetirlos sin castigar la mano. Pausa, menús y decisiones bloquean el ataque.
-- Los golpes de compañeros también detienen la regeneración por inactividad de las Criptas.
+- Los golpes de compañeros también detienen la regeneración por inactividad de las Criptas. *(Sustituido el 7 de octubre: desde entonces solo cuentan los ataques manuales; véase «Cierre de la 0.3».)*
 - Después de cada quinta victoria: elegir reliquia y después ruta. Ambas decisiones detienen el combate y sus temporizadores.
 - Sendero tranquilo: hasta 20% de curación y siguiente enemigo normal. Desafío élite: siguiente enemigo con las propiedades élite existentes (×2,2 vida, ×1,3 daño, ×2,5 oro y una ascua extra).
 - Ruta de evento: anuncia el encuentro antes de entrar. Santuario (hasta 45% de curación), mercader (un lucero al 80% del precio actual, redondeado hacia abajo) o altar (paga 25% de vida máxima, sin morir, por +20% aditivo al daño durante el viaje).
@@ -21,9 +21,9 @@ Se reutilizan los iconos y el retrato del guardián para probar las reglas. No s
 |---|---|---|
 | Ritmo | Probar sesiones humanas de 10–15 minutos y comparar las tres rutas | Descanso útil sin ser obligatorio, élite con recompensa suficiente, eventos comprensibles y sin bloqueos |
 | Enemigos · implementado | Guardián con escudo y Acólito con ataque canalizado; arte provisional | Avisos, contador, interrupción, guardado y combate automático verificados; pendiente valoración humana |
-| Jefe de Criptas · mecánicas implementadas | Campanera Vacía: Silencio y Toque Fúnebre; apariencia provisional | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
+| Jefe de Criptas · implementado | Campanera Vacía: Silencio y Toque Fúnebre; hoja definitiva integrada el 7 de octubre | Pausar ataques manuales o reservar Destello; pruebas de fases y persistencia aprobadas |
 | Reliquias · implementado | Cuatro combinaciones entre reliquias existentes | Efectos acotados, estados guardados, descripción al elegir y panel de combinaciones activas |
-| Colección · implementado | 18 entradas de enemigos, reliquias y sinergias | Desconocidos ocultos, progreso permanente, migración y navegación verificadas |
+| Colección · implementado | 19 entradas de enemigos, reliquias y sinergias (incluye el Forjador) | Desconocidos ocultos, progreso permanente, migración y navegación verificadas |
 | Distribución · implementado | ZIP portátil Windows x64 con ambos manifiestos | Arranque, recursos, renderizado y persistencia verificados fuera del proyecto |
 
 Los números del primer bloque son parámetros iniciales sujetos a pruebas. La versión completa 0.3 todavía no está terminada.
@@ -107,3 +107,28 @@ Pendientes: diseños y animaciones definitivos de enemigos/eventos, y exportaci�
 Implementada y comprobada una build portátil de desarrollo para Windows x64. Véase WINDOWS.md: paquete ZIP, reproducción de la exportación, recursos completos, arranque independiente, guardado/carga entre procesos y captura del renderizador. Los archivos generados permanecen en builds/ y no se añaden al historial Git.
 
 Pendiente principal: arte y animaciones definitivos de los nuevos enemigos y objetos de eventos. La versión permanece como 0.3.0-dev.
+
+## Cierre de la 0.3 — 7 de octubre de 2026
+
+**Eco de las Criptas.** La regla no se activaba desde que cada expedición empieza con un lucero: sus golpes reiniciaban la inactividad cada segundo. Ahora el enemigo recupera un 3% de su vida máxima por segundo si pasan 2 s sin un ataque manual aceptado (clic o Espacio). Luceros y Destello no lo detienen; el Silencio de la Campanera nunca la cura. La barra de vida late en violeta y el rótulo indica «ECO: ATACA PARA DETENERLO».
+
+- Simulación de 12 expediciones seguidas: a 1, 3 y 5 intentos por segundo, mismas cámaras que antes. Con un clic cada 2–3 s, resultados equivalentes. Solo el bot que nunca hace clic queda frenado en las Criptas (cámaras 15–20 frente a 22–29): es la identidad del ambiente.
+
+**Campanera Vacía con arte definitivo.** `assets/art/imagegen/final/bell-v1.png` (24 poses, PNG sin modificar) sustituye la variante teñida del Rey y la campana dibujada en código. Sus filas de ataque y muerte cruzan la cuadrícula, así que el importador corta por las columnas vacías entre poses. Silencio y Toque Fúnebre conservan sus avisos y ondas violetas.
+
+**Forjador Ciego, jefe de la Forja** (cámaras 30, 60, 90…). El Rey sin Brasa queda en el Jardín (10, 40, 70…). Cada tercer ataque se cubre con una **coraza fundida** igual al 12% de su vida máxima durante el aviso de 3 s:
+
+- El daño golpea primero la coraza; los luceros también cuentan. Romperla cancela la **Colada**, lo aturde 2 s y sigue su patrón.
+- Si la coraza aguanta, la Colada hace ×2,4 del golpe normal.
+- Destello no cancela la coraza: la golpea ×1,5. Si la rompe, cuenta como interrupción para Tormenta certera.
+- La coraza restante sobrevive al guardado; los guardados anteriores cargan sin coraza y los valores fuera de rango se recortan. Nueva entrada en la colección.
+- Simulación: el bot rompe 4 de 6 corazas a 1 intento por segundo, 7 de 8 a 3 y 12 de 13 a 5. El muro de la cámara 30 no cambia respecto al Rey: lo producen sus golpes normales, no la coraza. Queda para las pruebas con jugadores.
+- Apariencia: hoja definitiva `forge-v1` desde la tarde del 7 de octubre; durante la coraza muestra la pose de placas fundidas. Un anillo fundido se vacía al agrietarse.
+
+**Guardado ilegible.** Si una partida no se puede leer (dañada o de una versión más nueva), se copia como `ascua_save.ilegible-<fecha>.json` antes de empezar de nuevo, en lugar de sobrescribirse.
+
+> **Compatibilidad:** las builds anteriores a este cambio no reconocen la entrada del Forjador en la colección y empezarían de cero con una partida que ya lo haya encontrado. Hay que volver a exportar la versión portátil.
+
+**Arte definitivo integrado (tarde del 7 de octubre).** Forjador, Guardián del Umbral y Acólito del Eco con hojas propias de 24 poses, que sustituyen las variantes teñidas del centinela, el lucero y el Rey. El Guardián conserva los cuatro arcos que cuentan los segmentos de escudo restantes; el Acólito ya no lleva el hexágono dibujado en código. El mercader aparece con su retrato, y santuario y altar con sus ilustraciones, en la ruta y en el evento. Proceso en `assets/art/imagegen/README.md`.
+
+Pendiente: sesiones humanas de ritmo y valorar el muro de la cámara 30.

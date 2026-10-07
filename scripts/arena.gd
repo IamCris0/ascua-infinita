@@ -21,10 +21,18 @@ const VARIANTS = {
 	"slime": [[0.0, Color.WHITE, 1.0], [0.24, Color(0.9, 0.95, 1.1), 1.0], [-0.36, Color(1.1, 0.95, 0.9), 1.0]],
 	"wisp": [[0.0, Color.WHITE, 1.0], [-0.12, Color(0.92, 1.0, 1.15), 1.1], [0.0, Color(1.45, 0.8, 0.55), 1.25]],
 	"sentinel": [[0.0, Color.WHITE, 1.0], [0.0, Color(0.86, 0.86, 1.22), 1.0], [0.0, Color(1.15, 0.92, 0.85), 1.0]],
-	"boss": [[0.0, Color.WHITE, 1.0], [0.72, Color(0.95, 0.95, 1.1), 1.0], [0.08, Color(1.1, 1.0, 0.92), 1.0]]
+	"boss": [[0.0, Color.WHITE, 1.0], [0.72, Color(0.95, 0.95, 1.1), 1.0], [0.08, Color(1.1, 1.0, 0.92), 1.0]],
+	"bell": [[0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0]],
+	"forge": [[0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0]],
+	"guardian": [[0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0]],
+	"acolyte": [[0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0], [0.0, Color.WHITE, 1.0]]
 }
+# Actor keys drawn as bosses: larger, slower entrance, wider shadow.
+const BOSS_KEYS = ["boss", "bell", "forge"]
 const PARTICLE_COLORS = {"slime": [Color("74d9a8"), Color("2f6b55")], "wisp": [Color("c9a6f5"), Color("fff3c8")],
-	"sentinel": [Color("7e8796"), Color("ff9a4a")], "boss": [Color("ff7a3d"), Color("8c2f2f")]}
+	"sentinel": [Color("7e8796"), Color("ff9a4a")], "boss": [Color("ff7a3d"), Color("8c2f2f")],
+	"bell": [Color("c9a6f5"), Color("4b3f73")], "forge": [Color("ff8a3d"), Color("3a2a24")],
+	"guardian": [Color("5fb4ff"), Color("4a4f5c")], "acolyte": [Color("c9a6f5"), Color("2e2440")]}
 
 var state
 var lib
@@ -147,6 +155,17 @@ func visible_stage_rect() -> Rect2:
 	var origin: Vector2 = stage.get_meta("origin", Vector2.ZERO)
 	return Rect2(-origin / stage.scale, size / stage.scale)
 
+## Bosses of the Criptas and the Forja and the two special roles have their
+## own sheets; every other enemy uses its kind's sheet.
+func actor_key() -> String:
+	if state.is_bell_keeper():
+		return "bell"
+	if state.is_forge_keeper():
+		return "forge"
+	if state.enemy_role() in ["guardian", "acolyte"]:
+		return state.enemy_role()
+	return state.enemy_kind()
+
 func enemy_center() -> Vector2:
 	return enemy.position + Vector2(enemy.offset.x, -enemy.height() * 0.5)
 
@@ -171,7 +190,7 @@ func sync_enemy(walk_in: bool = true) -> void:
 	projectiles.clear()
 	auto_launched = false
 	heavy_launched = false
-	var kind: String = state.enemy_kind()
+	var kind: String = actor_key()
 	# A new actor must not inherit the defeated enemy's lunge or arrival.
 	for tag in ["lunge", "walk_in", "walking"]:
 		if enemy.has_meta(tag):
@@ -183,16 +202,9 @@ func sync_enemy(walk_in: bool = true) -> void:
 	enemy.hue = variant[0]
 	enemy.tint = variant[1]
 	enemy.saturation = variant[2]
-	if state.enemy_role() == "guardian":
-		enemy.tint = Color("94c9ed")
-	elif state.enemy_role() == "acolyte":
-		enemy.tint = Color("d4a4ff")
-	if state.is_bell_keeper():
-		enemy.tint = Color("a9c9ff")
-		enemy.hue = 0.6
 	enemy.alpha = 1.0
 	enemy.brightness = 1.12 if state.enemy_elite else 1.0
-	enemy.base_scale = 1.15 if kind == "boss" else (1.12 if state.enemy_elite else 1.0)
+	enemy.base_scale = 1.15 if kind in BOSS_KEYS else (1.12 if state.enemy_elite else 1.0)
 	enemy.bob = 10.0 if kind == "wisp" and not reduced_motion else 0.0
 	enemy.position = ENEMY_FEET + (Vector2(0, -34) if kind == "wisp" else Vector2.ZERO)
 	enemy.flash = 0
@@ -200,7 +212,7 @@ func sync_enemy(walk_in: bool = true) -> void:
 	hp_trail = 1.0
 	shown_kind = kind
 	if walk_in:
-		var distance = 420.0 if kind == "boss" else 300.0
+		var distance = 420.0 if kind in BOSS_KEYS else 300.0
 		enemy.offset = Vector2(distance, 0)
 		enemy.play("walk")
 		enemy.set_meta("walk_in", distance)
@@ -209,7 +221,7 @@ func sync_enemy(walk_in: bool = true) -> void:
 		bg_index = state.biome()
 		bg_fade = 1.0
 		show_banner(state.BIOMES[bg_index], state.BIOME_RULES[bg_index], Color("84cdb7"))
-	if kind == "boss":
+	if kind in BOSS_KEYS:
 		show_banner(state.enemy_name(), state.boss_title(), Color("ff8a5c"), 1.9)
 
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
@@ -219,6 +231,15 @@ func on_shield_broken() -> void:
 	var at = enemy_center()
 	rings.append({"pos": at, "t": 0.0, "dur": 0.4, "radius": 120.0, "color": Color("82bcf5")})
 	burst_particles(at, [Color("82bcf5"), Color("e0f4ff")], 16, 250.0)
+
+func on_armor_broken() -> void:
+	var at = enemy_center()
+	projectiles = projectiles.filter(func(p): return not p.get("fire", false))
+	rings.append({"pos": at, "t": 0.0, "dur": 0.5, "radius": 200.0, "color": Color("ff9a4a")})
+	burst_particles(at, [Color("ff9a4a"), Color("ffd28a"), Color("5a5f6b")], 30, 420.0)
+	add_shake(8.0)
+	enemy.play("hurt")
+	show_banner("¡CORAZA ROTA!", state.enemy_name() + " queda aturdido", Color("ffb070"), 1.6)
 
 func on_attack_started() -> void:
 	hero.play("attack")
@@ -284,7 +305,9 @@ func on_hero_hit(damage: float, heavy: bool) -> void:
 	if show_numbers:
 		numbers.append({"pos": hero_center() + Vector2(0, -60), "vel": Vector2(-20, -80), "life": 1.1, "text": "-" + compact_number(damage), "color": Color("ff6b5b"), "size": 34 if heavy else 26})
 
-func on_enemy_defeated(kind: String, elite: bool, boss: bool) -> void:
+func on_enemy_defeated(_kind: String, elite: bool, boss: bool) -> void:
+	# Still the defeated actor: the next enemy is synced after this signal.
+	var kind: String = enemy.key
 	corpse.set_character(kind)
 	corpse.hue = enemy.hue
 	corpse.tint = enemy.tint
@@ -322,6 +345,19 @@ func on_restart() -> void:
 	projectiles.clear()
 	hint_alpha = 1.0
 	sync_enemy(true)
+
+func on_echo_strike() -> void:
+	var at = enemy_center()
+	rings.append({"pos": at, "t": 0.0, "dur": 0.45, "radius": 170.0, "color": Color("baffd9")})
+	numbers.append({"pos": at + Vector2(0, -90), "vel": Vector2(0, -70), "life": 1.0, "text": "¡ECO ×3!", "color": Color("baffd9"), "size": 30})
+	add_shake(6.0)
+
+func on_last_breath() -> void:
+	flash = 0.0 if reduced_motion else 0.5
+	rings.append({"pos": hero_center(), "t": 0.0, "dur": 0.8, "radius": 240.0, "color": Color("86e0bd")})
+	burst_particles(hero_center(), [Color("86e0bd"), Color("fff1cf")], 30, 300.0)
+	hero.play("hurt")
+	show_banner("ÚLTIMO ALIENTO", "La brasa se niega a apagarse · Destello listo", Color("86e0bd"), 2.0)
 
 func on_ember_collected(kind: String) -> void:
 	var at = ember_stage_pos()
@@ -384,7 +420,7 @@ func _process(delta: float) -> void:
 			banner = {}
 	var shake_offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake
 	stage.position = stage.get_meta("origin", Vector2.ZERO) + shake_offset
-	if shown_kind != state.enemy_kind():
+	if shown_kind != actor_key():
 		sync_enemy(true)
 	# Walk-in for a freshly spawned enemy.
 	if enemy.has_meta("walk_in"):
@@ -402,12 +438,13 @@ func _process(delta: float) -> void:
 	projectiles = projectiles.filter(func(p): return p.t < p.dur)
 	# Travel precedes damage; remaining simulation time determines arrival.
 	if state.can_strike():
-		if state.auto_timer < 0.7:
+		var interval: float = state.wisp_interval()
+		if state.auto_timer < interval * 0.7:
 			auto_launched = false
-		if state.auto_timer >= 0.78 and not auto_launched and state.auto_damage() > 0:
+		if state.auto_timer >= interval * 0.78 and not auto_launched and state.auto_damage() > 0:
 			auto_launched = true
 			for i in range(mini(state.wisps, 6)):
-				projectiles.append({"from": companion_pos(i), "to": enemy_center(), "t": 0.0, "dur": maxf(0.01, 1.0 - state.auto_timer), "color": Color("86e0bd"), "size": 4.0})
+				projectiles.append({"from": companion_pos(i), "to": enemy_center(), "t": 0.0, "dur": maxf(0.01, interval - state.auto_timer), "color": Color("86e0bd"), "size": 4.0})
 	if not state.charging:
 		heavy_launched = false
 	elif state.charge_timer <= 0.32 and not heavy_launched:
@@ -442,7 +479,7 @@ func _process(delta: float) -> void:
 		enemy.speed = 0.25
 	else:
 		enemy.speed = 1.0
-	corpse.alpha = maxf(0.0, corpse.alpha - delta * (0.55 if corpse.key == "boss" else 1.1))
+	corpse.alpha = maxf(0.0, corpse.alpha - delta * (0.55 if corpse.key in BOSS_KEYS else 1.1))
 	hero.brightness = 1.0 + (0.18 + 0.08 * sin(ambient_time * 10.0) if state.fury_time > 0 else 0.0)
 	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
 	hp_trail = maxf(ratio, hp_trail - delta * 0.7)
@@ -483,7 +520,7 @@ func _draw_backdrop() -> void:
 		backdrop.draw_texture_rect(lib.backgrounds[bg_prev], rect, false, Color(1, 1, 1, bg_fade))
 	# Ground shadows under the actors.
 	_ellipse(backdrop, HERO_FEET + Vector2(hero.offset.x, 2), Vector2(62, 12), Color(0, 0, 0, 0.45))
-	var ew = 70.0 if enemy.key != "boss" else 110.0
+	var ew = 110.0 if enemy.key in BOSS_KEYS else 70.0
 	_ellipse(backdrop, ENEMY_FEET + Vector2(enemy.offset.x, 2), Vector2(ew, 14), Color(0, 0, 0, 0.45))
 
 func _ellipse(canvas: CanvasItem, center: Vector2, radius: Vector2, color: Color) -> void:
@@ -517,21 +554,19 @@ func _draw_lights() -> void:
 		lights.draw_texture_rect(glow, Rect2(ember_stage_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.7, 0.3, 0.9))
 
 func _draw_fx() -> void:
-	if state.is_bell_keeper():
-		var center = enemy_center() + Vector2(0, -enemy.height() * 0.52)
-		fx_layer.draw_arc(center, 30, PI, TAU, 20, Color("c9a6f5"), 4)
-		fx_layer.draw_line(center + Vector2(-30, 0), center + Vector2(-38, 16), Color("c9a6f5"), 4)
-		fx_layer.draw_line(center + Vector2(30, 0), center + Vector2(38, 16), Color("c9a6f5"), 4)
-		fx_layer.draw_line(center + Vector2(-38, 16), center + Vector2(38, 16), Color("c9a6f5"), 4)
-		fx_layer.draw_circle(center + Vector2(0, 24), 5, Color("c9a6f5"))
-	# Provisional magical shield; its four segments mirror the remaining hits.
+	# The four arcs mirror the shield segments that still absorb hits.
 	if state.shield_hits > 0:
 		var center = enemy_center()
 		for i in range(state.shield_hits):
 			var angle = -PI * 0.75 + i * PI * 0.5
 			fx_layer.draw_arc(center, 85, angle, angle + PI * 0.4, 12, Color("82bcf5"), 5)
-	if state.enemy_role() == "acolyte":
-		fx_layer.draw_arc(enemy_center(), 74, 0, TAU, 6, Color(0.75, 0.5, 1, 0.7), 2)
+	# Molten armour: the ring shrinks as hits crack it.
+	if state.forge_armor > 0:
+		var center = enemy_center()
+		var k = state.forge_armor / maxf(1.0, state.forge_armor_max())
+		var heat = 0.75 + 0.25 * sin(ambient_time * 10.0)
+		fx_layer.draw_arc(center, 96, 0, TAU, 48, Color(0.15, 0.08, 0.05, 0.6), 14)
+		fx_layer.draw_arc(center, 96, -PI / 2, -PI / 2 + TAU * k, 48, Color(1.0, 0.45 + 0.25 * heat, 0.15), 10)
 	# Companions orbiting the bearer.
 	for i in range(mini(state.wisps, 6)):
 		var pos = companion_pos(i)
@@ -597,9 +632,14 @@ func _draw_overlay() -> void:
 		var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.95, 0.85, 0.55))
 		var fill = Color("e0645a") if state.is_boss() else (Color("e8b450") if state.enemy_elite else Color("6fcf9f"))
+		if state.echo_healing() and not reduced_motion:
+			fill = fill.lerp(Color("b18cf0"), 0.5 + 0.5 * sin(ambient_time * 6.0))
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
 		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
-		_text_center(body, "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))], Vector2(cx, bar.end.y + 17), 13, Color("c3cbd3"), 3)
+		var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
+		if state.echo_healing():
+			health_text += "  ·  ECO: ATACA PARA DETENERLO"
+		_text_center(body, health_text, Vector2(cx, bar.end.y + 17), 13, Color("c9a6f5") if state.echo_healing() else Color("c3cbd3"), 3)
 		if not state.enemy_hint().is_empty() and not state.is_boss():
 			_text_center(body, state.enemy_hint(), Vector2(cx, top_y - 24), 13, Color("acd5ff"), 3)
 		# Telegraph.
@@ -612,9 +652,19 @@ func _draw_overlay() -> void:
 			tele = Rect2(w * 0.5 - w * 0.3, size.y * 0.16, w * 0.6, 12)
 			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
-			_text_center(font, state.charge_name() + (" · SUELTA EL ATAQUE" if state.bell_silence() else " · DESTELLO [E]"), Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
+			var cue = " · DESTELLO [E]"
+			if state.bell_silence():
+				cue = " · SUELTA EL ATAQUE"
+			elif state.is_forge_keeper():
+				cue = " · ¡RÓMPELA!"
+			_text_center(font, state.charge_name() + cue, Vector2(w * 0.5, tele.position.y - 12), 24, Color(1, 0.8 * pulse + 0.2, 0.4), 6)
 			if state.bell_silence():
 				_text_center(body, "Luceros seguros · Resonancia %d/3" % state.bell_resonance, Vector2(w * 0.5, tele.end.y + 22), 16, Color("c9a6f5"), 3)
+			elif state.forge_armor > 0:
+				var armor = Rect2(tele.position.x, tele.end.y + 8, tele.size.x * state.forge_armor / maxf(1.0, state.forge_armor_max()), 8)
+				overlay.draw_rect(Rect2(tele.position.x, armor.position.y, tele.size.x, 8).grow(2), Color(0.05, 0.03, 0.02, 0.9))
+				overlay.draw_rect(armor, Color("ff9a4a"))
+				_text_center(body, "Coraza %s · Destello ×1,5" % compact_number(ceil(state.forge_armor)), Vector2(w * 0.5, armor.end.y + 20), 16, Color("ffc58a"), 3)
 		elif state.stun_time > 0:
 			_text_center(font, "ATURDIDO", Vector2(cx, tele.position.y + 18), 18, Color("ffe38a"), 4)
 		elif state.spawn_delay <= 0:

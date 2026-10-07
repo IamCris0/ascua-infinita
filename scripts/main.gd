@@ -9,6 +9,8 @@ const StonePanel = preload("res://scripts/stone_panel.gd")
 const AudioDirector = preload("res://scripts/audio_director.gd")
 const FlyLayer = preload("res://scripts/fly_layer.gd")
 const TitleArt = preload("res://scripts/title_art.gd")
+const UiFactory = preload("res://scripts/ui_factory.gd")
+const LegacyTree = preload("res://scripts/legacy_tree.gd")
 const VERSION = "0.3.0-dev"
 const BUY_MODES = [1, 10, 0]
 const BUY_LABELS = ["×1", "×10", "MÁX"]
@@ -18,13 +20,15 @@ const KEEPER_LINES = [
 	"«El Rey no teme a tu espada. Teme al Destello que lo interrumpe.»",
 	"«Los luceros recuerdan a quien los liberó. Llévalos contigo.»",
 	"«Las ascuas errantes no esperan. Atrápalas antes de que se apaguen.»",
-	"«En las criptas, el eco cura a quien dejas de golpear.»",
-	"«La forja paga bien su calor. Pero quema.»"
+	"«En las criptas, el eco cura a quien no golpea tu propia mano.»",
+	"«La forja paga bien su calor. Pero quema.»",
+	"«El Forjador se viste de metal fundido. Rómpelo antes de que se vierta.»"
 ]
 
 var state = RunState.new()
 var lib
 var audio
+var ui
 var qa_mode: bool = false
 var capture_mode: bool = false
 var screen: String = ""
@@ -86,12 +90,14 @@ func _ready() -> void:
 	lib = load("res://scripts/art_library.gd").shared()
 	coin_tex = Kit.coin_texture()
 	var restored = state.load_game() if not qa_mode else false
+	var unreadable = state.preserve_unreadable_save() if not qa_mode and not restored else ""
 	if not restored:
 		state.restart()
 	theme = Kit.build_theme(lib)
 	audio = AudioDirector.new()
 	add_child(audio)
 	audio.muted_for_tests = qa_mode and not capture_mode
+	ui = UiFactory.new(lib, audio, coin_tex)
 	build_game()
 	build_title()
 	build_overlay()
@@ -105,6 +111,8 @@ func _ready() -> void:
 	connect_state()
 	apply_settings()
 	get_tree().auto_accept_quit = false
+	if not unreadable.is_empty():
+		add_log("No se pudo leer la partida guardada. Se conservó una copia: " + unreadable.get_file())
 	if restored:
 		if state.offline_reward > 0:
 			add_log("Tus luceros reunieron %d de oro durante tu ausencia." % int(state.offline_reward))
@@ -130,6 +138,19 @@ func connect_state() -> void:
 	state.shield_broken.connect(func():
 		arena.on_shield_broken()
 		audio.play("interrupt")
+	)
+	state.echo_strike.connect(func():
+		arena.on_echo_strike()
+		audio.play("critical", 0.05)
+	)
+	state.last_breath.connect(func():
+		arena.on_last_breath()
+		audio.play("rebirth")
+	)
+	state.armor_broken.connect(func():
+		arena.on_armor_broken()
+		audio.play("interrupt")
+		audio.duck(6.0, 0.6)
 	)
 	state.attack_started.connect(arena.on_attack_started)
 	state.burst_released.connect(func(interrupted):
@@ -249,119 +270,6 @@ func apply_settings() -> void:
 		if DisplayServer.window_get_mode() != mode and not (mode == DisplayServer.WINDOW_MODE_WINDOWED and DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MAXIMIZED):
 			DisplayServer.window_set_mode(mode)
 
-# ================================================================ widgets
-func label(parent: Node, value: String, font_size: int = 17, color: Color = Kit.TEXT, heading: bool = false) -> Label:
-	var l = Label.new()
-	l.text = value
-	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", color)
-	if heading:
-		l.add_theme_font_size_override("font_size", int(font_size * 1.22))
-		l.add_theme_font_override("font", lib.heading_font)
-		l.add_theme_constant_override("outline_size", 4)
-		l.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.03, 0.9))
-	if parent:
-		parent.add_child(l)
-	return l
-
-func wrap_label(parent: Node, value: String, font_size: int = 15, color: Color = Kit.MUTED) -> Label:
-	var l = label(parent, value, font_size, color)
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	l.custom_minimum_size.x = 60
-	return l
-
-func button(parent: Node, value: String, callback: Callable, height: float = 52, font_size: int = 19) -> Button:
-	var b = Button.new()
-	b.text = value
-	b.custom_minimum_size.y = height
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", int(font_size * 1.22))
-	b.pressed.connect(func():
-		audio.play("ui_click", 0.04)
-		callback.call()
-	)
-	b.mouse_entered.connect(func():
-		if not b.disabled:
-			audio.play("ui_hover", 0.05, 0.0, 0.03)
-	)
-	if parent:
-		parent.add_child(b)
-	return b
-
-func small_button(parent: Node, value: String, callback: Callable) -> Button:
-	var b = button(parent, value, callback, 34, 16)
-	b.add_theme_stylebox_override("normal", Kit.flat(Kit.SLOT, Color("3b404c"), 5, 2, 6))
-	b.add_theme_stylebox_override("hover", Kit.flat(Color("232731"), Kit.COPPER, 5, 2, 6))
-	b.add_theme_stylebox_override("pressed", Kit.flat(Color("2c2218"), Kit.COPPER, 5, 2, 6))
-	b.add_theme_stylebox_override("disabled", Kit.flat(Kit.SLOT, Color("23262e"), 5, 2, 6))
-	return b
-
-func stone(parent: Node, min_width: float = 0, straps: bool = true) -> VBoxContainer:
-	var p = StonePanel.new()
-	p.straps = straps
-	p.custom_minimum_size.x = min_width
-	p.add_theme_stylebox_override("panel", Kit.stone_style())
-	parent.add_child(p)
-	var v = VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.add_child(v)
-	return v
-
-func card(parent: Node, color: Color = Kit.SLATE_DARK, border: Color = Kit.LINE, margin: float = 10) -> PanelContainer:
-	var p = PanelContainer.new()
-	p.add_theme_stylebox_override("panel", Kit.flat(color, border, 6, 2, margin))
-	parent.add_child(p)
-	return p
-
-func icon_slot(parent: Node, texture: Texture2D, side: float = 48, border: Color = Kit.LINE) -> TextureRect:
-	var slot = PanelContainer.new()
-	slot.add_theme_stylebox_override("panel", Kit.slot_style(border))
-	slot.custom_minimum_size = Vector2(side, side)
-	parent.add_child(slot)
-	var t = TextureRect.new()
-	t.texture = texture
-	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	t.custom_minimum_size = Vector2(side - 10, side - 10)
-	slot.add_child(t)
-	return t
-
-func icon(parent: Node, texture: Texture2D, side: float) -> TextureRect:
-	var t = TextureRect.new()
-	t.texture = texture
-	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	t.custom_minimum_size = Vector2(side, side)
-	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if texture == coin_tex else CanvasItem.TEXTURE_FILTER_LINEAR
-	parent.add_child(t)
-	return t
-
-func spacer(parent: Node, height: float = -1) -> Control:
-	var c = Control.new()
-	if height < 0:
-		c.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	else:
-		c.custom_minimum_size.y = height
-	parent.add_child(c)
-	return c
-
-func hspacer(parent: Node) -> Control:
-	var c = Control.new()
-	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(c)
-	return c
-
-func separator(parent: Node) -> void:
-	parent.add_child(HSeparator.new())
-
-func header(parent: Node, overline: String, title: String) -> void:
-	label(parent, overline, 14, Kit.COPPER, true)
-	if not title.is_empty():
-		label(parent, title, 25, Kit.TEXT, true)
-
 # ================================================================ title
 func build_title() -> void:
 	title_root = Control.new()
@@ -383,18 +291,18 @@ func build_title() -> void:
 	var logo_box = VBoxContainer.new()
 	logo_box.add_theme_constant_override("separation", -46)
 	col.add_child(logo_box)
-	var logo = label(logo_box, "ASCUA", 132, Kit.GOLD, true)
+	var logo = ui.label(logo_box, "ASCUA", 132, Kit.GOLD, true)
 	logo.add_theme_constant_override("outline_size", 16)
 	logo.add_theme_color_override("font_outline_color", Color("1a0d06"))
 	logo.add_theme_constant_override("shadow_offset_y", 8)
 	logo.add_theme_constant_override("shadow_offset_x", 0)
 	logo.add_theme_color_override("font_shadow_color", Color(0.8, 0.28, 0.06, 0.6))
-	var logo2 = label(logo_box, "I N F I N I T A", 50, Kit.COPPER, true)
+	var logo2 = ui.label(logo_box, "I N F I N I T A", 50, Kit.COPPER, true)
 	logo2.add_theme_constant_override("outline_size", 10)
 	logo2.add_theme_color_override("font_outline_color", Color("1a0d06"))
-	spacer(col, 14)
-	label(col, "Un clic enciende la llama. Cada caída la hace eterna.", 19, Color("c9c2b4"))
-	spacer(col, 30)
+	ui.spacer(col, 14)
+	ui.label(col, "Un clic enciende la llama. Cada caída la hace eterna.", 19, Color("c9c2b4"))
+	ui.spacer(col, 30)
 	var holder = HBoxContainer.new()
 	col.add_child(holder)
 	var menu_panel = StonePanel.new()
@@ -405,12 +313,12 @@ func build_title() -> void:
 	title_menu = VBoxContainer.new()
 	title_menu.add_theme_constant_override("separation", 10)
 	menu_panel.add_child(title_menu)
-	spacer(col)
+	ui.spacer(col)
 	var foot = HBoxContainer.new()
 	col.add_child(foot)
-	title_stats = label(foot, "", 15, Kit.MUTED)
-	hspacer(foot)
-	label(foot, "v" + VERSION + "  ·  Godot 4.7", 13, Color("6f7782"))
+	title_stats = ui.label(foot, "", 15, Kit.MUTED)
+	ui.hspacer(foot)
+	ui.label(foot, "v" + VERSION + "  ·  Godot 4.7", 13, Color("6f7782"))
 
 func show_title() -> void:
 	screen = "title"
@@ -422,17 +330,17 @@ func show_title() -> void:
 	for child in title_menu.get_children():
 		title_menu.remove_child(child)
 		child.queue_free()
-	label(title_menu, "EL ECLIPSE AGUARDA", 14, Kit.COPPER, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ui.label(title_menu, "EL ECLIPSE AGUARDA", 14, Kit.COPPER, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if not state.dead and (state.room > 1 or state.gold > 0 or state.run_kills > 0):
-		button(title_menu, "CONTINUAR  ·  CÁMARA %d" % state.room, func(): start_game(false), 58, 21)
-		button(title_menu, "NUEVA EXPEDICIÓN", confirm_new_run, 52)
+		ui.button(title_menu, "CONTINUAR  ·  CÁMARA %d" % state.room, func(): start_game(false), 58, 21)
+		ui.button(title_menu, "NUEVA EXPEDICIÓN", confirm_new_run, 52)
 	elif state.dead:
-		button(title_menu, "IR A LA HOGUERA", open_camp_from_title, 58, 21)
+		ui.button(title_menu, "IR A LA HOGUERA", open_camp_from_title, 58, 21)
 	else:
-		button(title_menu, "COMENZAR EXPEDICIÓN", func(): start_game(state.dead), 58, 21)
-	button(title_menu, "CÓMO JUGAR", func(): show_howto(""), 50)
-	button(title_menu, "OPCIONES", func(): show_options(""), 50)
-	button(title_menu, "SALIR", quit_game, 50)
+		ui.button(title_menu, "COMENZAR EXPEDICIÓN", func(): start_game(state.dead), 58, 21)
+	ui.button(title_menu, "CÓMO JUGAR", func(): show_howto(""), 50)
+	ui.button(title_menu, "OPCIONES", func(): show_options(""), 50)
+	ui.button(title_menu, "SALIR", quit_game, 50)
 	var s = "Mejor cámara: %d   ·   Expediciones: %d   ·   Enemigos vencidos: %d   ·   Jefes vencidos: %d" % [state.best, state.runs, state.total_kills, state.total_bosses]
 	title_stats.text = s if state.total_kills > 0 else "Tu primera expedición te espera."
 	update_music()
@@ -441,7 +349,7 @@ func confirm_new_run() -> void:
 	var v = modal("confirm", "NUEVA EXPEDICIÓN", "¿Abandonar este viaje?", "La expedición actual terminará en la cámara %d. Conservarás las %d ascuas que llevas; el oro, la forja y las reliquias se pierden." % [state.room, state.run_essence])
 	var row = HBoxContainer.new()
 	v.add_child(row)
-	var a = button(row, "EMPEZAR DE NUEVO", func():
+	var a = ui.button(row, "EMPEZAR DE NUEVO", func():
 		close_modal(false)
 		retreating = true
 		state.finish_run()
@@ -452,7 +360,7 @@ func confirm_new_run() -> void:
 		start_game(false)
 	, 54)
 	a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var b = button(row, "VOLVER", func(): close_modal(), 54)
+	var b = ui.button(row, "VOLVER", func(): close_modal(), 54)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func open_camp_from_title() -> void:
@@ -496,10 +404,10 @@ func build_game() -> void:
 	var margin = MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
+		margin.add_theme_constant_override("margin_" + side, 14)
 	game_root.add_child(margin)
 	var root = VBoxContainer.new()
-	root.add_theme_constant_override("separation", 12)
+	root.add_theme_constant_override("separation", 10)
 	margin.add_child(root)
 	build_top_bar(root)
 	var body = HBoxContainer.new()
@@ -512,86 +420,91 @@ func build_game() -> void:
 	build_footer(root)
 
 func build_top_bar(root: Node) -> void:
-	var bar = card(root, Color("14161d"), Kit.LINE, 8)
+	var bar = ui.card(root, Color("14161d"), Kit.LINE, 8)
 	bar.get_theme_stylebox("panel").content_margin_left = 14
 	bar.get_theme_stylebox("panel").content_margin_right = 10
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
 	bar.add_child(row)
-	icon(row, load("res://assets/icon.svg"), 46)
+	ui.icon(row, load("res://assets/icon.svg"), 46)
 	var title = VBoxContainer.new()
 	title.add_theme_constant_override("separation", -2)
 	row.add_child(title)
-	label(title, "ASCUA INFINITA", 26, Kit.GOLD, true)
-	biome_label = label(title, "", 14, Kit.TEAL, true)
-	hspacer(row)
+	ui.label(title, "ASCUA INFINITA", 26, Kit.GOLD, true)
+	biome_label = ui.label(title, "", 14, Kit.TEAL, true)
+	ui.hspacer(row)
 	var mid = VBoxContainer.new()
 	mid.add_theme_constant_override("separation", 2)
 	mid.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(mid)
-	room_label = label(mid, "", 20, Kit.TEXT, true)
+	room_label = ui.label(mid, "", 20, Kit.TEXT, true)
 	room_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	room_track = RoomTrack.new()
 	room_track.main = self
 	room_track.custom_minimum_size = Vector2(330, 26)
 	mid.add_child(room_track)
-	hspacer(row)
+	ui.hspacer(row)
 	gold_box = HBoxContainer.new()
 	gold_box.add_theme_constant_override("separation", 8)
 	gold_box.tooltip_text = "Oro de esta expedición. Gástalo en la forja."
 	gold_box.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(gold_box)
-	icon(gold_box, coin_tex, 30)
-	gold_label = label(gold_box, "0", 30, Kit.GOLD, true)
+	ui.icon(gold_box, coin_tex, 30)
+	gold_label = ui.label(gold_box, "0", 30, Kit.GOLD, true)
 	gold_label.custom_minimum_size.x = 120
 	essence_box = HBoxContainer.new()
 	essence_box.add_theme_constant_override("separation", 6)
 	essence_box.tooltip_text = "Ascuas: se conservan al caer o retirarte. Gástalas en la hoguera."
 	essence_box.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(essence_box)
-	icon(essence_box, lib.ui.shard, 30)
+	ui.icon(essence_box, lib.ui.shard, 30)
 	var ev = VBoxContainer.new()
 	ev.add_theme_constant_override("separation", -4)
 	essence_box.add_child(ev)
-	essence_label = label(ev, "0", 22, Kit.TEAL, true)
-	run_essence_label = label(ev, "", 13, Color("9fd8c4"))
+	essence_label = ui.label(ev, "0", 22, Kit.TEAL, true)
+	run_essence_label = ui.label(ev, "", 13, Color("9fd8c4"))
 	essence_box.custom_minimum_size.x = 132
-	pause_button = button(row, "MENÚ", toggle_pause, 52, 18)
+	pause_button = ui.button(row, "MENÚ", toggle_pause, 52, 18)
 	pause_button.custom_minimum_size.x = 110
 
 func build_bearer_panel(body: Node) -> void:
-	var left = stone(body, 300)
-	left.add_theme_constant_override("separation", 8)
-	header(left, "EL PORTADOR", "La última brasa")
+	var left = ui.stone(body, 300)
+	left.add_theme_constant_override("separation", 5)
+	ui.header(left, "EL PORTADOR", "La última brasa")
 	var hp_row = HBoxContainer.new()
 	left.add_child(hp_row)
-	label(hp_row, "VITALIDAD", 15, Kit.MUTED, true)
-	hspacer(hp_row)
-	hp_label = label(hp_row, "", 17, Kit.TEXT, true)
+	ui.label(hp_row, "VITALIDAD", 15, Kit.MUTED, true)
+	ui.hspacer(hp_row)
+	hp_label = ui.label(hp_row, "", 17, Kit.TEXT, true)
 	hp_bar = ProgressBar.new()
 	hp_bar.custom_minimum_size.y = 18
 	hp_bar.show_percentage = false
 	left.add_child(hp_bar)
-	spacer(left, 2)
+	ui.spacer(left, 2)
 	var names = {"click": "Daño por clic", "auto": "Luceros / s", "crit": "Crítico", "burst": "Destello", "reward": "Oro por victoria"}
 	var colors = {"click": Kit.GOLD, "auto": Kit.TEAL, "crit": Kit.COPPER, "burst": Color("ffd28a"), "reward": Kit.GOLD}
 	for key in STAT_KEYS:
 		var row = HBoxContainer.new()
 		left.add_child(row)
-		label(row, names[key], 15, Kit.MUTED)
-		hspacer(row)
-		stat_values[key] = label(row, "", 17, colors[key], true)
-	separator(left)
-	label(left, "RELIQUIAS DEL VIAJE", 14, Kit.RUNE, true)
+		ui.label(row, names[key], 15, Kit.MUTED)
+		ui.hspacer(row)
+		stat_values[key] = ui.label(row, "", 17, colors[key], true)
+	ui.separator(left)
+	ui.label(left, "RELIQUIAS DEL VIAJE", 14, Kit.RUNE, true)
 	relic_grid = GridContainer.new()
 	relic_grid.columns = 5
 	relic_grid.add_theme_constant_override("h_separation", 6)
 	relic_grid.add_theme_constant_override("v_separation", 6)
 	left.add_child(relic_grid)
-	relic_hint = wrap_label(left, "Tu primera reliquia espera al superar la cámara 5.", 14)
-	spacer(left)
-	best_label = wrap_label(left, "", 14)
-	retreat_button = button(left, "VOLVER A LA HOGUERA", confirm_retreat, 50, 16)
+	relic_hint = ui.wrap_label(left, "Tu primera reliquia espera al superar la cámara 5.", 14)
+	# Growing text takes the free space and clips instead of pushing the
+	# footer off screen late in an expedition.
+	relic_hint.clip_text = true
+	relic_hint.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	relic_hint.size_flags_stretch_ratio = 3.0
+	ui.spacer(left)
+	best_label = ui.wrap_label(left, "", 14)
+	retreat_button = ui.button(left, "VOLVER A LA HOGUERA", confirm_retreat, 50, 16)
 	retreat_button.tooltip_text = "Termina la expedición y conserva tus ascuas."
 
 func build_center(body: Node) -> void:
@@ -614,7 +527,7 @@ func build_center(body: Node) -> void:
 	burst_button.custom_minimum_size.y = 64
 	burst_button.focus_mode = Control.FOCUS_NONE
 	burst_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	burst_button.tooltip_text = "Destello: rompe escudos e interrumpe los ataques canalizados del Rey y del Acólito."
+	burst_button.tooltip_text = "Destello: rompe escudos, interrumpe los ataques canalizados y golpea ×1,5 la coraza del Forjador."
 	burst_button.add_theme_stylebox_override("normal", Kit.button_texture(lib, Color(1.25, 0.86, 0.62)))
 	burst_button.add_theme_stylebox_override("hover", Kit.button_texture(lib, Color(1.45, 1.0, 0.7)))
 	burst_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(1.0, 0.7, 0.5)))
@@ -632,53 +545,55 @@ func build_center(body: Node) -> void:
 	burst_fill.add_theme_stylebox_override("background", StyleBoxEmpty.new())
 	burst_fill.add_theme_stylebox_override("fill", Kit.flat(Color(1.0, 0.6, 0.25, 0.28), Color(0, 0, 0, 0), 4, 0, 0))
 	burst_button.add_child(burst_fill)
-	burst_label = label(burst_button, "", 23, Color("fff0d6"), true)
+	burst_label = ui.label(burst_button, "", 23, Color("fff0d6"), true)
 	burst_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	burst_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	burst_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	burst_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func build_forge_panel(body: Node) -> void:
-	var right = stone(body, 344)
+	var right = ui.stone(body, 344)
 	right.add_theme_constant_override("separation", 8)
-	header(right, "FORJA DE CAMPAÑA", "Alimenta la llama")
+	ui.header(right, "FORJA DE CAMPAÑA", "Alimenta la llama")
 	var modes = HBoxContainer.new()
 	modes.add_theme_constant_override("separation", 6)
 	right.add_child(modes)
-	label(modes, "Comprar", 15, Kit.MUTED)
-	hspacer(modes)
+	ui.label(modes, "Comprar", 15, Kit.MUTED)
+	ui.hspacer(modes)
 	for i in range(BUY_MODES.size()):
-		var b = small_button(modes, BUY_LABELS[i], func(): set_buy_mode(i))
+		var b = ui.small_button(modes, BUY_LABELS[i], func(): set_buy_mode(i))
 		b.custom_minimum_size.x = 58
 		buy_mode_buttons.append(b)
-	label(modes, "[Q]", 13, Color("6f7782"))
+	ui.label(modes, "[Q]", 13, Color("6f7782"))
 	for i in range(state.UPGRADES.size()):
 		build_upgrade_card(right, i)
-	spacer(right, 4)
-	var chron = card(right, Color("15171d"), Kit.LINE, 10)
+	ui.spacer(right, 4)
+	var chron = ui.card(right, Color("15171d"), Kit.LINE, 10)
 	chron.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var cv = VBoxContainer.new()
 	cv.add_theme_constant_override("separation", 4)
 	chron.add_child(cv)
-	label(cv, "CRÓNICA DEL VIAJE", 13, Kit.COPPER, true)
-	chronicle_label = wrap_label(cv, "", 14, Color("b8b2a6"))
+	ui.label(cv, "CRÓNICA DEL VIAJE", 13, Kit.COPPER, true)
+	chronicle_label = ui.wrap_label(cv, "", 14, Color("b8b2a6"))
 	chronicle_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	next_label = label(cv, "", 14, Kit.TEAL, true)
-	var amb = card(right, Color("1b1a24"), Color("3a2f52"), 10)
+	chronicle_label.clip_text = true
+	chronicle_label.custom_minimum_size.y = 58 # Always room for three entries.
+	next_label = ui.label(cv, "", 14, Kit.TEAL, true)
+	var amb = ui.card(right, Color("1b1a24"), Color("3a2f52"), 10)
 	var av = VBoxContainer.new()
 	av.add_theme_constant_override("separation", 2)
 	amb.add_child(av)
-	label(av, "AMBIENTE", 13, Kit.RUNE, true)
-	rule_label = wrap_label(av, "", 14, Color("c8c0d8"))
+	ui.label(av, "AMBIENTE", 13, Kit.RUNE, true)
+	rule_label = ui.wrap_label(av, "", 14, Color("c8c0d8"))
 	set_buy_mode(0)
 
 func build_upgrade_card(parent: Node, kind: int) -> void:
 	var data: Dictionary = state.UPGRADES[kind]
-	var c = card(parent, Kit.SLATE_DARK, Kit.LINE, 8)
+	var c = ui.card(parent, Kit.SLATE_DARK, Kit.LINE, 8)
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	c.add_child(row)
-	var ic = icon_slot(row, lib.upgrade_icon(kind), 54)
+	var ic = ui.icon_slot(row, lib.upgrade_icon(kind), 54)
 	ic.custom_minimum_size = Vector2(44, 44)
 	var info = VBoxContainer.new()
 	info.add_theme_constant_override("separation", 0)
@@ -686,11 +601,11 @@ func build_upgrade_card(parent: Node, kind: int) -> void:
 	row.add_child(info)
 	var top = HBoxContainer.new()
 	info.add_child(top)
-	label(top, data.name, 17, Kit.TEXT, true)
-	hspacer(top)
-	var level = label(top, "", 14, Kit.GOLD, true)
-	var desc = wrap_label(info, data.description, 13, Kit.MUTED)
-	var cost = button(row, "", func(): purchase(kind), 54, 18)
+	ui.label(top, data.name, 17, Kit.TEXT, true)
+	ui.hspacer(top)
+	var level = ui.label(top, "", 14, Kit.GOLD, true)
+	var desc = ui.wrap_label(info, data.description, 13, Kit.MUTED)
+	var cost = ui.button(row, "", func(): purchase(kind), 54, 18)
 	cost.custom_minimum_size.x = 108
 	cost.icon = coin_tex
 	cost.expand_icon = true
@@ -702,15 +617,15 @@ func build_upgrade_card(parent: Node, kind: int) -> void:
 	upgrade_buttons.append(cost)
 
 func build_footer(root: Node) -> void:
-	var foot = card(root, Color("111319"), Kit.LINE, 8)
+	var foot = ui.card(root, Color("111319"), Kit.LINE, 8)
 	var row = HBoxContainer.new()
 	foot.add_child(row)
-	log_label = label(row, "", 15, Color("c9c2b4"))
+	log_label = ui.label(row, "", 15, Color("c9c2b4"))
 	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	log_label.clip_text = true
 	log_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label(row, "CLIC/ESPACIO atacar   E destello   1-4 forja   Q cantidad   ESC menú", 13, Color("78818d"))
-	status_label = label(row, "", 13, Kit.TEAL)
+	ui.label(row, "CLIC/ESPACIO atacar   E destello   1-4 forja   Q cantidad   ESC menú", 13, Color("78818d"))
+	status_label = ui.label(row, "", 13, Kit.TEAL)
 
 func set_buy_mode(index: int) -> void:
 	buy_mode = index
@@ -765,7 +680,7 @@ func refresh() -> void:
 		hp_low_state = int(low)
 		hp_bar.add_theme_stylebox_override("fill", Kit.flat(Kit.DANGER if low else Color("5fcf96"), Color(0, 0, 0, 0), 3, 0, 0))
 	stat_values.click.text = fmt(state.click_damage()) + (" ×2" if state.fury_time > 0 else "")
-	stat_values.auto.text = fmt(state.auto_damage())
+	stat_values.auto.text = fmt(state.auto_damage() / state.wisp_interval())
 	stat_values.crit.text = "%d%%  ·  ×%.1f" % [roundi(state.critical_chance() * 100), state.critical_multiplier()]
 	stat_values.burst.text = fmt(state.burst_damage())
 	stat_values.reward.text = fmt(state.kill_reward())
@@ -796,6 +711,8 @@ func refresh() -> void:
 	burst_fill.value = state.burst_max_cooldown() - state.burst_cooldown
 	if state.charging and state.bell_silence():
 		burst_label.text = "DESTELLO · CANCELAR SILENCIO [E]" if state.burst_cooldown <= 0 else "DESTELLO · %.1f s" % state.burst_cooldown
+	elif state.charging and state.is_forge_keeper():
+		burst_label.text = "¡ROMPE LA CORAZA!  DESTELLO ×1,5  [E]" if state.burst_cooldown <= 0 else "DESTELLO  ·  %.1f s" % state.burst_cooldown
 	elif state.charging:
 		burst_label.text = "¡INTERRUMPIR!  DESTELLO  [E]" if state.burst_cooldown <= 0 else "DESTELLO  ·  %.1f s" % state.burst_cooldown
 	elif state.burst_cooldown > 0:
@@ -861,7 +778,7 @@ func refresh_relics() -> void:
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(t)
 		if n > 1:
-			var badge = label(holder, "×%d" % n, 13, Kit.GOLD, true)
+			var badge = ui.label(holder, "×%d" % n, 13, Kit.GOLD, true)
 			badge.position = Vector2(26, 28)
 
 func fmt(value: float) -> String:
@@ -933,12 +850,12 @@ func modal(kind: String, overline: String, title: String, description: String, w
 	v.add_theme_constant_override("separation", 14)
 	modal_panel.add_child(v)
 	if not overline.is_empty():
-		label(v, overline, 15, Kit.COPPER, true)
+		ui.label(v, overline, 15, Kit.COPPER, true)
 	if not title.is_empty():
-		label(v, title, 38, Kit.GOLD, true)
+		ui.label(v, title, 38, Kit.GOLD, true)
 	if not description.is_empty():
-		wrap_label(v, description, 17, Color("d6d0c4"))
-	separator(v)
+		ui.wrap_label(v, description, 17, Color("d6d0c4"))
+	ui.separator(v)
 	overlay.show()
 	if not was_open:
 		audio.play("ui_open")
@@ -976,7 +893,7 @@ func show_howto(return_to: String) -> void:
 	var tips = [
 		[lib.fx_icon("slash", 2, 0.12), "Haz clic o mantén ESPACIO para atacar sin pulsar repetidamente. Ritmo máximo: un golpe cada 0,3 s. Encadenarlos suma hasta un 30% de daño."],
 		[lib.upgrade_icon(1), "Empiezas con un lucero que ataca solo. Compra más en la forja; los clics aceleran el combate. Usa Q para comprar ×10 o al máximo."],
-		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián e interrumpe la carga del Rey o del Acólito."],
+		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián, interrumpe las cargas del Rey y del Acólito y agrieta la coraza del Forjador."],
 		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y una ruta: descansar, desafiar a un élite o visitar un evento. El combate espera tu decisión."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]
@@ -985,11 +902,11 @@ func show_howto(return_to: String) -> void:
 		var row = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
 		v.add_child(row)
-		icon_slot(row, tip[0], 50)
-		var l = wrap_label(row, tip[1], 16, Kit.TEXT)
+		ui.icon_slot(row, tip[0], 50)
+		var l = ui.wrap_label(row, tip[1], 16, Kit.TEXT)
 		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	spacer(v, 4)
-	button(v, "ENCENDER LA LLAMA" if welcome else "ENTENDIDO", func(): _return_from(modal_return), 56)
+	ui.spacer(v, 4)
+	ui.button(v, "ENCENDER LA LLAMA" if welcome else "ENTENDIDO", func(): _return_from(modal_return), 56)
 
 func _return_from(where: String) -> void:
 	if where == "pause":
@@ -1010,7 +927,7 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 	var tabs = HBoxContainer.new()
 	v.add_child(tabs)
 	for section in ["Enemigos", "Reliquias", "Sinergias"]:
-		var tab = button(tabs, section, func(): show_collection(return_to, section), 42, 16)
+		var tab = ui.button(tabs, section, func(): show_collection(return_to, section), 42, 16)
 		tab.disabled = section == category
 	var scroll = ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 320)
@@ -1024,10 +941,10 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 		if entry.category != category:
 			continue
 		var found: bool = state.discoveries.has(entry.id)
-		label(list, entry.name if found else "Sin descubrir", 20, Kit.GOLD if found else Kit.MUTED, true)
-		wrap_label(list, entry.description if found else "???", 15, Kit.TEXT if found else Kit.MUTED)
-		separator(list)
-	button(v, "VOLVER", func(): _return_from(modal_return), 48)
+		ui.label(list, entry.name if found else "Sin descubrir", 20, Kit.GOLD if found else Kit.MUTED, true)
+		ui.wrap_label(list, entry.description if found else "???", 15, Kit.TEXT if found else Kit.MUTED)
+		ui.separator(list)
+	ui.button(v, "VOLVER", func(): _return_from(modal_return), 48)
 	persist()
 
 func show_options(return_to: String) -> void:
@@ -1037,7 +954,7 @@ func show_options(return_to: String) -> void:
 	for s in sliders:
 		var row = HBoxContainer.new()
 		v.add_child(row)
-		var l = label(row, s[0], 17)
+		var l = ui.label(row, s[0], 17)
 		l.custom_minimum_size.x = 190
 		var slider = HSlider.new()
 		slider.min_value = 0
@@ -1048,7 +965,7 @@ func show_options(return_to: String) -> void:
 		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		slider.focus_mode = Control.FOCUS_NONE
 		row.add_child(slider)
-		var value = label(row, "%d%%" % roundi(slider.value * 100), 16, Kit.GOLD, true)
+		var value = ui.label(row, "%d%%" % roundi(slider.value * 100), 16, Kit.GOLD, true)
 		value.custom_minimum_size.x = 56
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		var key: String = s[1]
@@ -1059,7 +976,7 @@ func show_options(return_to: String) -> void:
 			if key == "sfx_volume":
 				audio.play("coin", 0.0, 0.0, 0.12)
 		)
-	separator(v)
+	ui.separator(v)
 	var toggles = [["Sacudidas de pantalla", "screen_shake"], ["Números de daño", "show_numbers"], ["Reducir movimiento y destellos", "reduced_motion"], ["Pantalla completa", "fullscreen"]]
 	for t in toggles:
 		var c = CheckButton.new()
@@ -1074,8 +991,8 @@ func show_options(return_to: String) -> void:
 			apply_settings()
 		)
 		v.add_child(c)
-	spacer(v, 4)
-	button(v, "VOLVER", func():
+	ui.spacer(v, 4)
+	ui.button(v, "VOLVER", func():
 		persist()
 		_return_from(modal_return)
 	, 54)
@@ -1093,16 +1010,16 @@ func toggle_pause() -> void:
 func toggle_pause_menu() -> void:
 	state.paused = true
 	var v = modal("pause", "UN RESPIRO JUNTO AL FUEGO", "Expedición en pausa", "Cámara %d de %s. Tu progreso se guarda automáticamente." % [state.room, state.BIOMES[state.biome()].to_lower()], 560)
-	button(v, "CONTINUAR", func(): close_modal(), 56, 21)
-	button(v, "OPCIONES", func(): show_options("pause"), 50)
-	button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
-	button(v, "COLECCIÓN", func(): show_collection("pause"), 50)
-	button(v, "MENÚ PRINCIPAL", func():
+	ui.button(v, "CONTINUAR", func(): close_modal(), 56, 21)
+	ui.button(v, "OPCIONES", func(): show_options("pause"), 50)
+	ui.button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
+	ui.button(v, "COLECCIÓN", func(): show_collection("pause"), 50)
+	ui.button(v, "MENÚ PRINCIPAL", func():
 		persist()
 		show_title()
 	, 50)
-	button(v, "GUARDAR Y SALIR", quit_game, 50)
-	wrap_label(v, "Tus luceros reúnen 2 de oro por minuto y lucero mientras no juegas (máximo 4 horas). La expedición no recibe daño con el juego cerrado.", 14)
+	ui.button(v, "GUARDAR Y SALIR", quit_game, 50)
+	ui.wrap_label(v, "Tus luceros reúnen 2 de oro por minuto y lucero mientras no juegas (máximo 4 horas). La expedición no recibe daño con el juego cerrado.", 14)
 	persist()
 
 func show_relics() -> void:
@@ -1124,23 +1041,23 @@ func show_relics() -> void:
 		var cv = VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 8)
 		c.add_child(cv)
-		var ic = icon(cv, lib.relics[relic.id], 104)
+		var ic = ui.icon(cv, lib.relics[relic.id], 104)
 		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		label(cv, relic.tag, 14, color, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label(cv, relic.name, 22, Kit.TEXT, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var d = wrap_label(cv, relic.description + "\n\n" + state.synergy_hint(relic.id), 16, Color("d6d0c4"))
+		ui.label(cv, relic.tag, 14, color, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ui.label(cv, relic.name, 22, Kit.TEXT, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var d = ui.wrap_label(cv, relic.description + "\n\n" + state.synergy_hint(relic.id), 16, Color("d6d0c4"))
 		d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		d.custom_minimum_size.y = 64
 		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var owned = state.count_relic(relic.id)
-		label(cv, "Ya tienes ×%d" % owned if owned > 0 else "Nueva", 13, Kit.MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button(cv, "ELEGIR  [%d]" % n, func(): choose_relic(index), 52)
+		ui.label(cv, "Ya tienes ×%d" % owned if owned > 0 else "Nueva", 13, Kit.MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ui.button(cv, "ELEGIR  [%d]" % n, func(): choose_relic(index), 52)
 	suspend_button(v)
 
 # Pending decisions survive in the save; Continue reopens them.
 func suspend_button(parent: Node) -> void:
-	separator(parent)
-	button(parent, "GUARDAR Y VOLVER AL MENÚ", func():
+	ui.separator(parent)
+	ui.button(parent, "GUARDAR Y VOLVER AL MENÚ", func():
 		persist()
 		show_title()
 	, 42, 15)
@@ -1160,32 +1077,42 @@ func show_journey() -> void:
 		var choices = [
 			["SENDERO TRANQUILO  [1]", "Recuperas hasta un 20% de vida. El siguiente enemigo no será élite.", lib.relics.heart],
 			["DESAFÍO ÉLITE  [2]", "Siguiente enemigo: ×2,2 vida y ×1,3 daño. Recompensa: ×2,5 oro y una ascua extra.", lib.relics.fang],
-			["VISITAR: " + state.encounter_name().to_upper() + "  [3]", "Un encuentro opcional. Verás el trato antes de aceptarlo; puedes marcharte gratis.", lib.ui.keeper]]
+			["VISITAR: " + state.encounter_name().to_upper() + "  [3]", "Un encuentro opcional. Verás el trato antes de aceptarlo; puedes marcharte gratis.", encounter_art()]]
 		for i in range(choices.size()):
 			var row = HBoxContainer.new()
 			row.add_theme_constant_override("separation", 14)
 			v.add_child(row)
-			icon_slot(row, choices[i][2], 62)
+			ui.icon_slot(row, choices[i][2], 62)
 			var col = VBoxContainer.new()
 			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(col)
-			button(col, choices[i][0], func(): choose_journey(i), 44, 17)
-			wrap_label(col, choices[i][1], 15, Kit.MUTED)
+			ui.button(col, choices[i][0], func(): choose_journey(i), 44, 17)
+			ui.wrap_label(col, choices[i][1], 15, Kit.MUTED)
 	else:
 		var description = "Recupera hasta un 45% de tu vida máxima, sin coste."
-		var portrait = lib.relics.heart
 		if state.encounter_kind == "merchant":
 			description = "Un lucero adicional por %d de oro (20%% menos que en la forja). Tienes %d de oro." % [state.encounter_cost(), int(state.gold)]
-			portrait = lib.ui.keeper
 		elif state.encounter_kind == "altar":
 			description = "Entrega %d de vida actual para ganar +20%% al daño de clics y luceros durante esta expedición. Los pactos se suman. Debes sobrevivir al pago." % state.encounter_cost()
-			portrait = lib.relics.ash
-		icon(v, portrait, 96).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		wrap_label(v, description, 18, Kit.TEXT)
-		label(v, "Vida: %d / %d   ·   Pactos: %d" % [int(state.hp), int(state.max_hp()), state.altar_pacts], 16, Kit.TEAL)
-		button(v, "ACEPTAR  [1]", func(): resolve_journey(true), 52).disabled = not state.can_accept_encounter()
-		button(v, "SEGUIR SIN ACEPTAR  [2]", func(): resolve_journey(false), 48)
+		var art = ui.icon_slot(v, encounter_art(), 200, Color("6b5a44"))
+		art.get_parent().size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		if state.encounter_kind == "shrine" and not state.reduced_motion:
+			# The lit shrine flickers between its two burning states.
+			var flicker = art.create_tween().set_loops()
+			flicker.tween_callback(func(): art.texture = lib.event_art(2)).set_delay(0.35)
+			flicker.tween_callback(func(): art.texture = lib.event_art(1)).set_delay(0.35)
+		ui.wrap_label(v, description, 18, Kit.TEXT)
+		ui.label(v, "Vida: %d / %d   ·   Pactos: %d" % [int(state.hp), int(state.max_hp()), state.altar_pacts], 16, Kit.TEAL)
+		ui.button(v, "ACEPTAR  [1]", func(): resolve_journey(true), 52).disabled = not state.can_accept_encounter()
+		ui.button(v, "SEGUIR SIN ACEPTAR  [2]", func(): resolve_journey(false), 48)
 	suspend_button(v)
+
+## Encounter illustration, lit so it reads at route-icon size too.
+func encounter_art() -> Texture2D:
+	match state.encounter_kind:
+		"merchant": return lib.portrait("merchant")
+		"altar": return lib.event_art(5)
+	return lib.event_art(1)
 
 func choose_journey(index: int) -> void:
 	if state.choose_route(index):
@@ -1206,14 +1133,14 @@ func confirm_retreat() -> void:
 	var v = modal("retreat", "REGRESO A LA HOGUERA", "Conserva tu chispa.", "Guardarás %d ascuas. Terminará esta expedición: perderás el oro, la forja y las reliquias del viaje." % state.run_essence, 640)
 	var row = HBoxContainer.new()
 	v.add_child(row)
-	var a = button(row, "VOLVER Y CONSERVAR", func():
+	var a = ui.button(row, "VOLVER Y CONSERVAR", func():
 		retreating = true
 		close_modal(false)
 		state.paused = false
 		state.finish_run()
 	, 56)
 	a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var b = button(row, "SEGUIR EXPLORANDO", func(): close_modal(), 56)
+	var b = ui.button(row, "SEGUIR EXPLORANDO", func(): close_modal(), 56)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func show_summary() -> void:
@@ -1230,77 +1157,31 @@ func show_summary() -> void:
 		["Jefes derrotados", str(state.run_bosses)], ["Oro reunido", fmt(state.run_gold)],
 		["Reliquias", str(state.relics.size())], ["Duración", "%d min %02d s" % [minutes, int(state.run_time) % 60]]]
 	for r in rows:
-		label(grid, r[0], 17, Kit.MUTED)
-		label(grid, r[1], 19, Kit.TEXT, true)
-	separator(v)
+		ui.label(grid, r[0], 17, Kit.MUTED)
+		ui.label(grid, r[1], 19, Kit.TEXT, true)
+	ui.separator(v)
 	var gain = HBoxContainer.new()
 	gain.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(gain)
-	icon(gain, lib.ui.shard, 40)
-	label(gain, "+%d ascuas" % state.run_essence, 34, Kit.TEAL, true)
-	button(v, "IR A LA HOGUERA   →", func(): show_camp(), 58, 21)
+	ui.icon(gain, lib.ui.shard, 40)
+	ui.label(gain, "+%d ascuas" % state.run_essence, 34, Kit.TEAL, true)
+	ui.button(v, "IR A LA HOGUERA   →", func(): show_camp(), 58, 21)
 	persist()
 
 func show_camp() -> void:
 	state.run_essence = 0
-	var v = modal("camp", "LA HOGUERA  ·  PROGRESIÓN PERMANENTE", "Toda caída deja una brasa.", "", 1060)
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 22)
-	v.add_child(row)
-	var left = VBoxContainer.new()
-	left.custom_minimum_size.x = 250
-	left.add_theme_constant_override("separation", 10)
-	row.add_child(left)
-	var portrait = icon_slot(left, lib.ui.keeper, 220, Color("6b5a44"))
-	portrait.custom_minimum_size = Vector2(206, 206)
-	button(left, "COLECCIÓN", func(): show_collection("camp"), 40, 16)
-	label(left, "EL GUARDIÁN DE LA HOGUERA", 14, Kit.COPPER, true)
-	wrap_label(left, KEEPER_LINES[(state.runs + state.total_kills) % KEEPER_LINES.size()], 15, Color("d6d0c4"))
-	spacer(left)
-	var bank = HBoxContainer.new()
-	left.add_child(bank)
-	icon(bank, lib.ui.shard, 40)
-	var bv = VBoxContainer.new()
-	bv.add_theme_constant_override("separation", -4)
-	bank.add_child(bv)
-	label(bv, str(state.essence), 36, Kit.TEAL, true)
-	label(bv, "ascuas disponibles", 14, Kit.MUTED)
-	var grid = GridContainer.new()
-	grid.columns = 2
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	row.add_child(grid)
-	for i in range(state.LEGACY.size()):
-		var data: Dictionary = state.LEGACY[i]
-		var c = card(grid, Kit.SLATE_DARK, Kit.LINE, 10)
-		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var h = HBoxContainer.new()
-		c.add_child(h)
-		icon_slot(h, lib.legacy_icon(i), 58)
-		var info = VBoxContainer.new()
-		info.add_theme_constant_override("separation", 0)
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(info)
-		var top = HBoxContainer.new()
-		info.add_child(top)
-		label(top, data.name, 17, Kit.TEXT, true)
-		hspacer(top)
-		label(top, "NV. %d" % state.legacy_level(i), 14, Kit.GOLD, true)
-		wrap_label(info, data.description, 14, Kit.MUTED)
-		var maxed: bool = state.legacy_maxed(i)
-		var caption = "NIVEL MÁXIMO" if maxed else "%d ascuas  [%d]" % [state.legacy_price(i), i + 1]
-		var b = button(info, caption, func(): buy_legacy(i), 40, 15)
-		b.disabled = maxed or state.essence < state.legacy_price(i)
-	separator(v)
+	var v = modal("camp", "LA HOGUERA  ·  CONSTELACIÓN DEL LEGADO", "Toda caída deja una brasa.", "", 1290)
+	LegacyTree.build(self, v)
+	ui.separator(v)
 	var actions = HBoxContainer.new()
 	v.add_child(actions)
-	var menu_b = button(actions, "MENÚ PRINCIPAL", func():
+	var menu_b = ui.button(actions, "MENÚ PRINCIPAL", func():
 		persist()
 		show_title()
 	, 58)
 	menu_b.custom_minimum_size.x = 240
-	var go = button(actions, "RENACER   →   NUEVA EXPEDICIÓN  [ENTER]", rebirth, 58, 21)
+	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 200
+	var go = ui.button(actions, "RENACER   →   NUEVA EXPEDICIÓN  [ENTER]", rebirth, 58, 21)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	persist()
 
@@ -1311,6 +1192,13 @@ func buy_legacy(kind: int) -> void:
 		persist()
 	else:
 		audio.play("ui_denied")
+
+## Swearing an owned oath replaces the active one; free between expeditions.
+func swear(kind: int) -> void:
+	if state.set_oath(kind):
+		audio.play("offer")
+		show_camp()
+		persist()
 
 func rebirth() -> void:
 	state.restart()
@@ -1351,9 +1239,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		resolve_journey(key == KEY_1)
 		return
 	if modal_type == "camp":
-		if key >= KEY_1 and key <= KEY_6:
-			buy_legacy(key - KEY_1)
-		elif key == KEY_ENTER or key == KEY_KP_ENTER:
+		if key == KEY_ENTER or key == KEY_KP_ENTER:
 			rebirth()
 		return
 	if modal_type == "summary" and (key == KEY_ENTER or key == KEY_KP_ENTER or key == KEY_SPACE):
@@ -1385,7 +1271,7 @@ func capture() -> void:
 		state.runs = 4
 		state.total_kills = 312
 		state.total_bosses = 3
-		state.legacy = [3, 2, 2, 1, 0, 0]
+		state.legacy = [3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 		state.room = 14
 		state.gold = 120
 		show_title()
@@ -1398,6 +1284,9 @@ func capture() -> void:
 				state.offers.clear()
 				state.journey_phase = shot
 				state.encounter_kind = "merchant"
+				for a in args:
+					if a.begins_with("--encounter="):
+						state.encounter_kind = a.substr(12)
 				show_journey()
 			"relic": show_relics()
 			"camp":
@@ -1451,7 +1340,7 @@ func demo_state(shot: String) -> void:
 	state.run_gold = 5230
 	state.run_time = 431
 	state.run_bosses = 1
-	state.legacy = [2, 1, 2, 1, 0, 1]
+	state.legacy = [4, 3, 3, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0]
 	state.relics = ["fang", "eye", "clock", "fang"]
 	state.spawn_enemy(false)
 	state.spawn_delay = 0
