@@ -25,8 +25,30 @@ def checker_tones(rgb):
     return tones
 
 
+def remove_white_pockets(background, lum, sat, hi_tone, margin, sat_max, max_size):
+    """Drop small enclosed specks of the light tone that a lossy copy left behind.
+
+    Only pockets ringed by the dark outline go; specks inside coloured glows or
+    sparks keep their colour neighbours and stay.
+    """
+    bright = (sat <= sat_max) & (lum >= hi_tone - margin) & ~background
+    pockets, count = ndimage.label(bright)
+    for i, box in enumerate(ndimage.find_objects(pockets), start=1):
+        if box is None:
+            continue
+        ys = slice(max(0, box[0].start - 3), box[0].stop + 3)
+        xs = slice(max(0, box[1].start - 3), box[1].stop + 3)
+        region = pockets[ys, xs] == i
+        if region.sum() > max_size:
+            continue
+        ring = ndimage.binary_dilation(region, iterations=2) & ~region
+        if sat[ys, xs][ring].mean() < 40:
+            background[ys, xs] |= region
+    return background
+
+
 def key_out(rgb, sat_max=26, margin=24, grid_lines=False, fringe=2, min_blob=10,
-            hole_min=40, keep_bright=False, tone_tol=9, near_min=0.85):
+            hole_min=40, keep_bright=False, tone_tol=9, near_min=0.85, white_pockets=0):
     rgb = rgb.astype(np.int16)
     lo_tone, hi_tone = checker_tones(rgb)
     lum = rgb.mean(axis=2)
@@ -70,6 +92,8 @@ def key_out(rgb, sat_max=26, margin=24, grid_lines=False, fringe=2, min_blob=10,
         if keep_bright:
             soft &= lum <= hi_tone + margin
         background |= edge & soft
+    if white_pockets:
+        background = remove_white_pockets(background, lum, sat, hi_tone, margin, sat_max, white_pockets)
     alpha = ~background
     blobs, count = ndimage.label(alpha)
     if count:

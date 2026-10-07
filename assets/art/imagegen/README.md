@@ -49,3 +49,28 @@ Idle: ominous chest breathing and visibly billowing cloak. Walk: 6 distinct slow
 ### Corrección del jefe
 
 Edit this existing 1536x1024 transparent 6-column by4-row sprite sheet. Preserve the monarch identity, all poses, exact grid positions, all other frames and actual transparency. Fix ONLY frame boundaries in the THIRD ROW: the fourth frame (cell x768..1023,y512..767) has a leftward fire blast extending out of its cell and contaminating the previous character's frame. Shorten that blast so that ALL pixels of the fourth pose including fire stay inside x780..1010. Remove the stray blast pixels from the third cell x512..767 without changing that third character or its small chest orb. Keep the fourth king's hand thrusting LEFT, full body, crown and cape in its cell. Also keep second frame's raised flame inside x268..499. Do not add a background, grid, text, shadows, checkerboard or blur. Same canvas size. Exact transparent sprites ready for slicing.
+
+## Campanera Vacía — 7 de octubre de 2026
+
+`final/bell-v1.png` (prompt en `final/prompts.md`) se integra como personaje `bell`, sin modificar el PNG. Sobre un fondo neutro la hoja está limpia: los píxeles transparentes conservan color morado, pero tienen alfa 0. Los ropajes son ligeramente translúcidos (alfa 224–254), adecuado para un espectro.
+
+Las poses de ataque y muerte cruzan la cuadrícula de 256 px, así que el importador usa cortes propios por las columnas vacías entre poses (fila 3: 296, 529, 737, 1033, 1319; fila 4: 292, 535, 766, 1020, 1262) y separa las filas 2 y 3 en y = 510, donde la campana alzada invade el hueco superior. El punto de apoyo es el bajo de la túnica: y = 248, 504, 760 y 994 por fila. Las 24 regiones contienen una sola figura y no se solapan.
+
+## Arte recibido el 7 de octubre de 2026
+
+Seis imágenes generadas a partir de `final/prompts.md`. Los archivos tal como llegaron se conservan sin modificar en `assets/source/imagegen/` (excluida de la importación):
+
+| Original | Contenido | Uso en el juego |
+|---|---|---|
+| `forge-v1.webp` | Forjador Ciego, 24 poses | Jefe de la Forja (`forge`) |
+| `guardian-v1.webp` | Guardián del Umbral, 24 poses | Cámaras terminadas en 6 (`guardian`) |
+| `acolyte-v1.webp` | Acólito del Eco, 24 poses | Cámaras terminadas en 8 (`acolyte`) |
+| `merchant-v1.webp` | Mercader: cuatro poses de reposo y retrato | Retrato del evento y de la ruta (`merchant`) |
+| `shrine-altar-v1.jpg` | Santuario y altar, cuatro estados cada uno (original de 2912 × 1440) | Ilustraciones del evento y de la ruta |
+| `bell-v2.webp` | Segunda versión de la Campanera | Sin usar: el juego mantiene `bell-v1.png` |
+
+Las cuatro hojas WebP no tienen transparencia: el tablero está dibujado en los píxeles y la compresión lo difumina. `tools/sprites/key_imagegen.py` lo elimina con `keyout.py` (el mismo método de las hojas de Gemini), con tolerancias más amplias para la compresión y una regla que retira motas claras encerradas por el contorno, nunca las rodeadas de chispas de color. Después mide una región por pose: la pieza mayor de cada celda más las chispas y gotas cercanas de su misma fila, partiendo por la mitad los solapes entre poses vecinas. Las regiones y los puntos de apoyo (centro de la celda; suelo común por fila, separado para daño y muerte) se guardan en `final/regions.json`, que `tools/import_imagegen.gd` incorpora a `characters.json`.
+
+El santuario y el altar se muestran como ilustraciones enmarcadas con su fondo oscuro: se borran las líneas de la cuadrícula, se recorta cada estado y se reducen a celdas de 360 × 360 en `final/events-v1.png`. El santuario encendido alterna sus dos estados con llama.
+
+Si se consiguen los PNG originales con alfa real, basta con sustituir los archivos de `assets/source/imagegen/` (cambiando la extensión en el script) y repetir `python tools/sprites/key_imagegen.py` y `godot --headless --path . --script tools/import_imagegen.gd`.

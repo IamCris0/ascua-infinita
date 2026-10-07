@@ -2,7 +2,7 @@
 
 ## Renovación de personajes con ImageGen
 
-El juego utiliza ahora cinco hojas nuevas en `art/imagegen/`: portador, gelatina, lucero, centinela y Rey. Se generaron con ImageGen de OpenAI con alfa real y se integran mediante `characters.json`, sin sobrescribir los originales. Las secuencias tienen poses más diferenciadas de preparación, golpe, recuperación y muerte. Los prompts completos y las decisiones de recorte están en [art/imagegen/README.md](art/imagegen/README.md).
+El juego utiliza ahora seis hojas en `art/imagegen/`: portador, gelatina, lucero, centinela, Rey y, desde el 7 de octubre, la Campanera Vacía (`final/bell-v1.png`). Se generaron con ImageGen de OpenAI con alfa real y se integran mediante `characters.json`, sin sobrescribir los originales. Las secuencias tienen poses más diferenciadas de preparación, golpe, recuperación y muerte. Los prompts completos y las decisiones de recorte están en [art/imagegen/README.md](art/imagegen/README.md).
 
 `VerAnimaciones.cmd` abre un visor con selección de animación, pausa y cámara lenta. Los recursos anteriores de la tabla siguiente se conservan, y siguen usándose fondos, interfaz, reliquias, efectos y el pequeño compañero.
 
@@ -16,6 +16,8 @@ El juego utiliza ahora cinco hojas nuevas en `art/imagegen/`: portador, gelatina
 | `gemini/backgrounds/` | Jardín de las Cenizas, Criptas del Eco, Forja del Eclipse (1024 × 800) | Gemini, sin retoques |
 | `gemini/hero.png` | Hoja del portador con transparencia (1697 × 927) | Referencia de Gemini, editada con ImageGen de OpenAI para preparar la transparencia |
 | `source/gemini/` | Originales con el tablero gris incrustado; excluidos de la importación | Gemini |
+| `source/imagegen/` | Lote del 7 de octubre tal como llegó (WebP con tablero, JPG del santuario y altar); excluido de la importación | ImageGen / Gemini |
+| `art/imagegen/final/` | Campanera, Forjador, Guardián, Acólito y mercader con alfa, `regions.json` y `events-v1.png` | `tools/sprites/key_imagegen.py` |
 | `audio/sfx/` | 27 efectos WAV, 44,1 kHz mono | `tools/audio/synth.py` |
 | `audio/music/` | menú, jardín, criptas, forja, jefe y hoguera, en bucle (Ogg Vorbis) | `tools/audio/synth.py` |
 | `fonts/` | Jersey 10 | The Soft Type Project, OFL 1.1 |
