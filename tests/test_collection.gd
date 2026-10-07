@@ -10,6 +10,10 @@ func check(ok: bool, message: String):
 func _initialize():
 	run.call_deferred()
 func run():
+	if not "--qa" in OS.get_cmdline_user_args():
+		push_error("Run with -- --qa to isolate user saves")
+		quit(1)
+		return
 	var s = State.new()
 	s.restart()
 	check(s.discoveries == ["enemy:slime"], "First encounter reveals only its own entry")

@@ -72,6 +72,7 @@ var modal_return: String = ""
 var auto_save: float = 0.0
 var fall_timer: float = -1.0
 var retreating: bool = false
+var quit_unsaved: bool = false
 var logs: Array[String] = []
 var time: float = 0.0
 var last_room: int = -1
@@ -226,8 +227,13 @@ func persist() -> void:
 		state.save_game()
 
 func quit_game() -> void:
-	if not qa_mode and not state.save_game():
-		add_log("No se pudo guardar. Comprueba el espacio disponible antes de salir.")
+	# A failed save warns once; a second request closes anyway so the window
+	# can never become impossible to close.
+	if not qa_mode and not state.save_game() and not quit_unsaved:
+		quit_unsaved = true
+		var message = "No se pudo guardar. Comprueba el espacio disponible; vuelve a salir para cerrar sin guardar."
+		add_log(message)
+		title_stats.text = message
 		return
 	get_tree().quit()
 
@@ -692,7 +698,7 @@ func build_upgrade_card(parent: Node, kind: int) -> void:
 	cost.add_theme_constant_override("h_separation", 6)
 	cost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	cost.tooltip_text = "Tecla [%d]" % (kind + 1)
-	upgrade_cards.append({"level": level, "desc": desc, "button": cost, "card": c})
+	upgrade_cards.append({"level": level, "desc": desc, "button": cost, "card": c, "font_size": 0})
 	upgrade_buttons.append(cost)
 
 func build_footer(root: Node) -> void:
@@ -779,7 +785,11 @@ func refresh() -> void:
 			cost = state.bulk_price(i, count)
 		var b: Button = entry.button
 		b.text = fmt(cost) + ("\n×%d" % count if count > 1 else "")
-		b.add_theme_font_size_override("font_size", 19 if count > 1 else 22)
+		# Theme overrides relayout the card, so only touch them when the size changes.
+		var font_size = 19 if count > 1 else 22
+		if entry.font_size != font_size:
+			entry.font_size = font_size
+			b.add_theme_font_size_override("font_size", font_size)
 		b.disabled = not state.active() or state.gold < cost
 	var ready = state.burst_cooldown <= 0 and state.active()
 	burst_fill.max_value = state.burst_max_cooldown()
@@ -1125,6 +1135,15 @@ func show_relics() -> void:
 		var owned = state.count_relic(relic.id)
 		label(cv, "Ya tienes ×%d" % owned if owned > 0 else "Nueva", 13, Kit.MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button(cv, "ELEGIR  [%d]" % n, func(): choose_relic(index), 52)
+	suspend_button(v)
+
+# Pending decisions survive in the save; Continue reopens them.
+func suspend_button(parent: Node) -> void:
+	separator(parent)
+	button(parent, "GUARDAR Y VOLVER AL MENÚ", func():
+		persist()
+		show_title()
+	, 42, 15)
 
 func choose_relic(index: int) -> void:
 	if state.choose_relic(index):
@@ -1166,11 +1185,7 @@ func show_journey() -> void:
 		label(v, "Vida: %d / %d   ·   Pactos: %d" % [int(state.hp), int(state.max_hp()), state.altar_pacts], 16, Kit.TEAL)
 		button(v, "ACEPTAR  [1]", func(): resolve_journey(true), 52).disabled = not state.can_accept_encounter()
 		button(v, "SEGUIR SIN ACEPTAR  [2]", func(): resolve_journey(false), 48)
-	separator(v)
-	button(v, "GUARDAR Y VOLVER AL MENÚ", func():
-		persist()
-		show_title()
-	, 42, 15)
+	suspend_button(v)
 
 func choose_journey(index: int) -> void:
 	if state.choose_route(index):
@@ -1202,7 +1217,7 @@ func confirm_retreat() -> void:
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func show_summary() -> void:
-	var record = state.room >= state.best and state.runs > 1
+	var record = state.is_record()
 	var v = modal("summary", "FIN DE LA EXPEDICIÓN", "Regreso a la hoguera" if retreating else "La llama se apaga", "Cada caída deja una brasa. Lo que aprendiste en el eclipse vuelve contigo.", 640)
 	retreating = false
 	var grid = GridContainer.new()

@@ -10,6 +10,10 @@ func _initialize() -> void:
 	run.call_deferred()
 
 func run() -> void:
+	if not "--qa" in OS.get_cmdline_user_args():
+		push_error("Run with -- --qa to isolate user saves")
+		quit(1)
+		return
 	game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	Engine.time_scale = 3.0

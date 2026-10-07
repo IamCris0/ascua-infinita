@@ -87,20 +87,24 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-godot --headless --path . --editor --import --quit
-godot --headless --path . --script tests/test_progression.gd
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 10 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
+```
+
+El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
+
+```powershell
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, synergies
 godot --headless --path . --script tests/test_ui.gd -- --qa
-godot --headless --path . --script tests/test_assets.gd
-godot --headless --path . --script tests/test_audio.gd
-godot --headless --path . --script tests/test_journey.gd
+godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa
-godot --headless --path . --script tools/simulate.gd
 godot --headless --path . --script tools/simulate.gd -- --sample
 ```
 
-Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`).
+Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`).
 
-Para una futura exportación, incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos. Esta versión se ha validado desde Godot; todavía no incluye un ejecutable independiente verificado.
+Al exportar, `export_presets.cfg` ya incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos.
 
 ## Regenerar el arte y el sonido
 

@@ -21,6 +21,10 @@ func press(game, text: String) -> bool:
 	return false
 
 func run() -> void:
+	if not "--qa" in OS.get_cmdline_user_args():
+		push_error("Run with -- --qa to isolate user saves")
+		quit(1)
+		return
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
@@ -52,6 +56,9 @@ func run() -> void:
 	s.damage_enemy(1e9)
 	game.refresh()
 	check(game.modal_type == "relic" and game.overlay.visible, "Relic chooser opens")
+	check(press(game, "GUARDAR Y VOLVER") and game.screen == "title" and s.offers.size() == 3, "Relic choice can be suspended at the title")
+	game.start_game(false)
+	check(game.modal_type == "relic", "Continue returns to the pending relic choice")
 	check(press(game, "ELEGIR") and s.relics.size() == 1 and game.modal_type == "route", "Relic button opens the route choice")
 	check(not s.active() and press(game, "GUARDAR Y VOLVER") and game.screen == "title", "Route choice can be suspended at the title")
 	game.start_game(false)

@@ -1,4 +1,4 @@
-param([string]$EnginePath = $env:GODOT_BIN)
+﻿param([string]$EnginePath = $env:GODOT_BIN)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $EnginePath) {
@@ -28,9 +28,10 @@ if (-not (Test-Path -LiteralPath $template)) {
 }
 $output = Join-Path $projectRoot 'builds/windows'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-& $EnginePath --headless --path $projectRoot --editor --import --quit
+# Piping makes PowerShell wait even if GODOT_BIN points to the GUI executable.
+& $EnginePath --headless --path $projectRoot --editor --import --quit | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Falló la importación.' }
-& $EnginePath --headless --path $projectRoot --export-release 'Windows Desktop' (Join-Path $output 'AscuaInfinita.exe')
+& $EnginePath --headless --path $projectRoot --export-release 'Windows Desktop' (Join-Path $output 'AscuaInfinita.exe') | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Falló la exportación.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/LEEME-WINDOWS.txt') -Destination (Join-Path $output 'LEEME.txt') -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/THIRD-PARTY-NOTICES.txt') -Destination $output -Force
