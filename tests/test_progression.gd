@@ -23,6 +23,7 @@ func test_legacy_cap() -> void:
 	var s = fresh()
 	s.dead = true
 	s.essence = 1000
+	s.legacy[1] = 3
 	s.legacy[5] = 9
 	var cooldown = s.burst_max_cooldown()
 	check(not s.legacy_maxed(5) and s.buy_legacy(5) and s.legacy[5] == 10 and s.burst_max_cooldown() < cooldown, "The final storm legacy level improves the cooldown")
@@ -67,7 +68,7 @@ func test_combat_persistence() -> void:
 	s.click_cooldown = 0.05
 	s.combo = 6
 	s.combo_time = 1.1
-	s.idle_time = 0.5
+	s.manual_rest = 0.5
 	s.fury_time = 9.0
 	s.ember_active = true
 	s.ember_timer = 7.0
@@ -181,14 +182,18 @@ func _initialize() -> void:
 		s.choose_relic(s.offers[0])
 	if s.journey_phase == "route":
 		s.choose_route(0)
-	# Echo of the crypts: idle enemies recover health.
+	# Echo of the crypts: enemies recover health while the bearer rests the blade.
 	s.spawn_delay = 0
 	s.enemy_hp = s.enemy_max * 0.5
-	s.idle_time = 3.0
+	s.manual_rest = 2.0
 	var hurt = s.enemy_hp
 	s.attack_timer = -100
 	s.tick(0.5)
 	check(s.enemy_hp > hurt, "Crypt enemies regenerate when left alone")
+	s.damage_enemy(1, false, true)
+	check(s.echo_healing(), "Companion hits do not silence the crypt echo")
+	s.click_cooldown = 0
+	check(s.click() and not s.echo_healing(), "A manual attack stops the crypt echo")
 	# Elite enemies.
 	var base_max = s.enemy_max
 	var base_reward = s.kill_reward()
@@ -214,7 +219,7 @@ func _initialize() -> void:
 	s.essence = 200
 	check(s.buy_legacy(0) and s.legacy[0] == 1, "Permanent upgrade purchase")
 	check(s.buy_legacy(4) and s.legacy[4] == 1, "New permanent upgrades are available")
-	check(not s.buy_legacy(6), "Unknown permanent upgrade rejected")
+	check(not s.buy_legacy(State.LEGACY.size()), "Unknown permanent upgrade rejected")
 	var permanent = s.essence
 	s.restart()
 	check(is_equal_approx(s.click_damage(), 7 * 1.08) and s.essence == permanent and s.gold == 30, "Rebirth preserves permanent power and currency")
@@ -260,7 +265,7 @@ func _initialize() -> void:
 	DirAccess.remove_absolute(SAVE + ".bak")
 	var migrated = State.new()
 	check(migrated.load_game(SAVE, false), "Version 1 save loads")
-	check(migrated.room == 7 and migrated.legacy.size() == 6 and migrated.legacy[1] == 2 and migrated.master_volume == 0.0, "Version 1 save migrated")
+	check(migrated.room == 7 and migrated.legacy.size() == State.LEGACY.size() and migrated.legacy[1] == 2 and migrated.master_volume == 0.0, "Version 1 save migrated")
 	check(migrated.run_start_best == 9 and not migrated.is_record(), "Migrated expeditions start from the stored best")
 	test_legacy_cap()
 	test_combat_persistence()

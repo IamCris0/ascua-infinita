@@ -29,6 +29,11 @@ func _initialize():
 	check(s.boss_attacks == 1 and not s.charging, "First attack advances to silence pattern")
 	s.tick(s.attack_interval())
 	check(s.charging and s.bell_silence() and s.bell_resonance == 0, "Silence starts with a full warning and zero resonance")
+	var health = s.enemy_max * 0.5
+	s.enemy_hp = health
+	s.manual_rest = s.ECHO_REST
+	s.tick(0.5)
+	check(not s.echo_healing() and s.enemy_hp == health, "Resting during Silence never heals the Campanera")
 	s.wisps = 1
 	s.tick(1)
 	check(s.bell_resonance == 0, "Companions never provoke silence")

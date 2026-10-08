@@ -17,7 +17,7 @@ func run():
 	var s = State.new()
 	s.restart()
 	check(s.discoveries == ["enemy:slime"], "First encounter reveals only its own entry")
-	check(s.collection_catalog().size() == 18, "Catalog includes enemies, relics and synergies")
+	check(s.collection_catalog().size() == 19, "Catalog includes enemies, relics and synergies")
 	s.spawn_enemy(false)
 	check(s.discoveries.size() == 1, "Repeated encounters are deduplicated")
 	s.offers = [0]

@@ -1,5 +1,19 @@
 # Validación del proyecto
 
+## Constelación del Legado (0.4) — 7 de octubre de 2026
+
+- `tools/run_tests.ps1 -Balance`: 12 suites, cero fallos. Nueva `test_legacy_tree.gd` con 41 comprobaciones: estructura, requisitos que solo bloquean la compra, niveles conservados sin requisito, topes, un juramento activo elegido solo en la hoguera, efectos de cada nodo y juramento, Último aliento único por expedición y guardado, migración de partidas 0.3 y juramentos imposibles.
+- Refactor de `main.gd` (1.511 → 1.414 líneas) sin cambios de comportamiento: suites y capturas de hoguera, título, opciones y pacto revisadas antes de tocar el árbol.
+- Hoguera nueva revisada a 1280 × 800: los tres botones de acción quedan visibles sin desplazar. Equilibrio con cuatro estrategias del bot en PLAN_0_4.md.
+- **Corregido: el pie de la pantalla de combate se salía por abajo** al avanzar la expedición. La crónica, la lista de sinergias y las descripciones de dos líneas hacían que el HUD pidiera hasta 1.035 px de alto en una vista de 900. Ahora la crónica y las sinergias ocupan el espacio libre y recortan lo que no cabe (la crónica conserva siempre tres entradas), las mejoras de la forja tienen descripciones de una línea y el HUD pide 888 px con cualquier contenido. Prueba de regresión en `test_ui.gd`, comprobada fallando sin la corrección.
+
+## Cierre de la 0.3 — 7 de octubre de 2026
+
+- `tools/run_tests.ps1 -Balance`: **11 suites**, cero fallos. Nuevas: 22 comprobaciones del Forjador (coraza, ruptura, Colada, Destello, sinergia, pausa, guardado, migración y copia de guardados ilegibles) y de la regla del Eco en progresión y Campanera. Assets sube a 1.177 comprobaciones con la hoja de la Campanera.
+- Capturas en la interfaz real (Compatibility, RTX 4050): `campanera-1.png`, `campanera-3.png` y `forjador.png`. Los 24 recortes de la Campanera se revisaron alineados por su punto de apoyo.
+- Equilibrio con el bot (12 expediciones, 0/1/3/5 intentos por segundo) antes y después de cada cambio; resultados en PLAN_0_3.md.
+- Arte de la tarde: assets sube a **1.724 comprobaciones** (regiones, retrato e ilustraciones de eventos). Las 96 poses nuevas se revisaron recortadas y alineadas por su punto de apoyo; ninguna arrastra píxeles de otra. Capturas en la interfaz real del Guardián (`enemy-6.png`), el Acólito (`enemy-8.png`), el Forjador (`forjador.png`) y los tres eventos. Partida gráfica de 70 s: 10.073 fotogramas, mejor cámara 26, sin errores; combate gráfico contra el Forjador con coraza rota y Coladas, sin errores.
+
 ## Renovación de personajes — 4 de octubre de 2026
 
 - Cinco hojas PNG nuevas con transparencia real, integradas mediante regiones y puntos de apoyo. Conservados los assets anteriores. Filtrado nearest en los actores.

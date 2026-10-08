@@ -1,7 +1,7 @@
-# Versión Windows — 5 de octubre de 2026
+# Versión Windows — 5 de octubre de 2026 (reexportada el 7 de octubre)
 
-Paquete: builds/AscuaInfinita-Windows-0.3.0-dev.zip (56.577.650 bytes).
-SHA256: 65454a8b76fe67aba58b6bbf8213bf1ef1016806dc991751f2c4f1c2e5a1cb66
+Paquete: builds/AscuaInfinita-Windows-0.3.0-dev.zip (64.341.409 bytes).
+SHA256: 2383a4f629e8b063ce7a15c77aae02c8166ed6598b71f817fcd52fafba9be952
 
 Extraer el ZIP completo y abrir AscuaInfinita.exe; AscuaInfinita.pck debe permanecer a su lado. Incluye LEEME y avisos de Godot, sus componentes y la fuente Jersey 10. La build aún conserva arte provisional y la etiqueta 0.3.0-dev.
 

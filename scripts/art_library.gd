@@ -5,6 +5,10 @@ extends RefCounted
 const MANIFEST = "res://assets/art/atlas.json"
 const CHARACTER_OVERRIDES = "res://assets/art/imagegen/characters.json"
 const BACKGROUNDS = ["res://assets/gemini/backgrounds/garden.png", "res://assets/gemini/backgrounds/crypt.png", "res://assets/gemini/backgrounds/forge.png"]
+# Shrine (cells 0-3: unlit, lit, flaring, spent) and altar (4-7: dormant,
+# awake, pact sealed, broken), prepared by tools/sprites/key_imagegen.py.
+const EVENTS = "res://assets/art/imagegen/final/events-v1.png"
+const EVENT_CELL = 360
 
 static var _shared = null
 
@@ -14,6 +18,7 @@ var fx: Dictionary = {}
 var relics: Dictionary = {}
 var ui: Dictionary = {}
 var backgrounds: Array[Texture2D] = []
+var events: Texture2D
 var heading_font: Font
 var button_font: Font
 var logo_font: Font
@@ -47,6 +52,7 @@ func _init() -> void:
 	ui["button_margin"] = data.ui.button.margin
 	for path in BACKGROUNDS:
 		backgrounds.append(load(path))
+	events = load(EVENTS)
 	heading_font = _font("res://assets/fonts/Jersey10-Regular.ttf")
 	button_font = heading_font
 	logo_font = heading_font
@@ -131,13 +137,22 @@ func fx_icon(name: String, index: int, inset: float = 0.18) -> AtlasTexture:
 	a.region = Rect2(index * side + side * inset, side * inset, side * (1 - 2 * inset), side * (1 - 2 * inset))
 	return a
 
+func portrait(key: String) -> AtlasTexture:
+	var region: Array = characters[key].portrait
+	var a = AtlasTexture.new()
+	a.atlas = textures[key]
+	a.region = Rect2(region[0], region[1], region[2], region[3])
+	return a
+
+func event_art(index: int) -> AtlasTexture:
+	var a = AtlasTexture.new()
+	a.atlas = events
+	a.region = Rect2((index % 4) * EVENT_CELL, int(index / 4.0) * EVENT_CELL, EVENT_CELL, EVENT_CELL)
+	return a
+
 func upgrade_icon(kind: int) -> Texture2D:
 	if kind == 2 and characters.hero.has("portrait"):
-		var region: Array = characters.hero.portrait
-		var portrait = AtlasTexture.new()
-		portrait.atlas = textures.hero
-		portrait.region = Rect2(region[0], region[1], region[2], region[3])
-		return portrait
+		return portrait("hero")
 	match kind:
 		0: return fx_icon("slash", 2, 0.12)
 		1: return frame_icon("companion", 0)
@@ -145,4 +160,13 @@ func upgrade_icon(kind: int) -> Texture2D:
 		_: return fx_icon("critical", 1, 0.12)
 
 func legacy_icon(kind: int) -> Texture2D:
+	match kind:
+		6: return relics.eye
+		7: return fx_icon("slash", 2, 0.12)
+		8: return fx_icon("critical", 1, 0.12)
+		9: return frame_icon("companion", 0)
+		10: return relics.clock
+		11: return fx_icon("magic", 1, 0.12)
+		12: return relics.ash
+		13: return fx_icon("embers", 0, 0.1)
 	return [ui.staff, relics.heart, ui.lantern_star, relics.coin, ui.lantern_lit, relics.storm][kind]

@@ -88,9 +88,9 @@ func _initialize() -> void:
 	var enemy_health = s.enemy_hp
 	s.tick(1.0)
 	check(s.enemy_hp < enemy_health, "The opening fight progresses without clicking")
-	s.idle_time = 3
+	s.manual_rest = s.ECHO_REST
 	s.damage_enemy(1, false, true)
-	check(s.idle_time == 0, "Companion hits prevent idle regeneration in the crypt")
+	check(not s.echo_healing(), "The echo is a crypt rule only")
 	s.click_cooldown = 0
 	check(s.click(), "Manual attack is available")
 	s.tick(0.1)

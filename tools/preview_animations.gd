@@ -15,7 +15,7 @@ class Gallery extends Control:
 	var paused = false
 	var animation = "attack"
 	var captured = false
-	var keys = ["hero", "slime", "wisp", "sentinel", "boss"]
+	var keys = ["hero", "slime", "wisp", "sentinel", "boss", "bell"]
 	var names = ["Portador", "Gelatina", "Lucero", "Centinela", "Rey sin Brasa"]
 	func _ready() -> void:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

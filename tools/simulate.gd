@@ -35,6 +35,42 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary
 				break
 	return {"room": s.room, "minutes": t / 60.0, "essence": s.run_essence}
 
+## Buys the cheapest available node until nothing is affordable, then swears
+## the oath of the branch with most levels invested. With a focus branch the
+## bot only buys that branch and the shared row, and saves for its oath once
+## it is unlocked.
+func spend_legacy(s, focus: String = "") -> void:
+	var focus_oath = -1
+	for k in range(s.LEGACY.size()):
+		if s.is_oath(k) and s.LEGACY[k].branch == focus:
+			focus_oath = k
+	while true:
+		if focus_oath >= 0 and s.legacy_level(focus_oath) == 0 and s.legacy_unlocked(focus_oath):
+			if not s.buy_legacy(focus_oath):
+				break
+			continue
+		var best_k = -1
+		for k in range(s.LEGACY.size()):
+			if not s.can_buy_legacy(k):
+				continue
+			if not focus.is_empty() and not s.LEGACY[k].branch in [focus, ""]:
+				continue
+			if best_k < 0 or s.legacy_price(k) < s.legacy_price(best_k):
+				best_k = k
+		if best_k < 0 or not s.buy_legacy(best_k):
+			break
+	var invested = {}
+	for k in range(s.LEGACY.size()):
+		var branch: String = s.LEGACY[k].branch
+		invested[branch] = invested.get(branch, 0) + s.legacy_level(k)
+	var best_oath = -1
+	for k in range(s.LEGACY.size()):
+		if s.is_oath(k) and s.legacy_level(k) > 0 and (best_oath < 0 or k == focus_oath or invested[s.LEGACY[k].branch] > invested[s.LEGACY[best_oath].branch]):
+			if best_oath != focus_oath or best_oath < 0:
+				best_oath = k
+	if best_oath >= 0:
+		s.set_oath(best_oath)
+
 func _initialize() -> void:
 	if "--sample" in OS.get_cmdline_user_args():
 		for cps in [0.0, 1.0, 3.0, 5.0]:
@@ -59,15 +95,6 @@ func _initialize() -> void:
 			var r = play(s, cps, "balanced", 40)
 			line += "  [#%d sala %d, %.1f min, +%d]" % [run + 1, r.room, r.minutes, r.essence]
 			s.finish_run()
-			# Spend ascuas on the cheapest permanent upgrade.
-			var bought = true
-			while bought:
-				bought = false
-				var best_k = -1
-				for k in range(s.LEGACY.size()):
-					if not s.legacy_maxed(k) and s.essence >= s.legacy_price(k) and (best_k < 0 or s.legacy_price(k) < s.legacy_price(best_k)):
-						best_k = k
-				if best_k >= 0:
-					bought = s.buy_legacy(best_k)
+			spend_legacy(s)
 		print(line)
 	quit()
