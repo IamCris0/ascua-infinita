@@ -191,6 +191,10 @@ func connect_state() -> void:
 	)
 	state.relic_offered.connect(func(): audio.play("offer"))
 	state.purchased.connect(func(_kind, _count): audio.play("buy", 0.06))
+	state.achievement_unlocked.connect(func(id):
+		arena.show_toast("★  LOGRO  ·  " + state.achievement_name(id))
+		audio.play("offer")
+	)
 	state.fallen.connect(func():
 		arena.on_fallen()
 		if retreating:
@@ -344,11 +348,13 @@ func show_title() -> void:
 	ui.button(title_menu, "OPCIONES", func(): show_options(""), 50)
 	ui.button(title_menu, "SALIR", quit_game, 50)
 	var s = "Mejor cámara: %d   ·   Expediciones: %d   ·   Enemigos vencidos: %d   ·   Jefes vencidos: %d" % [state.best, state.runs, state.total_kills, state.total_bosses]
+	if state.eclipse_unlocked > 0:
+		s += "   ·   Eclipse %d desbloqueado" % state.eclipse_unlocked
 	title_stats.text = s if state.total_kills > 0 else "Tu primera expedición te espera."
 	update_music()
 
 func confirm_new_run() -> void:
-	var v = modal("confirm", "NUEVA EXPEDICIÓN", "¿Abandonar este viaje?", "La expedición actual terminará en la cámara %d. Conservarás las %d ascuas que llevas; el oro, la forja y las reliquias se pierden." % [state.room, state.run_essence])
+	var v = modal("confirm", "NUEVA EXPEDICIÓN", "¿Abandonar este viaje?", "La expedición actual terminará en la cámara %d. Conservarás las %d ascuas que llevas; el oro, la forja y las reliquias se pierden." % [state.room, state.banked_preview()])
 	var row = HBoxContainer.new()
 	v.add_child(row)
 	var a = ui.button(row, "EMPEZAR DE NUEVO", func():
@@ -669,7 +675,7 @@ func refresh() -> void:
 	essence_label.text = str(state.essence)
 	run_essence_label.text = "+%d en el viaje" % state.run_essence if not state.dead else "en la hoguera"
 	biome_label.text = state.BIOMES[state.biome()]
-	room_label.text = ("CÁMARA %d  ·  JEFE" if state.is_boss() else "CÁMARA %d") % state.room
+	room_label.text = ("CÁMARA %d  ·  JEFE" if state.is_boss() else "CÁMARA %d") % state.room + ("  ·  ECLIPSE %d" % state.eclipse if state.eclipse > 0 else "")
 	rule_label.text = state.BIOME_RULES[state.biome()]
 	var to_relic = 5 - ((state.room - 1) % 5)
 	var to_boss = 10 - ((state.room - 1) % 10)
@@ -928,7 +934,7 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 	var v = modal("collection", "MEMORIAS DEL ECLIPSE", "Colección · %d / %d" % [state.discoveries.size(), catalog.size()], "Tus descubrimientos permanecen al renacer. Lo desconocido se revela al encontrarlo.", 820)
 	var tabs = HBoxContainer.new()
 	v.add_child(tabs)
-	for section in ["Enemigos", "Reliquias", "Sinergias"]:
+	for section in ["Enemigos", "Reliquias", "Sinergias", "Logros", "Registro"]:
 		var tab = ui.button(tabs, section, func(): show_collection(return_to, section), 42, 16)
 		tab.disabled = section == category
 	var scroll = ScrollContainer.new()
@@ -939,6 +945,22 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 12)
 	scroll.add_child(list)
+	if category == "Logros":
+		ui.label(list, "%d de %d logros" % [state.achievements.size(), state.ACHIEVEMENTS.size()], 15, Kit.COPPER, true)
+		# Goals stay visible; only the unlocked ones light up.
+		for entry in state.ACHIEVEMENTS:
+			var done: bool = state.achievements.has(entry.id)
+			ui.label(list, ("★  " if done else "☆  ") + entry.name, 20, Kit.GOLD if done else Kit.MUTED, true)
+			ui.wrap_label(list, entry.description, 15, Kit.TEXT if done else Kit.MUTED)
+			ui.separator(list)
+	elif category == "Registro":
+		if state.history.is_empty():
+			ui.wrap_label(list, "Tus expediciones terminadas aparecerán aquí.", 15)
+		for run in state.history:
+			var oath_name = state.LEGACY[run.oath].name if run.oath >= 0 else "sin juramento"
+			ui.label(list, "Cámara %d%s" % [run.room, "  ·  Eclipse %d" % run.eclipse if run.eclipse > 0 else ""], 20, Kit.GOLD, true)
+			ui.wrap_label(list, "%d enemigos  ·  %d jefes  ·  %d min %02d s  ·  %s  ·  +%d ascuas" % [run.kills, run.bosses, run.time / 60, run.time % 60, oath_name, run.banked], 15, Kit.TEXT)
+			ui.separator(list)
 	for entry in catalog:
 		if entry.category != category:
 			continue
@@ -1077,7 +1099,7 @@ func show_journey() -> void:
 		"El combate está detenido. Puedes decidir con calma." , 880)
 	if route:
 		var choices = [
-			["SENDERO TRANQUILO  [1]", "Recuperas hasta un 20% de vida. El siguiente enemigo no será élite.", lib.relics.heart],
+			["SENDERO TRANQUILO  [1]", "Recuperas hasta un %d%% de vida. El siguiente enemigo no será élite." % roundi(state.rest_heal() * 100), lib.relics.heart],
 			["DESAFÍO ÉLITE  [2]", "Siguiente enemigo: ×2,2 vida y ×1,3 daño. Recompensa: ×2,5 oro y una ascua extra.", lib.relics.fang],
 			["VISITAR: " + state.encounter_name().to_upper() + "  [3]", "Un encuentro opcional. Verás el trato antes de aceptarlo; puedes marcharte gratis.", encounter_art()]]
 		for i in range(choices.size()):
@@ -1091,7 +1113,7 @@ func show_journey() -> void:
 			ui.button(col, choices[i][0], func(): choose_journey(i), 44, 17)
 			ui.wrap_label(col, choices[i][1], 15, Kit.MUTED)
 	else:
-		var description = "Recupera hasta un 45% de tu vida máxima, sin coste."
+		var description = "Recupera hasta un %d%% de tu vida máxima, sin coste." % roundi(state.shrine_heal() * 100)
 		if state.encounter_kind == "merchant":
 			description = "Un lucero adicional por %d de oro (20%% menos que en la forja). Tienes %d de oro." % [state.encounter_cost(), int(state.gold)]
 		elif state.encounter_kind == "altar":
@@ -1132,7 +1154,7 @@ func confirm_retreat() -> void:
 	if not state.active():
 		return
 	state.paused = true
-	var v = modal("retreat", "REGRESO A LA HOGUERA", "Conserva tu chispa.", "Guardarás %d ascuas. Terminará esta expedición: perderás el oro, la forja y las reliquias del viaje." % state.run_essence, 640)
+	var v = modal("retreat", "REGRESO A LA HOGUERA", "Conserva tu chispa.", "Guardarás %d ascuas. Terminará esta expedición: perderás el oro, la forja y las reliquias del viaje." % state.banked_preview(), 640)
 	var row = HBoxContainer.new()
 	v.add_child(row)
 	var a = ui.button(row, "VOLVER Y CONSERVAR", func():
@@ -1166,7 +1188,9 @@ func show_summary() -> void:
 	gain.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(gain)
 	ui.icon(gain, lib.ui.shard, 40)
-	ui.label(gain, "+%d ascuas" % state.run_essence, 34, Kit.TEAL, true)
+	ui.label(gain, "+%d ascuas" % state.last_banked, 34, Kit.TEAL, true)
+	if state.eclipse > 0:
+		ui.label(gain, "Eclipse %d: +%d%%" % [state.eclipse, roundi(state.ECLIPSE_BONUS * state.eclipse * 100)], 16, Kit.RUNE, true).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ui.button(v, "IR A LA HOGUERA   →", func(): show_camp(), 58, 21)
 	persist()
 
@@ -1182,10 +1206,29 @@ func show_camp() -> void:
 		show_title()
 	, 58)
 	menu_b.custom_minimum_size.x = 240
+	if state.eclipse_unlocked > 0:
+		var eclipse_b = ui.button(actions, "ECLIPSE %d" % state.eclipse, func():
+			state.set_eclipse((state.eclipse + 1) % (state.eclipse_unlocked + 1))
+			audio.play("offer")
+			show_camp()
+		, 58)
+		eclipse_b.custom_minimum_size.x = 200
+		eclipse_b.tooltip_text = eclipse_text()
 	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 200
 	var go = ui.button(actions, "RENACER   →   NUEVA EXPEDICIÓN  [ENTER]", rebirth, 58, 21)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	persist()
+
+## Cumulative rules and reward of the chosen Eclipse, for the bonfire tooltip.
+func eclipse_text() -> String:
+	var lines: Array[String] = ["Eclipse %d de %d desbloqueados. Pulsa para cambiar." % [state.eclipse, state.eclipse_unlocked]]
+	for level in range(1, state.eclipse + 1):
+		lines.append("%d · %s" % [level, state.ECLIPSE_RULES[level]])
+	if state.eclipse > 0:
+		lines.append("Recompensa: +%d%% de ascuas al volver." % roundi(state.ECLIPSE_BONUS * state.eclipse * 100))
+	else:
+		lines.append("Sin modificadores ni recompensa extra.")
+	return "\n".join(lines)
 
 func buy_legacy(kind: int) -> void:
 	if state.buy_legacy(kind):

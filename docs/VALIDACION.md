@@ -1,5 +1,10 @@
 # Validación del proyecto
 
+## Eclipse, logros y registro — 8 de octubre de 2026
+
+- `tools/run_tests.ps1 -Balance`: 15 suites, cero fallos. Nueva `test_eclipse.gd` (33 comprobaciones) y dos comprobaciones de la colección para las pestañas Logros y Registro. La muestra de equilibrio no cambia: el nivel por defecto es Eclipse 0.
+- Capturas revisadas a 1280 × 800: botón Eclipse en la hoguera sin desplazar las acciones, pestañas Logros y Registro, HUD con el nivel junto a la cámara y aviso de logro. Detalles en PLAN_0_5.md.
+
 ## Entradas cinemáticas de jefe — 8 de octubre de 2026
 
 - `tools/run_tests.ps1 -Balance`: 14 suites, cero fallos. Nueva `test_boss_intro.gd` (19 comprobaciones): entrada completa en el primer encuentro de cada jefe y breve después, combate congelado, salto único, pausa, guardado, franjas, acercamiento que mantiene al jefe en pantalla, *Reducir movimiento* y regreso al encuadre.

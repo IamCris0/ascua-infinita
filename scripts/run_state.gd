@@ -17,6 +17,7 @@ signal purchased(kind: int, count: int)
 signal shield_broken
 signal armor_broken
 signal last_breath
+signal achievement_unlocked(id: String)
 signal echo_strike
 signal attack_started
 signal burst_released(interrupted: bool)
@@ -65,6 +66,31 @@ const LEGACY = [
 	{"name": "Piel de ceniza", "description": "−4% de daño recibido", "base": 12, "step": 8, "max": 5, "branch": "brasa", "requires": [[1, 3]]},
 	{"name": "Último aliento", "description": "Una vez por viaje, un golpe mortal te deja con un 30% de vida, recarga Destello y desata la furia", "base": 150, "step": 0, "max": 1, "branch": "brasa", "requires": [[5, 1], [12, 1]], "oath": true}
 ]
+# Eclipse levels unlock one at a time by clearing a cycle (a room-30 boss) at
+# the previous level. Rules are cumulative; every level adds banked ascuas.
+const ECLIPSE_MAX = 5
+const ECLIPSE_BONUS = 0.2
+const ECLIPSE_RULES = [
+	"Sin modificadores.",
+	"Los élites aparecen el doble de a menudo.",
+	"Los enemigos golpean un 15% más fuerte.",
+	"Destello recarga un 20% más lento.",
+	"Los jefes tienen un 25% más de vida.",
+	"Descansos y santuarios curan la mitad."]
+const ACHIEVEMENTS = [
+	{"id": "first_kill", "name": "Primera brasa", "description": "Vence a tu primer enemigo."},
+	{"id": "king", "name": "Rey depuesto", "description": "Derrota al Rey sin Brasa."},
+	{"id": "bell", "name": "Silencio roto", "description": "Derrota a la Campanera Vacía."},
+	{"id": "forge", "name": "Forja apagada", "description": "Derrota al Forjador Ciego."},
+	{"id": "interrupts", "name": "Mano rápida", "description": "Interrumpe 10 cargas con Destello."},
+	{"id": "armor", "name": "Rompecorazas", "description": "Rompe 5 corazas del Forjador."},
+	{"id": "embers", "name": "Cazador de ascuas", "description": "Atrapa 25 ascuas errantes."},
+	{"id": "synergy", "name": "Afinidad", "description": "Completa una sinergia de reliquias."},
+	{"id": "oath", "name": "Juramentado", "description": "Compra tu primer juramento."},
+	{"id": "idle_boss", "name": "Los luceros bastan", "description": "Derrota a un jefe sin atacar con clic durante el combate."},
+	{"id": "eclipse", "name": "Más allá del eclipse", "description": "Supera la cámara 30 en Eclipse 1 o superior."},
+	{"id": "collection", "name": "Memoria del eclipse", "description": "Completa la colección."}]
+const HISTORY_SIZE = 8
 const OATH_ECHO = 8
 const OATH_SWARM = 11
 const OATH_LAST_BREATH = 13
@@ -157,6 +183,14 @@ var legacy: Array = []
 var oath: int = -1
 var best: int = 1
 var run_start_best: int = 1
+var eclipse: int = 0
+var eclipse_unlocked: int = 0
+var achievements: Array = []
+var history: Array = []
+var total_interrupts: int = 0
+var total_armor_breaks: int = 0
+var fight_clicks: int = 0
+var last_banked: int = 0
 var total_kills: int = 0
 var total_bosses: int = 0
 var total_elites: int = 0
@@ -204,6 +238,54 @@ func collection_catalog() -> Array:
 func remember(id: String) -> void:
 	if not discoveries.has(id):
 		discoveries.append(id)
+	if id.begins_with("synergy:"):
+		unlock("synergy")
+	if discoveries.size() >= collection_catalog().size():
+		unlock("collection")
+
+func unlock(id: String) -> void:
+	if achievements.has(id):
+		return
+	achievements.append(id)
+	achievement_unlocked.emit(id)
+	event.emit("Logro · " + achievement_name(id))
+
+func achievement_name(id: String) -> String:
+	for entry in ACHIEVEMENTS:
+		if entry.id == id:
+			return entry.name
+	return id
+
+## Achievements an older save already earned, inferred from its counters.
+func unlock_earned() -> void:
+	if total_kills > 0:
+		unlock("first_kill")
+	if total_embers >= 25:
+		unlock("embers")
+	for k in range(LEGACY.size()):
+		if is_oath(k) and legacy_level(k) > 0:
+			unlock("oath")
+
+func eclipse_bonus() -> float:
+	return 1.0 + ECLIPSE_BONUS * eclipse
+
+## Ascuas the expedition would bank now, with the Eclipse bonus.
+func banked_preview() -> int:
+	return run_essence + int(floor(run_essence * ECLIPSE_BONUS * eclipse))
+
+## The Eclipse level is chosen at the bonfire, between expeditions.
+func set_eclipse(level: int) -> bool:
+	if not dead or level < 0 or level > eclipse_unlocked:
+		return false
+	eclipse = level
+	changed.emit()
+	return true
+
+func rest_heal() -> float:
+	return 0.1 if eclipse >= 5 else 0.2
+
+func shrine_heal() -> float:
+	return 0.225 if eclipse >= 5 else 0.45
 
 func remember_relics() -> void:
 	for relic in relics:
@@ -298,7 +380,7 @@ func burst_damage() -> float:
 	return (click_damage() * 8 + auto_damage() * 3) * (1.0 + count_relic("storm") * 0.25)
 
 func burst_max_cooldown() -> float:
-	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX))
+	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX)) * (1.2 if eclipse >= 3 else 1.0)
 
 func legacy_maxed(kind: int) -> bool:
 	return legacy_level(kind) >= LEGACY[kind].max
@@ -409,7 +491,7 @@ func attack_interval() -> float:
 	return [5.6, 4.8, 6.6][enemy_index()]
 
 func enemy_damage() -> float:
-	var raw = (5 + room * 1.35) * (1.7 if is_boss() else 1.0) * (1.3 if enemy_elite else 1.0) * (1.15 if biome() == 2 else 1.0)
+	var raw = (5 + room * 1.35) * (1.7 if is_boss() else 1.0) * (1.3 if enemy_elite else 1.0) * (1.15 if biome() == 2 else 1.0) * (1.15 if eclipse >= 2 else 1.0)
 	raw *= [1.0, 0.85, 1.25][enemy_index()] if not is_boss() else 1.0
 	return maxf(1, raw - armor * 2)
 
@@ -579,6 +661,8 @@ func collect_ember() -> String:
 	ember_active = false
 	ember_cooldown = rng.randf_range(35, 70)
 	total_embers += 1
+	if total_embers >= 25:
+		unlock("embers")
 	var kind: String = EMBER_KINDS[rng.randi_range(0, EMBER_KINDS.size() - 1)]
 	if kind == "heal" and hp >= max_hp() * 0.95:
 		kind = "gold"
@@ -610,6 +694,7 @@ func click() -> bool:
 		return false
 	click_cooldown = CLICK_INTERVAL
 	manual_rest = 0
+	fight_clicks += 1
 	combo = mini(max_combo(), combo + 1)
 	combo_time = 1.5
 	if charging and bell_silence():
@@ -641,6 +726,9 @@ func burst() -> bool:
 			burst_cooldown *= 0.75
 		event.emit("¡INTERRUMPIDO! " + enemy_name() + " queda aturdido")
 		boss_interrupted.emit()
+		total_interrupts += 1
+		if total_interrupts >= 10:
+			unlock("interrupts")
 	else:
 		if forge_armor > 0:
 			damage *= FORGE_BURST
@@ -655,6 +743,9 @@ func burst() -> bool:
 
 func break_forge_armor() -> void:
 	forge_armor = 0
+	total_armor_breaks += 1
+	if total_armor_breaks >= 5:
+		unlock("armor")
 	charging = false
 	charge_timer = 0
 	boss_attacks += 1
@@ -700,9 +791,20 @@ func defeat_enemy() -> void:
 	run_essence += (5 + depth * 2 if boss else 1 + int(room / 15.0)) + (1 if enemy_elite else 0)
 	total_kills += 1
 	run_kills += 1
+	unlock("first_kill")
 	if boss:
 		total_bosses += 1
 		run_bosses += 1
+		unlock(enemy_id())
+		if fight_clicks == 0:
+			unlock("idle_boss")
+		# Clearing a cycle at the highest unlocked Eclipse opens the next one.
+		if room % 30 == 0:
+			if eclipse >= 1:
+				unlock("eclipse")
+			if eclipse >= eclipse_unlocked and eclipse_unlocked < ECLIPSE_MAX:
+				eclipse_unlocked = eclipse + 1
+				event.emit("Eclipse %d desbloqueado · elígelo en la hoguera" % eclipse_unlocked)
 	if enemy_elite:
 		total_elites += 1
 	hp = minf(max_hp(), hp + 4 + count_relic("ash") * 4 + (25 if boss else 0))
@@ -723,14 +825,15 @@ func defeat_enemy() -> void:
 		relic_offered.emit()
 
 func spawn_enemy(roll_elite: bool = true) -> void:
+	fight_clicks = 0
 	bell_resonance = 0
 	forge_armor = 0
 	shield_hits = 4 if enemy_role() == "guardian" else 0
 	pending_hit = 0
 	pending_damage = 0
 	if roll_elite:
-		enemy_elite = not is_boss() and room >= 6 and rng.randf() < 0.12
-	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0)
+		enemy_elite = not is_boss() and room >= 6 and rng.randf() < (0.24 if eclipse >= 1 else 0.12)
+	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0) * (1.25 if is_boss() and eclipse >= 4 else 1.0)
 	enemy_max *= [1.0, 0.85, 1.3][enemy_index()] if not is_boss() else 1.0
 	enemy_hp = enemy_max
 	attack_timer = 0
@@ -765,8 +868,8 @@ func choose_route(index: int) -> bool:
 	enemy_elite = index == 1
 	spawn_enemy(false)
 	if index == 0:
-		hp = minf(max_hp(), hp + max_hp() * 0.2)
-		event.emit("Sendero tranquilo · recuperas hasta un 20% de vida. Siguiente rival sin élite.")
+		hp = minf(max_hp(), hp + max_hp() * rest_heal())
+		event.emit("Sendero tranquilo · recuperas hasta un %d%% de vida. Siguiente rival sin élite." % roundi(rest_heal() * 100))
 	elif index == 1:
 		event.emit("Desafío élite · más peligro a cambio de oro y ascuas.")
 	if index != 2:
@@ -794,7 +897,7 @@ func resolve_encounter(accept: bool) -> bool:
 		return false
 	if accept:
 		match encounter_kind:
-			"shrine": hp = minf(max_hp(), hp + max_hp() * 0.45)
+			"shrine": hp = minf(max_hp(), hp + max_hp() * shrine_heal())
 			"merchant":
 				gold -= encounter_cost()
 				wisps += 1
@@ -833,7 +936,11 @@ func buy(kind: int, count: int = 1) -> int:
 func finish_run() -> void:
 	if dead:
 		return
-	essence += run_essence
+	last_banked = banked_preview()
+	essence += last_banked
+	history.push_front({"room": room, "kills": run_kills, "bosses": run_bosses, "time": int(run_time), "eclipse": eclipse, "oath": oath, "banked": last_banked})
+	if history.size() > HISTORY_SIZE:
+		history.resize(HISTORY_SIZE)
 	dead = true
 	bell_resonance = 0
 	forge_armor = 0
@@ -854,6 +961,8 @@ func buy_legacy(kind: int) -> bool:
 	essence -= legacy_price(kind)
 	legacy[kind] = legacy_level(kind) + 1
 	# A first oath is sworn at once; switching later is a free choice.
+	if is_oath(kind):
+		unlock("oath")
 	if is_oath(kind) and oath == -1:
 		oath = kind
 	changed.emit()
@@ -901,11 +1010,12 @@ func restart() -> void:
 const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor", "focus", "essence", "run_essence",
 	"best", "runs", "total_kills", "total_bosses", "total_elites", "total_embers", "total_gold", "saved_at",
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
-	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best"]
+	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
+	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
-const COMBAT_DEFAULTS = {"manual_rest": 0.0, "shelter_ready": false, "last_breath_used": false, "bell_resonance": 0, "forge_armor": 0.0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
+const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready": false, "last_breath_used": false, "bell_resonance": 0, "forge_armor": 0.0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
@@ -925,6 +1035,8 @@ func snapshot() -> Dictionary:
 		data[key] = get(key)
 	data.ember_pos = [ember_pos.x, ember_pos.y]
 	data.oath = oath
+	data.achievements = achievements.duplicate()
+	data.history = history.duplicate(true)
 	data.journey_phase = journey_phase
 	data.encounter_kind = encounter_kind
 	return data
@@ -967,6 +1079,13 @@ static func _migrate(data: Dictionary) -> Dictionary:
 	# Before the Constelación there were no oaths to swear.
 	if not data.has("oath"):
 		data.oath = -1
+	# Before Eclipse, achievements and the expedition log.
+	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks"]:
+		if not data.has(key):
+			data[key] = 0
+	for key in ["achievements", "history"]:
+		if not data.has(key):
+			data[key] = []
 	if not data.has("run_start_best"):
 		data.run_start_best = data.get("best", 1)
 	if data.get("legacy") is Array:
@@ -993,6 +1112,19 @@ func _read_save(path: String) -> Variant:
 		return null
 	data.version = int(data.version)
 	data = _migrate(data)
+	if not data.achievements is Array or not data.history is Array or data.history.size() > HISTORY_SIZE:
+		return null
+	var achievement_ids: Array = ACHIEVEMENTS.map(func(entry): return entry.id)
+	for id in data.achievements:
+		if not id is String or not achievement_ids.has(id):
+			return null
+	for run in data.history:
+		if not run is Dictionary:
+			return null
+		for key in ["room", "kills", "bosses", "time", "eclipse", "oath", "banked"]:
+			var value = run.get(key)
+			if not (value is float or value is int) or not is_finite(float(value)) or value != floor(value) or value < (-1 if key == "oath" else 0):
+				return null
 	if not data.has("discoveries"):
 		data.discoveries = []
 	if not data.discoveries is Array:
@@ -1081,6 +1213,15 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	master_volume = clampf(master_volume, 0, 1)
 	music_volume = clampf(music_volume, 0, 1)
 	sfx_volume = clampf(sfx_volume, 0, 1)
+	achievements = data.achievements.duplicate()
+	history = []
+	for run in data.history:
+		var entry := {}
+		for key in ["room", "kills", "bosses", "time", "eclipse", "oath", "banked"]:
+			entry[key] = int(run[key])
+		history.append(entry)
+	eclipse_unlocked = mini(eclipse_unlocked, ECLIPSE_MAX)
+	eclipse = mini(eclipse, eclipse_unlocked)
 	discoveries = []
 	for id in data.discoveries:
 		remember(id)
@@ -1088,6 +1229,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	oath = int(data.oath)
 	if oath != -1 and (not is_oath(oath) or legacy_level(oath) <= 0):
 		oath = -1
+	unlock_earned()
 	relics = data.relics.duplicate()
 	remember_relics()
 	offers = data.offers.map(func(v): return int(v))

@@ -4,7 +4,7 @@
 
 Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.3.0-dev**: primer bloque de Caminos del Eclipse.
 
-Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
+Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. La hoguera es un árbol de legado con juramentos ([plan 0.4](docs/PLAN_0_4.md)); al superar la cámara 30 se desbloquean los modos Eclipse, y la Colección guarda logros y el registro de expediciones ([plan 0.5](docs/PLAN_0_5.md)). El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
 
 ![Partida de Ascua Infinita](docs/preview.png)
 
@@ -87,7 +87,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 13 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 14 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa

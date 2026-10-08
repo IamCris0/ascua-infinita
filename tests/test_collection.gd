@@ -49,6 +49,14 @@ func run():
 	check(game.modal_type == "collection" and game.state.paused, "Collection pauses combat")
 	var names: Array = game.modal_buttons().map(func(b): return b.text)
 	check(names.has("Enemigos") and names.has("Reliquias") and names.has("Sinergias"), "All catalog categories are navigable")
+	check(names.has("Logros") and names.has("Registro"), "Achievements and the expedition log have their own tabs")
+	game.state.unlock("first_kill")
+	game.show_collection("pause", "Logros")
+	var texts: Array = []
+	for label in game.modal_panel.find_children("*", "Label", true, false):
+		texts.append(label.text)
+	check(texts.has("1 de %d logros" % game.state.ACHIEVEMENTS.size()) and texts.has("★  Primera brasa"), "The achievements tab lists progress and unlocked goals")
+	game.show_collection("pause", "Registro")
 	game.show_collection("pause", "Reliquias")
 	var hp = game.state.hp
 	game.state.tick(20)
