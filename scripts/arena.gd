@@ -71,6 +71,7 @@ var hp_trail: float = 1.0
 var hovered: bool = false
 var last_hurt_anim: float = 0.0
 var hint_alpha: float = 1.0
+var toasts: Array = []
 # Boss entrance: its total length when it began, and whether it is the full
 # first-meeting version with the closer look and the name card.
 var intro_total: float = 0.0
@@ -260,6 +261,10 @@ func sync_enemy(walk_in: bool = true) -> void:
 			banner = {}
 		else:
 			show_banner(state.enemy_name(), state.boss_title(), Color("ff8a5c"), 1.9)
+
+## Small notices in the stage corner (achievements); they do not replace banners.
+func show_toast(text: String) -> void:
+	toasts.append({"text": text, "t": 0.0})
 
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
 	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
@@ -455,6 +460,9 @@ func _process(delta: float) -> void:
 		banner.t += delta
 		if banner.t > banner.dur:
 			banner = {}
+	for toast in toasts:
+		toast.t += delta
+	toasts = toasts.filter(func(toast): return toast.t < 3.4)
 	var shake_offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake
 	if shown_kind != actor_key():
 		sync_enemy(true)
@@ -742,6 +750,14 @@ func _draw_overlay() -> void:
 		var p = stage_to_screen(ember_stage_pos())
 		_text_center(body, "¡Ascua errante!", p + Vector2(0, -44), 14, Color(1, 0.88, 0.6, 0.9), 3)
 	_draw_intro(font, body)
+	for i in range(toasts.size()):
+		var toast: Dictionary = toasts[i]
+		var a = clampf(toast.t / 0.25, 0, 1) * clampf((3.4 - toast.t) / 0.5, 0, 1)
+		var width = body.get_string_size(toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 28
+		var box = Rect2(size.x - width - 14, 14 + i * 40 + letterbox() * size.y * 0.1, width, 32)
+		overlay.draw_rect(box, Color(0.05, 0.05, 0.08, 0.85 * a))
+		overlay.draw_rect(Rect2(box.position, Vector2(3, box.size.y)), Color(1.0, 0.8, 0.45, a))
+		overlay.draw_string(body, box.position + Vector2(14, 22), toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.7, a))
 	# Banner.
 	if not banner.is_empty():
 		var t: float = banner.t
