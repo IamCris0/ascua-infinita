@@ -2,7 +2,7 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.3.0-dev**: primer bloque de Caminos del Eclipse.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.5.0-dev**: Caminos del Eclipse, Constelación del Legado y modos Eclipse.
 
 Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. La hoguera es un árbol de legado con juramentos ([plan 0.4](docs/PLAN_0_4.md)); al superar la cámara 30 se desbloquean los modos Eclipse, y la Colección guarda logros y el registro de expediciones ([plan 0.5](docs/PLAN_0_5.md)). El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
 
@@ -129,3 +129,7 @@ Proyecto privado. No se concede una licencia de distribución pública por defec
 ## Versión portátil Windows
 
 La compilación está documentada en [docs/WINDOWS.md](docs/WINDOWS.md). Ejecuta `tools/export_windows.ps1` para generar el ZIP en `builds/`. Incluye sus recursos y no requiere instalar Godot en el equipo del jugador.
+
+## Versión web
+
+`tools/export_web.ps1` genera `builds/AscuaInfinita-Web-<versión>.zip`, listo para subir a itch.io como proyecto HTML. Instrucciones y diferencias (guardado en el navegador, sin botón Salir) en [docs/WEB.md](docs/WEB.md).

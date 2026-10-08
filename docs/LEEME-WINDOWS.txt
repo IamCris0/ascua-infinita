@@ -1,13 +1,14 @@
-ASCUA INFINITA — Windows x64 — 0.3.0-dev
+ASCUA INFINITA — Windows x64 — 0.5.0-dev
 
 Extrae todo el ZIP en una carpeta y abre AscuaInfinita.exe.
 Mantén AscuaInfinita.pck junto al ejecutable. No necesitas instalar Godot.
 
 Clic o mantener Espacio: atacar. E: Destello. Escape: menú.
-La colección se abre desde el menú y la hoguera.
+La colección (con logros y registro) se abre desde el menú y la hoguera.
+En la hoguera compras el árbol de legado y eliges juramento y nivel Eclipse.
 
 La partida se guarda en %APPDATA%/Godot/app_userdata/Ascua Infinita/.
 Comparte guardado con el proyecto abierto en Godot bajo el mismo usuario.
 Para trasladar una partida, copia ascua_save.json y su copia .bak con el juego cerrado.
 
-Versión de desarrollo: algunos personajes conservan apariencias provisionales.
+Versión de desarrollo.
