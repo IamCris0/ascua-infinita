@@ -11,7 +11,8 @@ const FlyLayer = preload("res://scripts/fly_layer.gd")
 const TitleArt = preload("res://scripts/title_art.gd")
 const UiFactory = preload("res://scripts/ui_factory.gd")
 const LegacyTree = preload("res://scripts/legacy_tree.gd")
-const VERSION = "0.3.0-dev"
+# Read from project.godot so a single setting names every build.
+var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
 const BUY_LABELS = ["×1", "×10", "MÁX"]
 const STAT_KEYS = ["click", "auto", "crit", "burst", "reward"]
@@ -346,7 +347,9 @@ func show_title() -> void:
 		ui.button(title_menu, "COMENZAR EXPEDICIÓN", func(): start_game(state.dead), 58, 21)
 	ui.button(title_menu, "CÓMO JUGAR", func(): show_howto(""), 50)
 	ui.button(title_menu, "OPCIONES", func(): show_options(""), 50)
-	ui.button(title_menu, "SALIR", quit_game, 50)
+	# A browser tab has nothing to quit to; saves happen on their own.
+	if not OS.has_feature("web"):
+		ui.button(title_menu, "SALIR", quit_game, 50)
 	var s = "Mejor cámara: %d   ·   Expediciones: %d   ·   Enemigos vencidos: %d   ·   Jefes vencidos: %d" % [state.best, state.runs, state.total_kills, state.total_bosses]
 	if state.eclipse_unlocked > 0:
 		s += "   ·   Eclipse %d desbloqueado" % state.eclipse_unlocked
@@ -1042,7 +1045,8 @@ func toggle_pause_menu() -> void:
 		persist()
 		show_title()
 	, 50)
-	ui.button(v, "GUARDAR Y SALIR", quit_game, 50)
+	if not OS.has_feature("web"):
+		ui.button(v, "GUARDAR Y SALIR", quit_game, 50)
 	ui.wrap_label(v, "Tus luceros reúnen 2 de oro por minuto y lucero mientras no juegas (máximo 4 horas). La expedición no recibe daño con el juego cerrado.", 14)
 	persist()
 
