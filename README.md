@@ -27,7 +27,7 @@ También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con *
 | 1 · 2 · 3 en rutas | Descansar, desafiar al élite o visitar el evento |
 | 1 · 2 en eventos | Aceptar o marcharse sin pagar |
 | Enter en la hoguera | Renacer; el árbol de legado se compra con el ratón |
-| Esc | Menú de pausa |
+| Esc | Menú de pausa; durante la presentación de un jefe, saltarla (también Enter) |
 | F11 | Pantalla completa |
 
 ## Novedades de la versión 0.2.0
@@ -87,7 +87,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 12 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 13 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa

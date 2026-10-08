@@ -84,6 +84,10 @@ const BOSS_TITLES = ["SEÑOR DEL JARDÍN", "SEÑOR DE LAS CRIPTAS", "SEÑOR DE L
 const EMBER_KINDS = ["gold", "fury", "heal", "spark"]
 const SPAWN_DELAY = 0.35
 const BOSS_INTRO = 1.6
+# The first meeting with each boss earns a longer entrance: the walk-in, then
+# a closer look with its name and how to face it. Skipping leaves a moment.
+const BOSS_INTRO_FULL = 3.2
+const INTRO_SKIP_LEFT = 0.3
 const CHARGE_TIME = 3.0
 const STORM_LEGACY_MAX = 10
 const CLICK_INTERVAL = 0.3
@@ -208,11 +212,33 @@ func remember_relics() -> void:
 		if has_synergy(synergy.id):
 			remember("synergy:" + synergy.id)
 
+## Collection id of the current enemy: each boss and role has its own entry.
+func enemy_id() -> String:
+	if is_boss():
+		return "bell" if is_bell_keeper() else ("forge" if is_forge_keeper() else "king")
+	return enemy_role() if not enemy_role().is_empty() else enemy_kind()
+
 func remember_enemy() -> void:
 	if dead:
 		return
-	var id = "bell" if is_bell_keeper() else ("forge" if is_forge_keeper() else ("king" if is_boss() else (enemy_role() if not enemy_role().is_empty() else enemy_kind())))
-	remember("enemy:" + id)
+	remember("enemy:" + enemy_id())
+
+## How to face each boss, shown on the first meeting.
+func boss_lore() -> String:
+	match enemy_id():
+		"bell": return "«Cuando la campana calle, calla tu espada. Cuando doble, Destello.»"
+		"forge": return "«Su coraza fundida dura tres segundos. Rómpela antes de que se vierta.»"
+	return "«Cada tercer golpe prepara su Brasa. Guarda el Destello para ese momento.»"
+
+func in_boss_intro() -> bool:
+	return is_boss() and spawn_delay > 0 and active()
+
+func skip_intro() -> bool:
+	if not in_boss_intro() or spawn_delay <= INTRO_SKIP_LEFT:
+		return false
+	spawn_delay = INTRO_SKIP_LEFT
+	changed.emit()
+	return true
 
 func count_relic(id: String) -> int:
 	return relics.count(id)
@@ -712,7 +738,9 @@ func spawn_enemy(roll_elite: bool = true) -> void:
 	charge_timer = 0
 	stun_time = 0
 	boss_attacks = 0
-	spawn_delay = BOSS_INTRO if is_boss() else SPAWN_DELAY
+	spawn_delay = SPAWN_DELAY
+	if is_boss():
+		spawn_delay = BOSS_INTRO if discoveries.has("enemy:" + enemy_id()) else BOSS_INTRO_FULL
 	remember_enemy()
 	enemy_changed.emit()
 
@@ -882,7 +910,7 @@ const COMBAT_DEFAULTS = {"manual_rest": 0.0, "shelter_ready": false, "last_breat
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0}
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
-	"combo_time": 1.5, "spawn_delay": BOSS_INTRO, "stun_time": 2.0,
+	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
 
 func snapshot() -> Dictionary:

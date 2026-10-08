@@ -118,3 +118,20 @@ Implementados el refactor (`ui_factory.gd`, `legacy_tree.gd`), los 14 nodos con 
 - El bot no juega como una persona: no prioriza Destello, no elige rutas y compra siguiendo reglas fijas. Estos números orientan, no sustituyen pruebas reales.
 
 **Tu partida** (legado 3, 2, 3, 2, 4, 2) conserva todo. Con Brasa interior 3 ya tiene abiertos Ojo templado y Cadena larga; para subir Tormenta contenida necesita Corazón eterno 3 (15 ascuas).
+
+## Entradas cinemáticas de jefe — 8 de octubre de 2026
+
+Implementadas con el arte existente ([captura](intro.png)):
+
+- **Primer encuentro con cada jefe** (Rey, Campanera y Forjador): entrada de 3,2 s.
+  - Franjas de cine que se deslizan.
+  - El jefe entra caminando durante 1,6 s.
+  - La cámara se acerca un 16% manteniéndolo en su sitio.
+  - Una ficha con título, nombre y un consejo para vencerlo; por ejemplo: «Su coraza fundida dura tres segundos. Rómpela antes de que se vierta».
+- **Encuentros siguientes:** entrada breve de 1,6 s con franjas y el rótulo de siempre.
+- **Durante la entrada nadie ataca:** clics, luceros, Destello y enemigo esperan. Las recargas siguen corriendo, como en la entrada anterior.
+- **Saltar:** *Esc* o *Enter* dejan solo 0,3 s. *Esc* fuera de una entrada sigue abriendo la pausa. La pausa congela la entrada y no se puede saltar estando en pausa.
+- ***Reducir movimiento*:** franjas fijas y sin acercamiento.
+- **Guardado:** la entrada sobrevive al guardado (el tope de su tiempo pasa a 3,2 s). El primer encuentro se decide con la colección: un jefe ya descubierto entra en versión breve.
+
+Validación: 19 comprobaciones nuevas (`tests/test_boss_intro.gd`) y una de interfaz (Esc salta en vez de pausar). Las 14 suites aprobadas. Partida gráfica de 70 s sin errores.

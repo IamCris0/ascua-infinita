@@ -121,6 +121,16 @@ func run() -> void:
 	check(game.game_root.get_child(1).get_combined_minimum_size().y <= limit, "A busy HUD never pushes the footer off screen")
 	s.relics = []
 	game.refresh()
+	s.room = 30
+	s.discoveries.erase("enemy:forge")
+	s.spawn_enemy(false)
+	var esc = InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	game._unhandled_key_input(esc)
+	check(not s.paused and game.modal_type.is_empty() and s.spawn_delay <= s.INTRO_SKIP_LEFT, "Esc skips a boss entrance instead of pausing")
+	s.room = 1
+	s.spawn_enemy(false)
 	game.show_options("")
 	game.state.music_volume = 0.2
 	game.apply_settings()

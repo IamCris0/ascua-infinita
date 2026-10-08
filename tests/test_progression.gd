@@ -157,7 +157,7 @@ func _initialize() -> void:
 		if s.journey_phase == "route":
 			s.choose_route(0)
 	check(s.is_boss() and s.enemy_kind() == "boss", "Every tenth room is a boss")
-	s.tick(2.0)
+	s.tick(s.BOSS_INTRO_FULL)
 	# Boss: every third blow is a charged ember that Destello interrupts.
 	s.hp = s.max_hp()
 	s.boss_attacks = 2
