@@ -179,6 +179,8 @@ func connect_state() -> void:
 		arena.sync_enemy(true)
 		if state.is_boss() and screen == "game":
 			audio.play("boss_appear")
+			if state.spawn_delay > state.BOSS_INTRO:
+				audio.duck(5.0, state.BOSS_INTRO_FULL - 0.6)
 	)
 	state.boss_charge_started.connect(func(): audio.play("boss_charge"))
 	state.boss_interrupted.connect(func(): audio.play("interrupt"))
@@ -1221,7 +1223,9 @@ func _unhandled_key_input(e: InputEvent) -> void:
 			"options", "howto", "collection": _return_from(modal_return)
 			"retreat", "confirm": close_modal(screen == "game")
 			"":
-				if screen == "game": toggle_pause()
+				# Esc first skips a boss entrance; otherwise it opens the pause menu.
+				if screen == "game" and not state.skip_intro():
+					toggle_pause()
 		return
 	if key == KEY_F11:
 		state.fullscreen = not state.fullscreen
@@ -1248,6 +1252,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if screen != "game" or not modal_type.is_empty() or not state.active():
 		return
 	match key:
+		KEY_ENTER, KEY_KP_ENTER: state.skip_intro()
 		KEY_SPACE: state.click()
 		KEY_E: try_burst()
 		KEY_1: purchase(0)
@@ -1298,6 +1303,11 @@ func capture() -> void:
 				fall_timer = -1.0
 				show_summary()
 			"pause": toggle_pause()
+			"intro":
+				# A first meeting with the Forjador, caught after his walk-in.
+				state.discoveries.erase("enemy:" + state.enemy_id())
+				state.spawn_enemy(false)
+				state.spawn_delay = state.BOSS_INTRO_FULL - 1.4
 			"options": show_options("pause")
 			"howto": show_howto("welcome")
 	await get_tree().create_timer(1.6 if shot in ["preview", "boss", "crypt", "forge"] else 0.8).timeout
@@ -1327,7 +1337,7 @@ func demo_state(shot: String) -> void:
 	state.wisps = 3
 	state.armor = 2
 	state.focus = 1
-	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6}.get(shot, 8)
+	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6, "intro": 30}.get(shot, 8)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--room="):
 			state.room = int(a.substr(7))

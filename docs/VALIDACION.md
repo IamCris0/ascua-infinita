@@ -1,5 +1,10 @@
 # Validación del proyecto
 
+## Entradas cinemáticas de jefe — 8 de octubre de 2026
+
+- `tools/run_tests.ps1 -Balance`: 14 suites, cero fallos. Nueva `test_boss_intro.gd` (19 comprobaciones): entrada completa en el primer encuentro de cada jefe y breve después, combate congelado, salto único, pausa, guardado, franjas, acercamiento que mantiene al jefe en pantalla, *Reducir movimiento* y regreso al encuadre.
+- Captura `intro.png` revisada: la ficha tiene banda propia y retira cualquier rótulo previo. Partida gráfica de 70 s (10.063 fotogramas, primeros encuentros con Rey y Campanera) sin errores.
+
 ## Constelación del Legado (0.4) — 7 de octubre de 2026
 
 - `tools/run_tests.ps1 -Balance`: 12 suites, cero fallos. Nueva `test_legacy_tree.gd` con 41 comprobaciones: estructura, requisitos que solo bloquean la compra, niveles conservados sin requisito, topes, un juramento activo elegido solo en la hoguera, efectos de cada nodo y juramento, Último aliento único por expedición y guardado, migración de partidas 0.3 y juramentos imposibles.

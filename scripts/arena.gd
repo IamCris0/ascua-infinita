@@ -71,6 +71,11 @@ var hp_trail: float = 1.0
 var hovered: bool = false
 var last_hurt_anim: float = 0.0
 var hint_alpha: float = 1.0
+# Boss entrance: its total length when it began, and whether it is the full
+# first-meeting version with the closer look and the name card.
+var intro_total: float = 0.0
+var intro_full: bool = false
+const INTRO_ZOOM = 0.16
 
 func _ready() -> void:
 	clip_contents = true
@@ -147,13 +152,39 @@ func _layout() -> void:
 	stage.scale = Vector2(s, s)
 	stage.position = origin
 	stage.set_meta("origin", origin)
+	stage.set_meta("scale", s)
 
 func stage_to_screen(p: Vector2) -> Vector2:
 	return stage.position + p * stage.scale
 
 func visible_stage_rect() -> Rect2:
 	var origin: Vector2 = stage.get_meta("origin", Vector2.ZERO)
-	return Rect2(-origin / stage.scale, size / stage.scale)
+	var s: float = stage.get_meta("scale", stage.scale.x)
+	return Rect2(-origin / s, size / s)
+
+## Seconds since the current boss entrance began, or -1 outside one.
+func intro_elapsed() -> float:
+	if intro_total <= 0 or not state.is_boss() or state.spawn_delay <= 0:
+		return -1.0
+	return intro_total - state.spawn_delay
+
+## 0..1 height of the cinema bars: they slide in and out with the entrance.
+func letterbox() -> float:
+	var e = intro_elapsed()
+	if e < 0:
+		return 0.0
+	if reduced_motion:
+		return 1.0
+	return minf(clampf(e / 0.35, 0, 1), clampf(state.spawn_delay / 0.35, 0, 1))
+
+## The full entrance leans in on the boss once it has arrived.
+func intro_zoom() -> float:
+	var e = intro_elapsed()
+	if e < 0 or not intro_full or reduced_motion:
+		return 1.0
+	var rise = smoothstep(state.BOSS_INTRO, state.BOSS_INTRO + 0.5, e)
+	var fall = 1.0 - smoothstep(intro_total - 0.45, intro_total, e)
+	return 1.0 + INTRO_ZOOM * minf(rise, fall)
 
 ## Bosses of the Criptas and the Forja and the two special roles have their
 ## own sheets; every other enemy uses its kind's sheet.
@@ -221,8 +252,14 @@ func sync_enemy(walk_in: bool = true) -> void:
 		bg_index = state.biome()
 		bg_fade = 1.0
 		show_banner(state.BIOMES[bg_index], state.BIOME_RULES[bg_index], Color("84cdb7"))
+	intro_total = state.spawn_delay if kind in BOSS_KEYS else 0.0
+	intro_full = intro_total > state.BOSS_INTRO + 0.01
+	# The full entrance draws its own name card; the brief one keeps the banner.
 	if kind in BOSS_KEYS:
-		show_banner(state.enemy_name(), state.boss_title(), Color("ff8a5c"), 1.9)
+		if intro_full:
+			banner = {}
+		else:
+			show_banner(state.enemy_name(), state.boss_title(), Color("ff8a5c"), 1.9)
 
 func show_banner(title: String, subtitle: String, color: Color, duration: float = 3.2) -> void:
 	banner = {"title": title, "subtitle": subtitle, "color": color, "t": 0.0, "dur": duration}
@@ -419,20 +456,27 @@ func _process(delta: float) -> void:
 		if banner.t > banner.dur:
 			banner = {}
 	var shake_offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake
-	stage.position = stage.get_meta("origin", Vector2.ZERO) + shake_offset
 	if shown_kind != actor_key():
 		sync_enemy(true)
 	# Walk-in for a freshly spawned enemy.
 	if enemy.has_meta("walk_in"):
 		var distance: float = enemy.get_meta("walk_in")
-		var total = state.BOSS_INTRO if state.is_boss() else state.SPAWN_DELAY
-		var k = clampf(state.spawn_delay / total, 0, 1) if total > 0 else 0.0
+		var k = clampf(state.spawn_delay / state.SPAWN_DELAY, 0, 1)
+		if state.is_boss():
+			# Bosses walk in during the first BOSS_INTRO seconds of their entrance.
+			k = 1.0 - clampf((intro_total - state.spawn_delay) / state.BOSS_INTRO, 0, 1)
 		enemy.offset = Vector2(distance * k, 0)
 		enemy.set_meta("walking", true)
-		if state.spawn_delay <= 0:
+		if k <= 0 or state.spawn_delay <= 0:
 			enemy.remove_meta("walk_in")
 			enemy.remove_meta("walking")
 			enemy.play("idle")
+	# After the walk-in has placed the boss, zoom keeps its screen position
+	# fixed while the stage grows.
+	var zoom = intro_zoom()
+	var base_scale: float = stage.get_meta("scale", stage.scale.x)
+	stage.scale = Vector2.ONE * base_scale * zoom
+	stage.position = stage.get_meta("origin", Vector2.ZERO) + enemy_center() * base_scale * (1.0 - zoom) + shake_offset
 	for p in projectiles:
 		p.t += delta
 	projectiles = projectiles.filter(func(p): return p.t < p.dur)
@@ -691,12 +735,13 @@ func _draw_overlay() -> void:
 		var a = clampf(n.life * 2.0, 0, 1)
 		_text_center(font, n.text, p, n.size, Color(n.color, a), 6, Color(0.05, 0.03, 0.02, a))
 	# First-steps hint.
-	if hint_alpha > 0 and state.total_kills < 3 and state.active():
+	if hint_alpha > 0 and state.total_kills < 3 and state.active() and not state.in_boss_intro():
 		var pulse = 0.65 + 0.35 * sin(ambient_time * 4.0)
 		_text_center(font, "HAZ CLIC PARA ATACAR  ·  ESPACIO", Vector2(w * 0.5, size.y - 28), 22, Color(1, 0.85, 0.55, hint_alpha * pulse), 5)
 	if state.ember_active:
 		var p = stage_to_screen(ember_stage_pos())
 		_text_center(body, "¡Ascua errante!", p + Vector2(0, -44), 14, Color(1, 0.88, 0.6, 0.9), 3)
+	_draw_intro(font, body)
 	# Banner.
 	if not banner.is_empty():
 		var t: float = banner.t
@@ -707,6 +752,31 @@ func _draw_overlay() -> void:
 		overlay.draw_rect(Rect2(0, y + 38, w, 2), Color(banner.color, 0.6 * a))
 		_text_center(font, banner.title, Vector2(w * 0.5, y), 40, Color(banner.color, a), 7)
 		_text_center(body, banner.subtitle, Vector2(w * 0.5, y + 26), 16, Color(0.92, 0.9, 0.85, a), 3)
+
+## Cinema bars, and on a first meeting the boss's name card and advice.
+func _draw_intro(font: Font, body: Font) -> void:
+	var bars = letterbox()
+	if bars <= 0:
+		return
+	var w = size.x
+	var h = size.y * 0.1 * bars
+	overlay.draw_rect(Rect2(0, 0, w, h), Color(0, 0, 0, 0.94))
+	overlay.draw_rect(Rect2(0, size.y - h, w, h), Color(0, 0, 0, 0.94))
+	if state.spawn_delay > state.INTRO_SKIP_LEFT:
+		_text_center(body, "Esc · saltar", Vector2(w - 64, size.y - h * 0.35), 13, Color(0.75, 0.75, 0.78, 0.8 * bars), 2)
+	if not intro_full:
+		return
+	var e = intro_elapsed()
+	var a = clampf((e - 1.0) / 0.4, 0, 1) * clampf(state.spawn_delay / 0.4, 0, 1)
+	if a <= 0:
+		return
+	var y = size.y * 0.1 + 46
+	overlay.draw_rect(Rect2(0, y - 26, w, 116), Color(0.02, 0.02, 0.04, 0.62 * a))
+	overlay.draw_rect(Rect2(0, y - 26, w, 2), Color(1.0, 0.55, 0.35, 0.6 * a))
+	overlay.draw_rect(Rect2(0, y + 88, w, 2), Color(1.0, 0.55, 0.35, 0.6 * a))
+	_text_center(body, state.boss_title() + "  ·  NUEVO ENEMIGO", Vector2(w * 0.5, y), 14, Color(0.95, 0.7, 0.55, a), 3)
+	_text_center(font, state.enemy_name(), Vector2(w * 0.5, y + 44), 46, Color(1.0, 0.62, 0.42, a), 8)
+	_text_center(body, state.boss_lore(), Vector2(w * 0.5, y + 74), 16, Color(0.95, 0.9, 0.84, a), 3)
 
 func _frame_glow(color: Color) -> void:
 	var steps = 10
