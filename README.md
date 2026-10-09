@@ -2,7 +2,7 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.9.0-dev**: cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.10.0-dev**: retos diarios y semanales, 30 logros con recompensa, colección con bestiario y estadísticas, cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
 
 Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Hay dos formas de jugar mejor que solo hacer clic:
 - **Parada**: alza la guardia justo antes de que llegue un golpe. A tiempo, lo anula, aturde al enemigo y contraatacas; antes de tiempo, solo bloquea la mitad.
@@ -21,6 +21,15 @@ Entre cámaras el portador avanza y el siguiente rival entra caminando. Tras cad
 | La Centinela | Guardia | Muro de brasas que absorbe daño | Guardia perfecta |
 | La Invocadora | Luceros | Tres luceros más durante 8 s | Vencer a la Campanera |
 | El Errante | Fortuna | Deja oro al golpear | Abrir 15 cofres |
+
+**Retos y colección** (desde el título, la pausa o la hoguera):
+- **Retos**: tres diarios y dos semanales, iguales para todos ese día o semana. Por ejemplo, «Logra 8 paradas perfectas» o «Abre 3 cofres». Dan ascuas y esquirlas.
+- **Logros**: 30, en cinco grupos, con recompensa reclamable.
+- **Colección**: fichas con retratos animados y un contador de victorias por enemigo. Completar una categoría da premio.
+- **Registro**: las últimas expediciones, con su portador.
+- **Estadísticas**: lo que llevas jugado.
+
+Un número junto al botón avisa de las recompensas pendientes.
 
 **Arsenal**: los jefes, algunos élites y los cofres dejan piezas de equipo que se conservan al caer:
 - tres ranuras (arma, talismán y amuleto) y nueve piezas;
@@ -115,7 +124,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 19 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 20 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -123,14 +132,14 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat, map, arsenal, bearers
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat, map, arsenal, bearers, retos
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa
 godot --headless --path . --script tools/simulate.gd -- --sample
 ```
 
-Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel`, `event`, `arsenal`, `masteries` y `bearers`).
+Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel`, `event`, `arsenal`, `masteries`, `bearers`, `retos`, `logros` y `bestiary`).
 
 Al exportar, `export_presets.cfg` ya incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos.
 

@@ -32,6 +32,7 @@ signal item_found(item: Dictionary)
 signal bearer_unlocked(id: String)
 signal walled
 signal fortune(amount: float)
+signal mission_completed(text: String)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -88,25 +89,58 @@ const ECLIPSE_RULES = [
 	"Destello recarga un 20% más lento.",
 	"Los jefes tienen un 25% más de vida.",
 	"Descansos y santuarios curan la mitad."]
+# Thirty achievements in five groups; each pays a reward once claimed.
 const ACHIEVEMENTS = [
-	{"id": "first_kill", "name": "Primera brasa", "description": "Vence a tu primer enemigo."},
-	{"id": "king", "name": "Rey depuesto", "description": "Derrota al Rey sin Brasa."},
-	{"id": "bell", "name": "Silencio roto", "description": "Derrota a la Campanera Vacía."},
-	{"id": "forge", "name": "Forja apagada", "description": "Derrota al Forjador Ciego."},
-	{"id": "interrupts", "name": "Mano rápida", "description": "Interrumpe 10 cargas con Destello."},
-	{"id": "armor", "name": "Rompecorazas", "description": "Rompe 5 corazas del Forjador."},
-	{"id": "embers", "name": "Cazador de ascuas", "description": "Atrapa 25 ascuas errantes."},
-	{"id": "synergy", "name": "Afinidad", "description": "Completa una sinergia de reliquias."},
-	{"id": "oath", "name": "Juramentado", "description": "Compra tu primer juramento."},
-	{"id": "idle_boss", "name": "Los luceros bastan", "description": "Derrota a un jefe sin atacar con clic durante el combate."},
-	{"id": "eclipse", "name": "Más allá del eclipse", "description": "Supera la cámara 30 en Eclipse 1 o superior."},
-	{"id": "collection", "name": "Memoria del eclipse", "description": "Completa la colección."},
-	{"id": "parry", "name": "Guardia perfecta", "description": "Para 25 golpes enemigos."},
-	{"id": "weak", "name": "Ojo certero", "description": "Acierta 50 puntos débiles."},
-	{"id": "chests", "name": "Cazatesoros", "description": "Abre 15 cofres."},
-	{"id": "jackpot", "name": "La rueda sonríe", "description": "Consigue Oro ×3 en la Rueda del eclipse."},
-	{"id": "legendary", "name": "Leyenda forjada", "description": "Encuentra una pieza legendaria."},
-	{"id": "smith", "name": "Mano de herrero", "description": "Sube una pieza a su nivel máximo."}]
+	{"id": "first_kill", "group": "Combate", "name": "Primera brasa", "description": "Vence a tu primer enemigo.", "reward": {"essence": 5}},
+	{"id": "kills_500", "group": "Combate", "name": "Exterminador", "description": "Vence a 500 enemigos.", "reward": {"essence": 20}},
+	{"id": "kills_2000", "group": "Combate", "name": "Leyenda de ceniza", "description": "Vence a 2.000 enemigos.", "reward": {"essence": 40, "scrap": 10}},
+	{"id": "interrupts", "group": "Combate", "name": "Mano rápida", "description": "Interrumpe 10 cargas con Destello.", "reward": {"essence": 15}},
+	{"id": "parry", "group": "Combate", "name": "Guardia perfecta", "description": "Logra 25 paradas perfectas.", "reward": {"essence": 20}},
+	{"id": "weak", "group": "Combate", "name": "Ojo certero", "description": "Acierta 50 puntos débiles.", "reward": {"essence": 20}},
+	{"id": "armor", "group": "Combate", "name": "Rompecorazas", "description": "Rompe 5 corazas del Forjador.", "reward": {"essence": 15}},
+	{"id": "king", "group": "Jefes", "name": "Rey depuesto", "description": "Derrota al Rey sin Brasa.", "reward": {"essence": 15}},
+	{"id": "bell", "group": "Jefes", "name": "Silencio roto", "description": "Derrota a la Campanera Vacía.", "reward": {"essence": 20}},
+	{"id": "forge", "group": "Jefes", "name": "Forja apagada", "description": "Derrota al Forjador Ciego.", "reward": {"essence": 25}},
+	{"id": "idle_boss", "group": "Jefes", "name": "Los luceros bastan", "description": "Derrota a un jefe sin atacar con clic durante el combate.", "reward": {"essence": 20}},
+	{"id": "untouched", "group": "Jefes", "name": "Intocable", "description": "Derrota a un jefe sin recibir daño en ese combate.", "reward": {"essence": 30}},
+	{"id": "room_50", "group": "Viaje", "name": "Más allá", "description": "Llega a la cámara 50.", "reward": {"essence": 30}},
+	{"id": "room_60", "group": "Viaje", "name": "Sin fondo", "description": "Llega a la cámara 60.", "reward": {"essence": 40}},
+	{"id": "eclipse", "group": "Viaje", "name": "Más allá del eclipse", "description": "Supera la cámara 30 en Eclipse 1 o superior.", "reward": {"essence": 30}},
+	{"id": "eclipse_5", "group": "Viaje", "name": "Noche perpetua", "description": "Supera la cámara 30 en Eclipse 5.", "reward": {"essence": 60, "scrap": 20}},
+	{"id": "embers", "group": "Viaje", "name": "Cazador de ascuas", "description": "Atrapa 25 ascuas errantes.", "reward": {"essence": 15}},
+	{"id": "rich", "group": "Viaje", "name": "Bolsa llena", "description": "Reúne 100.000 de oro en una expedición.", "reward": {"essence": 20}},
+	{"id": "chests", "group": "Botín", "name": "Cazatesoros", "description": "Abre 15 cofres.", "reward": {"essence": 10, "scrap": 10}},
+	{"id": "jackpot", "group": "Botín", "name": "La rueda sonríe", "description": "Consigue Oro ×3 en la Rueda del eclipse.", "reward": {"essence": 15}},
+	{"id": "wheel_10", "group": "Botín", "name": "Jugador empedernido", "description": "Gira la Rueda del eclipse 10 veces.", "reward": {"essence": 15}},
+	{"id": "legendary", "group": "Botín", "name": "Leyenda forjada", "description": "Encuentra una pieza legendaria.", "reward": {"scrap": 20}},
+	{"id": "smith", "group": "Botín", "name": "Mano de herrero", "description": "Sube una pieza a su nivel máximo.", "reward": {"scrap": 15}},
+	{"id": "synergy", "group": "Botín", "name": "Afinidad", "description": "Completa una sinergia de reliquias.", "reward": {"essence": 10}},
+	{"id": "oath", "group": "Legado", "name": "Juramentado", "description": "Compra tu primer juramento.", "reward": {"essence": 15}},
+	{"id": "masteries", "group": "Legado", "name": "Maestro", "description": "Sube una maestría a su nivel máximo.", "reward": {"scrap": 15}},
+	{"id": "bearers", "group": "Legado", "name": "Muchas manos", "description": "Desbloquea todos los portadores.", "reward": {"essence": 40}},
+	{"id": "daily", "group": "Legado", "name": "Constancia", "description": "Completa 10 retos diarios.", "reward": {"essence": 30}},
+	{"id": "weekly", "group": "Legado", "name": "Semana de brasas", "description": "Completa un reto semanal.", "reward": {"essence": 25}},
+	{"id": "collection", "group": "Legado", "name": "Memoria del eclipse", "description": "Completa la colección.", "reward": {"essence": 50, "scrap": 20}}]
+const ACHIEVEMENT_GROUPS = ["Combate", "Jefes", "Viaje", "Botín", "Legado"]
+# Retos: three daily and two weekly goals picked from the date, the same for
+# everyone that day or week. Progress comes from play; rewards are claimed.
+const MISSION_KINDS = {
+	"kills": {"text": "Vence a %d enemigos", "daily": 60, "weekly": 400},
+	"elites": {"text": "Vence a %d élites", "daily": 4, "weekly": 20},
+	"bosses": {"text": "Derrota a %d jefes", "daily": 2, "weekly": 10},
+	"parries": {"text": "Logra %d paradas perfectas", "daily": 8, "weekly": 40},
+	"weak": {"text": "Acierta %d puntos débiles", "daily": 10, "weekly": 50},
+	"chests": {"text": "Abre %d cofres", "daily": 3, "weekly": 15},
+	"interrupts": {"text": "Interrumpe %d cargas con Destello", "daily": 4, "weekly": 20},
+	"embers": {"text": "Atrapa %d ascuas errantes", "daily": 3, "weekly": 15},
+	"room": {"text": "Llega a la cámara %d en una expedición", "daily": 20, "weekly": 40}}
+const MISSION_IDS = ["kills", "elites", "bosses", "parries", "weak", "chests", "interrupts", "embers", "room"]
+const DAILY_COUNT = 3
+const WEEKLY_COUNT = 2
+const DAILY_REWARD = {"essence": 12, "scrap": 4}
+const WEEKLY_REWARD = {"essence": 50, "scrap": 15}
+# Completing every entry of a collection category pays this once.
+const CATEGORY_REWARD = {"essence": 25, "scrap": 8}
 const HISTORY_SIZE = 8
 # Mapa de caminos. After each milestone relic the map offers three lanes for
 # the next four chambers; the fifth (milestone or boss) is shared. Every node
@@ -369,6 +403,19 @@ var scrap: int = 0
 var masteries: Dictionary = {}
 var next_item_uid: int = 1
 var bearer: String = "bearer"
+# Retos y recompensas (permanent)
+var achievements_claimed: Array = []
+var collection_claimed: Array = []
+var bestiary: Dictionary = {}
+var mission_day: int = -1
+var mission_week: int = -1
+var daily: Array = []
+var weekly: Array = []
+var total_missions: int = 0
+var daily_done: int = 0
+var total_time: float = 0
+# Blows taken in the current fight, for Intocable.
+var fight_hits: int = 0
 # Muro de brasas and Llamada del enjambre while they last.
 var wall: float = 0
 var wall_time: float = 0
@@ -442,6 +489,8 @@ func unlock(id: String) -> void:
 		if BEARERS[key].unlock == id:
 			bearer_unlocked.emit(key)
 			event.emit("Nuevo portador · " + BEARERS[key].name + ". Elígelo en la hoguera")
+	if BEARER_IDS.all(func(key): return bearer_unlocked_by(key)):
+		unlock("bearers")
 
 func achievement_name(id: String) -> String:
 	for entry in ACHIEVEMENTS:
@@ -459,9 +508,145 @@ func unlock_earned() -> void:
 		unlock("parry")
 	if total_weak >= 50:
 		unlock("weak")
+	if total_kills >= 500:
+		unlock("kills_500")
+	if total_kills >= 2000:
+		unlock("kills_2000")
+	if best >= 50:
+		unlock("room_50")
+	if best >= 60:
+		unlock("room_60")
+	if total_spins >= 10:
+		unlock("wheel_10")
+	if daily_done >= 10:
+		unlock("daily")
+	for entry in MASTERIES:
+		if mastery(entry.id) >= entry.max:
+			unlock("masteries")
 	for k in range(LEGACY.size()):
 		if is_oath(k) and legacy_level(k) > 0:
 			unlock("oath")
+
+# ---------------------------------------------------------------- rewards
+func achievement_entry(id: String) -> Dictionary:
+	for entry in ACHIEVEMENTS:
+		if entry.id == id:
+			return entry
+	return {}
+
+func reward_text(reward: Dictionary) -> String:
+	var parts: Array[String] = []
+	if reward.get("essence", 0) > 0:
+		parts.append("+%d ascuas" % reward.essence)
+	if reward.get("scrap", 0) > 0:
+		parts.append("+%d esquirlas" % reward.scrap)
+	return "  ·  ".join(parts)
+
+func _pay(reward: Dictionary) -> void:
+	essence += int(reward.get("essence", 0))
+	scrap += int(reward.get("scrap", 0))
+
+func claim_achievement(id: String) -> bool:
+	if not achievements.has(id) or achievements_claimed.has(id):
+		return false
+	achievements_claimed.append(id)
+	_pay(achievement_entry(id).reward)
+	changed.emit()
+	return true
+
+func category_complete(category: String) -> bool:
+	var entries = collection_catalog().filter(func(entry): return entry.category == category)
+	return not entries.is_empty() and entries.all(func(entry): return discoveries.has(entry.id))
+
+func claim_category(category: String) -> bool:
+	if not category_complete(category) or collection_claimed.has(category):
+		return false
+	collection_claimed.append(category)
+	_pay(CATEGORY_REWARD)
+	changed.emit()
+	return true
+
+## Day and Monday-based week numbers of a calendar date, for the retos.
+static func day_number(date: Dictionary) -> int:
+	return int(Time.get_unix_time_from_datetime_dict({"year": date.year, "month": date.month, "day": date.day, "hour": 0, "minute": 0, "second": 0}) / 86400)
+
+static func week_number(day: int) -> int:
+	return int(floor((day + 3) / 7.0))
+
+func _pick_missions(seed_value: int, count: int, period: String) -> Array:
+	var picker = RandomNumberGenerator.new()
+	picker.seed = seed_value
+	var pool: Array = MISSION_IDS.duplicate()
+	var picked: Array = []
+	for i in range(count):
+		var kind: String = pool.pop_at(picker.randi_range(0, pool.size() - 1))
+		picked.append({"kind": kind, "target": MISSION_KINDS[kind][period], "progress": 0, "claimed": false})
+	return picked
+
+## New retos when the day or the week changes; unclaimed ones are lost.
+func refresh_missions(day: int) -> bool:
+	var refreshed := false
+	if day != mission_day:
+		mission_day = day
+		daily = _pick_missions(day * 7919 + 17, DAILY_COUNT, "daily")
+		refreshed = true
+	var week = week_number(day)
+	if week != mission_week:
+		mission_week = week
+		weekly = _pick_missions(week * 104729 + 3, WEEKLY_COUNT, "weekly")
+		refreshed = true
+	if refreshed:
+		changed.emit()
+	return refreshed
+
+func mission_text(mission: Dictionary) -> String:
+	return MISSION_KINDS[mission.kind].text % mission.target
+
+func mission_done(mission: Dictionary) -> bool:
+	return mission.progress >= mission.target
+
+## Counts play toward the retos; "room" keeps the deepest chamber instead.
+func progress_mission(kind: String, amount: int = 1) -> void:
+	for mission in daily + weekly:
+		if mission.kind != kind or mission.claimed or mission_done(mission):
+			continue
+		mission.progress = mini(mission.target, maxi(mission.progress, amount) if kind == "room" else mission.progress + amount)
+		if mission_done(mission):
+			mission_completed.emit(mission_text(mission))
+			event.emit("Reto completado · " + mission_text(mission))
+
+func claim_mission(is_weekly: bool, index: int) -> bool:
+	var list: Array = weekly if is_weekly else daily
+	if index < 0 or index >= list.size() or list[index].claimed or not mission_done(list[index]):
+		return false
+	list[index].claimed = true
+	total_missions += 1
+	_pay(WEEKLY_REWARD if is_weekly else DAILY_REWARD)
+	if is_weekly:
+		unlock("weekly")
+	else:
+		daily_done += 1
+		if daily_done >= 10:
+			unlock("daily")
+	changed.emit()
+	return true
+
+## Rewards waiting to be claimed: retos, achievements and full categories.
+func claimable_count() -> int:
+	var count := 0
+	for mission in daily + weekly:
+		if mission_done(mission) and not mission.claimed:
+			count += 1
+	for id in achievements:
+		if not achievements_claimed.has(id):
+			count += 1
+	var categories := {}
+	for entry in collection_catalog():
+		categories[entry.category] = true
+	for category in categories:
+		if category_complete(category) and not collection_claimed.has(category):
+			count += 1
+	return count
 
 func eclipse_bonus() -> float:
 	return 1.0 + ECLIPSE_BONUS * eclipse
@@ -758,6 +943,7 @@ func tick(delta: float) -> void:
 	if not active():
 		return
 	run_time += delta
+	total_time += delta
 	manual_rest = minf(2, manual_rest + delta)
 	click_cooldown = maxf(0, click_cooldown - delta)
 	burst_cooldown = maxf(0, burst_cooldown - delta)
@@ -897,6 +1083,7 @@ func _guard_blow() -> void:
 		return
 	stun_time = PARRY_STUN
 	total_parries += 1
+	progress_mission("parries")
 	if total_parries >= 25:
 		unlock("parry")
 	parried.emit(true)
@@ -940,6 +1127,8 @@ func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 		event.emit("Refugio de musgo · protege del 40% del golpe")
 	amount *= 1.0 - mini(legacy_level(12), LEGACY[12].max) * 0.04
 	amount *= 1.0 - gear("guard")
+	if amount > 0:
+		fight_hits += 1
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
 	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
@@ -975,6 +1164,7 @@ func collect_ember() -> String:
 	ember_active = false
 	ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0) * bearer_stat("ember", 1.0)
 	total_embers += 1
+	progress_mission("embers")
 	if total_embers >= 25:
 		unlock("embers")
 	var kind: String = EMBER_KINDS[rng.randi_range(0, EMBER_KINDS.size() - 1)]
@@ -1020,6 +1210,7 @@ func click(weak: bool = false) -> bool:
 		weak_cooldown = _weak_wait()
 		burst_cooldown = maxf(0, burst_cooldown - WEAK_RECHARGE)
 		total_weak += 1
+		progress_mission("weak")
 		if total_weak >= 50:
 			unlock("weak")
 		weak_struck.emit()
@@ -1049,6 +1240,7 @@ func burst() -> bool:
 		event.emit("¡INTERRUMPIDO! " + enemy_name() + " queda aturdido")
 		boss_interrupted.emit()
 		total_interrupts += 1
+		progress_mission("interrupts")
 		if total_interrupts >= 10:
 			unlock("interrupts")
 	else:
@@ -1135,6 +1327,8 @@ func _gain_gold(amount: float) -> void:
 	gold += amount
 	run_gold += amount
 	total_gold += amount
+	if run_gold >= 100000:
+		unlock("rich")
 
 func defeat_enemy() -> void:
 	var boss = is_boss()
@@ -1147,6 +1341,14 @@ func defeat_enemy() -> void:
 	total_kills += 1
 	run_kills += 1
 	unlock("first_kill")
+	if total_kills >= 500:
+		unlock("kills_500")
+	if total_kills >= 2000:
+		unlock("kills_2000")
+	bestiary[enemy_id()] = int(bestiary.get(enemy_id(), 0)) + 1
+	progress_mission("kills")
+	if enemy_elite:
+		progress_mission("elites")
 	if boss:
 		grant_item(make_item("boss"))
 		scrap += 1 + cycle()
@@ -1156,12 +1358,17 @@ func defeat_enemy() -> void:
 		total_bosses += 1
 		run_bosses += 1
 		unlock(enemy_id())
+		progress_mission("bosses")
 		if fight_clicks == 0:
 			unlock("idle_boss")
+		if fight_hits == 0:
+			unlock("untouched")
 		# Clearing a cycle at the highest unlocked Eclipse opens the next one.
 		if room % 30 == 0:
 			if eclipse >= 1:
 				unlock("eclipse")
+			if eclipse >= 5:
+				unlock("eclipse_5")
 			if eclipse >= eclipse_unlocked and eclipse_unlocked < ECLIPSE_MAX:
 				eclipse_unlocked = eclipse + 1
 				event.emit("Eclipse %d desbloqueado · elígelo en la hoguera" % eclipse_unlocked)
@@ -1173,6 +1380,11 @@ func defeat_enemy() -> void:
 	var grant_relic = room % 5 == 0
 	room += 1
 	best = maxi(best, room)
+	progress_mission("room", room)
+	if best >= 50:
+		unlock("room_50")
+	if best >= 60:
+		unlock("room_60")
 	spawn_enemy()
 	if grant_relic:
 		journey_phase = "map"
@@ -1192,6 +1404,7 @@ func _offer_relics() -> void:
 
 func spawn_enemy(roll_elite: bool = true) -> void:
 	fight_clicks = 0
+	fight_hits = 0
 	parry_window = 0
 	weak_active = false
 	weak_timer = 0
@@ -1386,6 +1599,7 @@ func open_chest() -> Array:
 		return []
 	journey_phase = ""
 	total_chests += 1
+	progress_mission("chests")
 	if total_chests >= 15:
 		unlock("chests")
 	var loot = roll_loot(chest_tier)
@@ -1401,6 +1615,8 @@ func open_chest() -> Array:
 func _spin_wheel(bet: int) -> void:
 	gold -= bet
 	total_spins += 1
+	if total_spins >= 10:
+		unlock("wheel_10")
 	wheel_result = rng.randi_range(0, WHEEL.size() - 1)
 	var sector: String = WHEEL[wheel_result]
 	var entry := {"kind": "nothing", "amount": 0}
@@ -1592,6 +1808,8 @@ func buy_mastery(index: int) -> bool:
 		return false
 	scrap -= mastery_cost(index)
 	masteries[id] = mastery(id) + 1
+	if mastery(id) >= MASTERIES[index].max:
+		unlock("masteries")
 	changed.emit()
 	return true
 
@@ -1711,7 +1929,8 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
 	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
 	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak",
-	"total_chests", "total_spins", "lane_start", "chest_tier", "scrap", "next_item_uid", "total_items"]
+	"total_chests", "total_spins", "lane_start", "chest_tier", "scrap", "next_item_uid", "total_items",
+	"total_missions", "daily_done", "total_time"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -1720,7 +1939,7 @@ const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready":
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0,
 	"parry_window": 0.0, "parry_cooldown": 0.0, "weak_active": false, "weak_timer": 0.0, "weak_cooldown": WEAK_FIRST,
-	"wall": 0.0, "wall_time": 0.0, "summon_time": 0.0}
+	"wall": 0.0, "wall_time": 0.0, "summon_time": 0.0, "fight_hits": 0}
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0,
@@ -1750,6 +1969,10 @@ func snapshot() -> Dictionary:
 	data.masteries = masteries.duplicate()
 	data.run_items = run_items.duplicate()
 	data.bearer = bearer
+	data.achievements_claimed = achievements_claimed.duplicate()
+	data.collection_claimed = collection_claimed.duplicate()
+	data.bestiary = bestiary.duplicate()
+	data.missions = {"day": mission_day, "week": mission_week, "daily": daily.duplicate(true), "weekly": weekly.duplicate(true)}
 	return data
 
 func save_game(path: String = SAVE_PATH) -> bool:
@@ -1816,6 +2039,16 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.masteries = {}
 		data.run_items = []
 		data.next_item_uid = 1
+	# Before the retos nothing was claimed. Achievements already earned keep
+	# their reward waiting.
+	if not data.has("achievements_claimed"):
+		data.achievements_claimed = []
+		data.collection_claimed = []
+		data.bestiary = {}
+		data.missions = {"day": -1, "week": -1, "daily": [], "weekly": []}
+	for key in ["total_missions", "daily_done", "total_time"]:
+		if not data.has(key):
+			data[key] = 0
 	# Before the bearers there was only the Portador.
 	if not data.has("bearer"):
 		data.bearer = "bearer"
@@ -1923,6 +2156,8 @@ func _read_save(path: String) -> Variant:
 		return null
 	if not data.get("bearer") in BEARER_IDS:
 		return null
+	if not _valid_retos(data):
+		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
 	if data.legacy.size() != LEGACY.size() or data.room < 1 or data.room > 10000:
@@ -1937,6 +2172,37 @@ func _read_save(path: String) -> Variant:
 		if not relic in RELIC_IDS:
 			return null
 	return data
+
+static func _valid_retos(data: Dictionary) -> bool:
+	if not data.achievements_claimed is Array or not data.collection_claimed is Array or not data.bestiary is Dictionary or not data.missions is Dictionary:
+		return false
+	for id in data.achievements_claimed:
+		if not id is String or not data.achievements.has(id):
+			return false
+	for category in data.collection_claimed:
+		if not category in ["Enemigos", "Reliquias", "Sinergias", "Arsenal"]:
+			return false
+	for id in data.bestiary:
+		var count = data.bestiary[id]
+		if not id is String or not (count is float or count is int) or count != floor(count) or count < 0:
+			return false
+	var m: Dictionary = data.missions
+	for key in ["day", "week"]:
+		if not (m.get(key) is float or m.get(key) is int) or m[key] != floor(m[key]) or m[key] < -1:
+			return false
+	for key in ["daily", "weekly"]:
+		if not m.get(key) is Array or m[key].size() > (DAILY_COUNT if key == "daily" else WEEKLY_COUNT):
+			return false
+		for mission in m[key]:
+			if not mission is Dictionary or not MISSION_KINDS.has(mission.get("kind")) or not mission.get("claimed") is bool:
+				return false
+			for field in ["target", "progress"]:
+				var value = mission.get(field)
+				if not (value is float or value is int) or value != floor(value) or value < 0:
+					return false
+			if mission.progress > mission.target:
+				return false
+	return true
 
 static func _valid_arsenal(data: Dictionary) -> bool:
 	if not data.armory is Array or data.armory.size() > ARMORY_SIZE or not data.equipped is Dictionary or not data.masteries is Dictionary or not data.run_items is Array:
@@ -2038,6 +2304,19 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 		masteries[id] = int(data.masteries[id])
 	run_items = data.run_items.map(func(uid): return int(uid))
 	bearer = data.bearer if bearer_unlocked_by(data.bearer) else "bearer"
+	achievements_claimed = data.achievements_claimed.duplicate()
+	collection_claimed = data.collection_claimed.duplicate()
+	bestiary = {}
+	for id in data.bestiary:
+		bestiary[id] = int(data.bestiary[id])
+	mission_day = int(data.missions.day)
+	mission_week = int(data.missions.week)
+	daily = []
+	weekly = []
+	for key in ["daily", "weekly"]:
+		for mission in data.missions[key]:
+			var entry = {"kind": mission.kind, "target": int(mission.target), "progress": int(mission.progress), "claimed": mission.claimed}
+			(daily if key == "daily" else weekly).append(entry)
 	var boss_count = boss_attacks
 	spawn_enemy(false)
 	boss_attacks = boss_count

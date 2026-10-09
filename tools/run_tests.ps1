@@ -38,6 +38,7 @@ $suites = @(
     @('tests/test_map.gd'),
     @('tests/test_arsenal.gd'),
     @('tests/test_bearers.gd'),
+    @('tests/test_retos.gd'),
     @('tests/test_collection.gd', '--qa'),
     @('tests/test_ui.gd', '--qa')
 )

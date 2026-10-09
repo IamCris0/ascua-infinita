@@ -1,5 +1,23 @@
 # Validación del proyecto
 
+## Retos (0.10) — 9 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 20 suites sin fallos y partida gráfica de 70 s.
+- `test_retos.gd` es nueva (50 comprobaciones):
+  - fechas y semanas de lunes a domingo;
+  - retos iguales para cualquier partida el mismo día, distintos entre días, y su renovación;
+  - progreso por cada tipo de jugada;
+  - tope, reclamación única y premios;
+  - Constancia y Semana de brasas;
+  - recompensas de logros y categorías;
+  - los doce logros nuevos y su deducción en partidas anteriores;
+  - bestiario y tiempo de combate;
+  - guardado y rechazo de retos inválidos;
+  - partidas anteriores con la recompensa de sus logros pendiente.
+- `test_collection.gd` adaptada a las ocho pestañas.
+- `test_ui.gd` (73 comprobaciones): el aviso de recompensas en la pausa y la reclamación de un reto desde su ficha.
+- Capturas `retos.png`, `logros.png` y `bestiary.png` revisadas.
+
 ## Portadores (0.9) — 9 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 19 suites sin fallos. La partida gráfica de 70 s llega a la cámara 29 sin errores.

@@ -14,6 +14,7 @@ const LegacyTree = preload("res://scripts/legacy_tree.gd")
 const JourneyScreens = preload("res://scripts/journey_screens.gd")
 const ArsenalScreen = preload("res://scripts/arsenal_screen.gd")
 const BearerScreen = preload("res://scripts/bearer_screen.gd")
+const CollectionScreen = preload("res://scripts/collection_screen.gd")
 # Read from project.godot so a single setting names every build.
 var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
@@ -73,6 +74,8 @@ var parry_fill: ProgressBar
 var parry_label: Label
 # Real-time end of a hit-stop; the engine runs slowed until then.
 var hitstop_until: int = 0
+# Seconds until the daily retos are checked against the clock again.
+var mission_check: float = 0.0
 # Live views of the chest and wheel screens, for their keyboard shortcuts.
 var chest_view
 var wheel_view
@@ -128,6 +131,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	if not unreadable.is_empty():
 		add_log("No se pudo leer la partida guardada. Se conservó una copia: " + unreadable.get_file())
+	refresh_missions()
 	if restored:
 		if state.offline_reward > 0:
 			add_log("Tus luceros reunieron %d de oro durante tu ausencia." % int(state.offline_reward))
@@ -243,6 +247,10 @@ func connect_state() -> void:
 	state.bearer_unlocked.connect(func(id):
 		arena.show_toast("NUEVO PORTADOR  ·  " + state.BEARERS[id].name)
 	)
+	state.mission_completed.connect(func(text):
+		arena.show_toast("RETO COMPLETADO  ·  " + text)
+		audio.play("offer")
+	)
 	state.item_found.connect(func(item):
 		arena.show_toast("BOTÍN  ·  %s (%s)" % [state.item_name(item), state.RARITIES[item.rarity].to_lower()])
 		audio.play("chest_rare" if item.rarity >= 2 else "loot")
@@ -293,6 +301,10 @@ func _process(delta: float) -> void:
 		hitstop_until = 0
 		Engine.time_scale = 1.0
 	time += delta
+	mission_check -= delta
+	if mission_check <= 0:
+		mission_check = 30.0
+		refresh_missions()
 	if screen == "game":
 		state.tick(minf(delta, 0.1))
 		if modal_type.is_empty() and Input.is_physical_key_pressed(KEY_SPACE):
@@ -423,6 +435,7 @@ func show_title() -> void:
 		ui.button(title_menu, "IR A LA HOGUERA", open_camp_from_title, 58, 21)
 	else:
 		ui.button(title_menu, "COMENZAR EXPEDICIÓN", func(): start_game(state.dead), 58, 21)
+	ui.button(title_menu, "RETOS Y COLECCIÓN" + claims_badge(), func(): show_collection(""), 50)
 	ui.button(title_menu, "CÓMO JUGAR", func(): show_howto(""), 50)
 	ui.button(title_menu, "OPCIONES", func(): show_options(""), 50)
 	# A browser tab has nothing to quit to; saves happen on their own.
@@ -1052,6 +1065,7 @@ func show_howto(return_to: String) -> void:
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."],
 		[lib.portrait("hero"), "Al conseguir ciertos logros se desbloquean nuevos PORTADORES: la Centinela, la Invocadora y el Errante. Cada uno cambia sus estadísticas y lo que hace Destello. Se eligen en la hoguera."],
+		[lib.map_icon("milestone"), "RETOS Y COLECCIÓN: retos diarios y semanales, logros y colecciones completas te dan ascuas y esquirlas. Un número junto al botón indica recompensas por reclamar."],
 		[lib.item_icon("ash_sword"), "Los jefes, algunos élites y los cofres dejan piezas de equipo que se conservan al caer. Equípalas, mejóralas con esquirlas y compra maestrías en el ARSENAL (pausa u hoguera)."]
 	]
 	for tip in tips:
@@ -1075,49 +1089,43 @@ func _return_from(where: String) -> void:
 		close_modal()
 		persist()
 
-func show_collection(return_to: String, category: String = "Enemigos") -> void:
+func show_collection(return_to: String, category: String = "Retos") -> void:
 	modal_return = return_to
 	state.paused = true
-	var catalog: Array = state.collection_catalog()
-	var v = modal("collection", "MEMORIAS DEL ECLIPSE", "Colección · %d / %d" % [state.discoveries.size(), catalog.size()], "Tus descubrimientos permanecen al renacer. Lo desconocido se revela al encontrarlo.", 820)
-	var tabs = HBoxContainer.new()
-	v.add_child(tabs)
-	for section in ["Enemigos", "Reliquias", "Sinergias", "Arsenal", "Logros", "Registro"]:
-		var tab = ui.button(tabs, section, func(): show_collection(return_to, section), 42, 16)
-		tab.disabled = section == category
-	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 320)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	v.add_child(scroll)
-	var list = VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 12)
-	scroll.add_child(list)
-	if category == "Logros":
-		ui.label(list, "%d de %d logros" % [state.achievements.size(), state.ACHIEVEMENTS.size()], 15, Kit.COPPER, true)
-		# Goals stay visible; only the unlocked ones light up.
-		for entry in state.ACHIEVEMENTS:
-			var done: bool = state.achievements.has(entry.id)
-			ui.label(list, ("★  " if done else "☆  ") + entry.name, 20, Kit.GOLD if done else Kit.MUTED, true)
-			ui.wrap_label(list, entry.description, 15, Kit.TEXT if done else Kit.MUTED)
-			ui.separator(list)
-	elif category == "Registro":
-		if state.history.is_empty():
-			ui.wrap_label(list, "Tus expediciones terminadas aparecerán aquí.", 15)
-		for run in state.history:
-			var oath_name = state.LEGACY[run.oath].name if run.oath >= 0 else "sin juramento"
-			ui.label(list, "Cámara %d%s" % [run.room, "  ·  Eclipse %d" % run.eclipse if run.eclipse > 0 else ""], 20, Kit.GOLD, true)
-			ui.wrap_label(list, "%d enemigos  ·  %d jefes  ·  %d min %02d s  ·  %s  ·  +%d ascuas" % [run.kills, run.bosses, run.time / 60, run.time % 60, oath_name, run.banked], 15, Kit.TEXT)
-			ui.separator(list)
-	for entry in catalog:
-		if entry.category != category:
-			continue
-		var found: bool = state.discoveries.has(entry.id)
-		ui.label(list, entry.name if found else "Sin descubrir", 20, Kit.GOLD if found else Kit.MUTED, true)
-		ui.wrap_label(list, entry.description if found else "???", 15, Kit.TEXT if found else Kit.MUTED)
-		ui.separator(list)
+	refresh_missions()
+	var v = modal("collection", "MEMORIAS DEL ECLIPSE", "Retos y colección", "Retos diarios y semanales, logros con recompensa, tus descubrimientos y lo que llevas jugado.", 1120)
+	CollectionScreen.build(self, v, category)
 	ui.button(v, "VOLVER", func(): _return_from(modal_return), 48)
 	persist()
+
+## Claims a reto, an achievement or a completed category, then redraws its tab.
+func claim_reward(kind: String, value) -> void:
+	var ok := false
+	var tab := "Retos"
+	match kind:
+		"daily": ok = state.claim_mission(false, int(value))
+		"weekly": ok = state.claim_mission(true, int(value))
+		"achievement":
+			ok = state.claim_achievement(str(value))
+			tab = "Logros"
+		"category":
+			ok = state.claim_category(str(value))
+			tab = str(value)
+	if not ok:
+		audio.play("ui_denied")
+		return
+	audio.play("relic")
+	persist()
+	show_collection(modal_return, tab)
+
+## Today's retos; new ones replace them at midnight and on Mondays.
+func refresh_missions() -> void:
+	if state.refresh_missions(RunState.day_number(Time.get_date_dict_from_system())):
+		persist()
+
+## " (N)" after a button when rewards are waiting.
+func claims_badge() -> String:
+	return CollectionScreen.badge(state.claimable_count())
 
 func show_arsenal(return_to: String, tab: String = "Equipo") -> void:
 	modal_return = return_to
@@ -1236,7 +1244,7 @@ func toggle_pause_menu() -> void:
 	ui.button(v, "OPCIONES", func(): show_options("pause"), 50)
 	ui.button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
 	ui.button(v, "ARSENAL", func(): show_arsenal("pause"), 50)
-	ui.button(v, "COLECCIÓN", func(): show_collection("pause"), 50)
+	ui.button(v, "RETOS Y COLECCIÓN" + claims_badge(), func(): show_collection("pause"), 50)
 	ui.button(v, "MENÚ PRINCIPAL", func():
 		persist()
 		show_title()
@@ -1395,7 +1403,7 @@ func show_camp() -> void:
 		eclipse_b.custom_minimum_size.x = 150
 		eclipse_b.tooltip_text = eclipse_text()
 	ui.button(actions, "ARSENAL", func(): show_arsenal("camp"), 58).custom_minimum_size.x = 150
-	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 160
+	ui.button(actions, "RETOS" + claims_badge(), func(): show_collection("camp"), 58).custom_minimum_size.x = 160
 	var go = ui.button(actions, "RENACER   →   [ENTER]", rebirth, 58, 21)
 	go.tooltip_text = "Nueva expedición con " + state.BEARERS[state.bearer].name
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1563,6 +1571,18 @@ func capture() -> void:
 				state.finish_run()
 				fall_timer = -1.0
 				show_camp()
+			"retos", "logros", "bestiary":
+				state.refresh_missions(RunState.day_number(Time.get_date_dict_from_system()))
+				state.daily[0].progress = state.daily[0].target
+				state.daily[1].progress = int(state.daily[1].target / 2)
+				state.weekly[0].progress = int(state.weekly[0].target * 0.7)
+				for id in ["first_kill", "king", "interrupts", "parry", "chests", "synergy"]:
+					state.unlock(id)
+				state.achievements_claimed = ["first_kill", "synergy"]
+				for id in ["enemy:slime", "enemy:wisp", "enemy:sentinel", "enemy:guardian", "enemy:king", "enemy:bell"]:
+					state.remember(id)
+				state.bestiary = {"slime": 212, "wisp": 180, "sentinel": 164, "guardian": 21, "king": 4, "bell": 2}
+				show_collection("pause", {"retos": "Retos", "logros": "Logros", "bestiary": "Enemigos"}[shot])
 			"bearers":
 				state.achievements.append("parry")
 				state.total_chests = 9
