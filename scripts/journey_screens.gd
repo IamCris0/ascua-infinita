@@ -157,6 +157,8 @@ static func loot_icon(game, entry: Dictionary) -> Texture2D:
 		"forge": return game.lib.upgrade_icon(int(entry.amount))
 		"relic": return game.lib.map_icon("milestone")
 		"chest": return game.lib.map_icon("chest")
+		"scrap": return game.lib.item_icon("scrap")
+		"item": return game.lib.item_icon(entry.item.base)
 	return null
 
 static func sector_icon(game, kind: String) -> Texture2D:

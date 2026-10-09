@@ -28,6 +28,7 @@ signal weak_struck
 signal node_entered(node: String)
 signal chest_opened(tier: int, loot: Array)
 signal wheel_spun(index: int)
+signal item_found(item: Dictionary)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -100,7 +101,9 @@ const ACHIEVEMENTS = [
 	{"id": "parry", "name": "Guardia perfecta", "description": "Para 25 golpes enemigos."},
 	{"id": "weak", "name": "Ojo certero", "description": "Acierta 50 puntos débiles."},
 	{"id": "chests", "name": "Cazatesoros", "description": "Abre 15 cofres."},
-	{"id": "jackpot", "name": "La rueda sonríe", "description": "Consigue Oro ×3 en la Rueda del eclipse."}]
+	{"id": "jackpot", "name": "La rueda sonríe", "description": "Consigue Oro ×3 en la Rueda del eclipse."},
+	{"id": "legendary", "name": "Leyenda forjada", "description": "Encuentra una pieza legendaria."},
+	{"id": "smith", "name": "Mano de herrero", "description": "Sube una pieza a su nivel máximo."}]
 const HISTORY_SIZE = 8
 # Mapa de caminos. After each milestone relic the map offers three lanes for
 # the next four chambers; the fifth (milestone or boss) is shared. Every node
@@ -131,6 +134,60 @@ const LOOT_ESSENCE = [1, 2, 4]
 # The Rueda has ten equal sectors; each one lands one time in ten.
 const WHEEL = ["gold2", "nothing", "heal", "gold3", "nothing", "relic", "gold2", "chest", "nothing", "essence"]
 const WHEEL_NAMES = {"gold2": "Oro ×2", "gold3": "Oro ×3", "nothing": "Nada", "heal": "Vida", "relic": "Reliquia", "chest": "Cofre", "essence": "Ascuas"}
+# Arsenal: permanent equipment in three slots. Pieces come from chests,
+# elites and bosses, keep their level between expeditions and are upgraded
+# or salvaged with esquirlas. A piece's power is its base value times its
+# rarity, plus LEVEL_STEP of that per level.
+const SLOTS = ["weapon", "talisman", "amulet"]
+const SLOT_NAMES = {"weapon": "Arma", "talisman": "Talismán", "amulet": "Amuleto"}
+const RARITIES = ["Común", "Rara", "Épica", "Legendaria"]
+const RARITY_COLORS = ["b8c0c8", "6fb4ff", "c48cf5", "ffb347"]
+# Tuned with the bot over three seeds: the arsenal adds about five chambers to
+# active play by the ninth to twelfth expedition.
+const RARITY_POWER = [1.0, 1.35, 1.8, 2.4]
+const RARITY_MAX_LEVEL = [4, 6, 8, 10]
+# Icon order follows assets/art/loot/items.png.
+const ITEM_IDS = ["ash_sword", "comet_blade", "rune_spear", "wisp_lantern", "black_hourglass", "silver_bell", "moss_charm", "split_coin", "forge_scale"]
+const ITEMS = {
+	"ash_sword": {"slot": "weapon", "name": "Espada de ceniza", "stat": "click", "base": 0.05},
+	"comet_blade": {"slot": "weapon", "name": "Hoja del cometa", "stat": "crit", "base": 0.015},
+	"rune_spear": {"slot": "weapon", "name": "Lanza rúnica", "stat": "burst", "base": 0.08},
+	"wisp_lantern": {"slot": "talisman", "name": "Farol de luceros", "stat": "wisp", "base": 0.05},
+	"black_hourglass": {"slot": "talisman", "name": "Reloj de arena negra", "stat": "cooldown", "base": 0.025},
+	"silver_bell": {"slot": "talisman", "name": "Campanilla de plata", "stat": "speed", "base": 0.025},
+	"moss_charm": {"slot": "amulet", "name": "Amuleto de musgo", "stat": "hp", "base": 0.04},
+	"split_coin": {"slot": "amulet", "name": "Moneda partida", "stat": "gold", "base": 0.05},
+	"forge_scale": {"slot": "amulet", "name": "Escama de forja", "stat": "guard", "base": 0.02}}
+const STAT_TEXT = {"click": "+%s%% de daño por clic", "crit": "+%s%% de probabilidad crítica", "burst": "+%s%% de daño de Destello",
+	"wisp": "+%s%% de daño de luceros", "cooldown": "−%s%% de recarga de Destello", "speed": "+%s%% de velocidad de luceros",
+	"hp": "+%s%% de vida máxima", "gold": "+%s%% de oro", "guard": "−%s%% de daño recibido"}
+const STAT_NAMES = {"click": "más daño por clic", "crit": "más probabilidad crítica", "burst": "más daño de Destello", "wisp": "más daño de luceros",
+	"cooldown": "Destello recarga antes", "speed": "luceros más rápidos", "hp": "más vida máxima", "gold": "más oro", "guard": "menos daño recibido"}
+const TRAIT_IDS = ["vampire", "keen", "steady", "thorns", "lucky", "embers"]
+const TRAITS = {
+	"vampire": {"name": "Sed de brasas", "text": "Tus críticos manuales curan un 1% de tu vida máxima."},
+	"keen": {"name": "Ojo de halcón", "text": "Los puntos débiles aparecen el doble de a menudo."},
+	"steady": {"name": "Pulso sereno", "text": "La parada perfecta dura 0,1 s más."},
+	"thorns": {"name": "Espinas de obsidiana", "text": "Al bloquear devuelves el doble del daño que te llega."},
+	"lucky": {"name": "Buena estrella", "text": "Un 30% de los cofres sube un nivel de calidad."},
+	"embers": {"name": "Imán de ascuas", "text": "Las ascuas errantes aparecen el doble de a menudo."}}
+# Each level adds this share of the piece's base power.
+const LEVEL_STEP = 0.08
+const SALVAGE = [2, 5, 12, 30]
+const UPGRADE_STEP = [2, 3, 5, 8]
+const ARMORY_SIZE = 24
+# Chance of each rarity by where a piece is found.
+const RARITY_WEIGHTS = {"elite": [70, 25, 5, 0], "wood": [65, 28, 7, 0], "iron": [45, 38, 14, 3], "eclipse": [20, 40, 30, 10], "boss": [40, 38, 18, 4]}
+const ELITE_DROP = 0.15
+# Maestrías: permanent upgrades of the three skills, bought with esquirlas.
+# Each level costs `cost` times the level it reaches.
+const MASTERIES = [
+	{"id": "burst_power", "name": "Destello ardiente", "text": "+8% de daño de Destello por nivel", "max": 5, "cost": 9},
+	{"id": "burst_haste", "name": "Recarga veloz", "text": "−4% de recarga de Destello por nivel", "max": 5, "cost": 12},
+	{"id": "guard_window", "name": "Guardia amplia", "text": "+0,04 s de parada perfecta por nivel", "max": 3, "cost": 15},
+	{"id": "riposte", "name": "Contraataque", "text": "+0,5× al contraataque de la parada por nivel", "max": 4, "cost": 12},
+	{"id": "firm_guard", "name": "Guardia firme", "text": "El bloqueo detiene un 5% más del golpe por nivel", "max": 4, "cost": 12},
+	{"id": "weak_eye", "name": "Ojo afilado", "text": "+0,25 s de punto débil y +0,2× a su golpe por nivel", "max": 4, "cost": 12}]
 const OATH_ECHO = 8
 const OATH_SWARM = 11
 const OATH_LAST_BREATH = 13
@@ -273,6 +330,15 @@ var total_parries: int = 0
 var total_weak: int = 0
 var total_chests: int = 0
 var total_spins: int = 0
+var total_items: int = 0
+# Arsenal (permanent)
+var armory: Array = []
+var equipped: Dictionary = {"weapon": -1, "talisman": -1, "amulet": -1}
+var scrap: int = 0
+var masteries: Dictionary = {}
+var next_item_uid: int = 1
+# Pieces found during this expedition, for the summary.
+var run_items: Array = []
 var fight_clicks: int = 0
 var last_banked: int = 0
 var total_kills: int = 0
@@ -317,6 +383,9 @@ func collection_catalog() -> Array:
 		entries.append({"id": "relic:" + relic.id, "category": "Reliquias", "name": relic.name, "description": relic.description})
 	for synergy in SYNERGIES:
 		entries.append({"id": "synergy:" + synergy.id, "category": "Sinergias", "name": synergy.name, "description": synergy.description})
+	for id in ITEM_IDS:
+		var item: Dictionary = ITEMS[id]
+		entries.append({"id": "item:" + id, "category": "Arsenal", "name": item.name, "description": "%s · %s. Su fuerza depende de la rareza y el nivel." % [SLOT_NAMES[item.slot], STAT_NAMES[item.stat]]})
 	return entries
 
 func remember(id: String) -> void:
@@ -433,42 +502,42 @@ func legacy_level(kind: int) -> int:
 	return int(legacy[kind]) if kind < legacy.size() else 0
 
 func max_hp() -> float:
-	return 120.0 + legacy_level(1) * 20 + count_relic("heart") * 35 + armor * 15
+	return (120.0 + legacy_level(1) * 20 + count_relic("heart") * 35 + armor * 15) * (1.0 + gear("hp"))
 
 func power_multiplier() -> float:
 	return (1.0 + legacy_level(0) * 0.08) * (1.0 + altar_pacts * 0.2)
 
 func click_damage() -> float:
 	var base = (5.0 + blade * 3.5 + legacy_level(0) * 2) * (1.0 + count_relic("fang") * 0.3) * power_multiplier()
-	return base * (2.0 if fury_time > 0 else 1.0) * (0.9 if oath == OATH_SWARM else 1.0)
+	return base * (2.0 if fury_time > 0 else 1.0) * (0.9 if oath == OATH_SWARM else 1.0) * (1.0 + gear("click"))
 
 func wisp_damage() -> float:
-	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier()
+	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier() * (1.0 + gear("wisp"))
 
 func auto_damage() -> float:
 	return wisps * wisp_damage() * (1.3 if has_synergy("chorus") and manual_rest >= 2.0 else 1.0)
 
 ## Seconds between companion volleys: Órbita veloz and the Enjambre oath.
 func wisp_interval() -> float:
-	return (1.0 - mini(legacy_level(10), LEGACY[10].max) * 0.05) * (0.75 if oath == OATH_SWARM else 1.0)
+	return (1.0 - mini(legacy_level(10), LEGACY[10].max) * 0.05) * (0.75 if oath == OATH_SWARM else 1.0) / (1.0 + gear("speed"))
 
 func max_combo() -> int:
 	return COMBO_BASE + mini(legacy_level(7), LEGACY[7].max) * 5
 
 func critical_chance() -> float:
-	return minf(0.65, 0.08 + count_relic("eye") * 0.12 + focus * 0.03 + mini(legacy_level(6), LEGACY[6].max) * 0.02)
+	return minf(0.65, 0.08 + count_relic("eye") * 0.12 + focus * 0.03 + mini(legacy_level(6), LEGACY[6].max) * 0.02 + gear("crit"))
 
 func critical_multiplier() -> float:
 	return 2.0 + focus * 0.1
 
 func gold_multiplier() -> float:
-	return (1.0 + 0.35 * count_relic("coin")) * (1.0 + legacy_level(3) * 0.1) * (1.25 if biome() == 2 else 1.0)
+	return (1.0 + 0.35 * count_relic("coin")) * (1.0 + legacy_level(3) * 0.1) * (1.25 if biome() == 2 else 1.0) * (1.0 + gear("gold"))
 
 func burst_damage() -> float:
-	return (click_damage() * 8 + auto_damage() * 3) * (1.0 + count_relic("storm") * 0.25)
+	return (click_damage() * 8 + auto_damage() * 3) * (1.0 + count_relic("storm") * 0.25) * (1.0 + gear("burst")) * (1.0 + 0.08 * mastery("burst_power"))
 
 func burst_max_cooldown() -> float:
-	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX)) * (1.2 if eclipse >= 3 else 1.0)
+	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX)) * (1.2 if eclipse >= 3 else 1.0) * (1.0 - gear("cooldown")) * (1.0 - 0.04 * mastery("burst_haste"))
 
 func legacy_maxed(kind: int) -> bool:
 	return legacy_level(kind) >= LEGACY[kind].max
@@ -673,6 +742,8 @@ func tick(delta: float) -> void:
 				echo_strike.emit()
 			if pending_critical and has_synergy("precision"):
 				burst_cooldown = maxf(0, burst_cooldown - 0.4)
+			if pending_critical and has_trait("vampire"):
+				hp = minf(max_hp(), hp + max_hp() * 0.01)
 			damage_enemy(damage, pending_critical, false)
 			if not active() or spawn_delay > 0:
 				return
@@ -739,7 +810,27 @@ func parry() -> bool:
 
 ## A blow landing now would meet a perfect parry: the guard went up just in time.
 func perfect_guard() -> bool:
-	return parry_window > 0 and parry_window >= PARRY_WINDOW - PARRY_PERFECT
+	return parry_window > 0 and parry_window >= PARRY_WINDOW - perfect_window()
+
+## Length of the perfect part of the guard: Guardia amplia and Pulso sereno add to it.
+func perfect_window() -> float:
+	return minf(PARRY_WINDOW, PARRY_PERFECT + 0.04 * mastery("guard_window") + (0.1 if has_trait("steady") else 0.0))
+
+func block_share() -> float:
+	return PARRY_BLOCK - 0.05 * mastery("firm_guard")
+
+func riposte_power() -> float:
+	return PARRY_RIPOSTE + 0.5 * mastery("riposte")
+
+func weak_duration() -> float:
+	return WEAK_TIME + 0.25 * mastery("weak_eye")
+
+func weak_bonus() -> float:
+	return WEAK_BONUS + 0.2 * mastery("weak_eye")
+
+## Seconds before the next weak point: Ojo de halcón halves the wait.
+func _weak_wait() -> float:
+	return rng.randf_range(6, 10) * (0.5 if has_trait("keen") else 1.0)
 
 ## Seconds until the next normal blow lands, or -1 when none is coming.
 func blow_in() -> float:
@@ -753,9 +844,12 @@ func _guard_blow() -> void:
 	parry_window = 0
 	parry_cooldown = PARRY_RECOVER
 	if not perfect:
+		var through = enemy_damage() * block_share()
 		parried.emit(false)
-		event.emit("Bloqueo · el golpe pierde la mitad")
-		_hit_hero(enemy_damage() * PARRY_BLOCK, false)
+		event.emit("Bloqueo · el golpe pierde un %d%%" % roundi((1.0 - block_share()) * 100))
+		_hit_hero(through, false)
+		if has_trait("thorns") and active():
+			damage_enemy(through * 2.0, false, true)
 		return
 	stun_time = PARRY_STUN
 	total_parries += 1
@@ -765,19 +859,19 @@ func _guard_blow() -> void:
 	event.emit("¡Parada perfecta! " + enemy_name() + " queda aturdido")
 	if is_boss() and PARRY_BOSS > 0:
 		_hit_hero(enemy_damage() * PARRY_BOSS, false)
-	damage_enemy(click_damage() * PARRY_RIPOSTE, false, false)
+	damage_enemy(click_damage() * riposte_power(), false, false)
 
 func _tick_weak(delta: float) -> void:
 	if weak_active:
 		weak_timer = maxf(0, weak_timer - delta)
 		if weak_timer <= 0:
 			weak_active = false
-			weak_cooldown = rng.randf_range(6, 10)
+			weak_cooldown = _weak_wait()
 		return
 	weak_cooldown = maxf(0, weak_cooldown - delta)
 	if weak_cooldown <= 0:
 		weak_active = true
-		weak_timer = WEAK_TIME
+		weak_timer = weak_duration()
 		weak_pos = Vector2(rng.randf_range(-0.7, 0.7), rng.randf_range(-0.6, 0.5))
 		weak_appeared.emit()
 
@@ -791,6 +885,7 @@ func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 		shelter_ready = false
 		event.emit("Refugio de musgo · protege del 40% del golpe")
 	amount *= 1.0 - mini(legacy_level(12), LEGACY[12].max) * 0.04
+	amount *= 1.0 - gear("guard")
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
 	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
@@ -809,7 +904,7 @@ func _tick_ember(delta: float) -> void:
 		ember_timer = maxf(0, ember_timer - delta)
 		if ember_timer <= 0:
 			ember_active = false
-			ember_cooldown = rng.randf_range(35, 70)
+			ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0)
 		return
 	if room < 3:
 		return
@@ -824,7 +919,7 @@ func collect_ember() -> String:
 	if not ember_active or not active():
 		return ""
 	ember_active = false
-	ember_cooldown = rng.randf_range(35, 70)
+	ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0)
 	total_embers += 1
 	if total_embers >= 25:
 		unlock("embers")
@@ -865,10 +960,10 @@ func click(weak: bool = false) -> bool:
 	if charging and bell_silence():
 		bell_resonance = mini(3, bell_resonance + 1)
 	pending_critical = weak or rng.randf() < critical_chance()
-	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0) * (WEAK_BONUS if weak else 1.0)
+	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0) * (weak_bonus() if weak else 1.0)
 	if weak:
 		weak_active = false
-		weak_cooldown = rng.randf_range(6, 10)
+		weak_cooldown = _weak_wait()
 		burst_cooldown = maxf(0, burst_cooldown - WEAK_RECHARGE)
 		total_weak += 1
 		if total_weak >= 50:
@@ -965,6 +1060,11 @@ func defeat_enemy() -> void:
 	total_kills += 1
 	run_kills += 1
 	unlock("first_kill")
+	if boss:
+		grant_item(make_item("boss"))
+		scrap += 1 + cycle()
+	elif enemy_elite and rng.randf() < ELITE_DROP:
+		grant_item(make_item("elite"))
 	if boss:
 		total_bosses += 1
 		run_bosses += 1
@@ -1113,6 +1213,8 @@ func _enter_node() -> void:
 			journey_phase = "chest"
 			var roll = rng.randf()
 			chest_tier = 2 if roll < 0.1 else (1 if roll < (0.4 if room < 20 else 0.55) else 0)
+			if has_trait("lucky") and rng.randf() < 0.3:
+				chest_tier = mini(2, chest_tier + 1)
 			event.emit(CHEST_NAMES[chest_tier] + " · ábrelo antes del combate")
 		"shrine", "merchant", "altar", "wheel":
 			journey_phase = "event"
@@ -1133,6 +1235,8 @@ func encounter_cost() -> int:
 func roll_loot(tier: int) -> Array:
 	var loot: Array = []
 	var weights: Dictionary = LOOT_WEIGHTS.duplicate()
+	weights["item"] = [1, 2, 3][tier]
+	weights["scrap"] = 2
 	if LOOT_RELIC[tier] > 0:
 		weights["relic"] = LOOT_RELIC[tier]
 	if hp >= max_hp() * 0.9:
@@ -1152,6 +1256,8 @@ func _loot_entry(kind: String, tier: int) -> Dictionary:
 		"essence": return {"kind": kind, "amount": LOOT_ESSENCE[tier]}
 		"heal": return {"kind": kind, "amount": floor(max_hp() * 0.35)}
 		"forge": return {"kind": kind, "amount": [0, 2, 3][rng.randi_range(0, 2)]}
+		"scrap": return {"kind": kind, "amount": [3, 6, 12][tier]}
+		"item": return {"kind": kind, "amount": 1, "item": make_item(["wood", "iron", "eclipse"][tier])}
 	return {"kind": kind, "amount": 1}
 
 func loot_text(entry: Dictionary) -> String:
@@ -1163,6 +1269,8 @@ func loot_text(entry: Dictionary) -> String:
 		"forge": return UPGRADES[int(entry.amount)].name + " +1"
 		"relic": return "Una reliquia a elegir"
 		"chest": return "Un cofre de hierro"
+		"scrap": return "+%d esquirlas" % int(entry.amount)
+		"item": return item_name(entry.item) + " (" + RARITIES[entry.item.rarity].to_lower() + ")"
 		"nothing": return "Nada"
 	return ""
 
@@ -1183,6 +1291,8 @@ func _apply_loot(entry: Dictionary) -> void:
 		"chest":
 			journey_phase = "chest"
 			chest_tier = 1
+		"scrap": scrap += int(entry.amount)
+		"item": grant_item(entry.item)
 
 func open_chest() -> Array:
 	if journey_phase != "chest" or dead or paused:
@@ -1251,6 +1361,150 @@ func resolve_encounter(accept: bool) -> bool:
 			event.emit(NODES[kind].name + " · trato completado")
 	else:
 		event.emit(NODES[kind].name + " · sigues tu camino")
+	changed.emit()
+	return true
+
+# ---------------------------------------------------------------- arsenal
+func _weighted_index(weights: Array) -> int:
+	var total := 0
+	for w in weights:
+		total += w
+	var roll = rng.randi_range(1, total)
+	for i in range(weights.size()):
+		roll -= weights[i]
+		if roll <= 0:
+			return i
+	return 0
+
+func make_item(source: String) -> Dictionary:
+	var rarity = _weighted_index(RARITY_WEIGHTS[source])
+	var base: String = ITEM_IDS[rng.randi_range(0, ITEM_IDS.size() - 1)]
+	var quirk = ""
+	if rarity == 3 or (rarity == 2 and rng.randf() < 0.4):
+		quirk = TRAIT_IDS[rng.randi_range(0, TRAIT_IDS.size() - 1)]
+	var item = {"uid": next_item_uid, "base": base, "rarity": rarity, "level": 0, "trait": quirk}
+	next_item_uid += 1
+	return item
+
+## A found piece joins the arsenal; with the arsenal full it becomes esquirlas.
+func grant_item(item: Dictionary) -> void:
+	total_items += 1
+	remember("item:" + item.base)
+	if item.rarity == 3:
+		unlock("legendary")
+	if armory.size() >= ARMORY_SIZE:
+		scrap += salvage_value(item)
+		event.emit("Arsenal lleno · %s se funde en %d esquirlas" % [item_name(item), salvage_value(item)])
+	else:
+		armory.append(item)
+		run_items.append(item.uid)
+		event.emit("Botín · %s (%s)" % [item_name(item), RARITIES[item.rarity].to_lower()])
+	item_found.emit(item)
+
+func item_by_uid(uid: int) -> Dictionary:
+	for item in armory:
+		if item.uid == uid:
+			return item
+	return {}
+
+func equipped_item(slot: String) -> Dictionary:
+	var uid = int(equipped.get(slot, -1))
+	return item_by_uid(uid) if uid >= 0 else {}
+
+func is_equipped(uid: int) -> bool:
+	return equipped.values().has(uid)
+
+func item_name(item: Dictionary) -> String:
+	return ITEMS[item.base].name
+
+func item_value(item: Dictionary) -> float:
+	return ITEMS[item.base].base * RARITY_POWER[item.rarity] * (1.0 + LEVEL_STEP * item.level)
+
+## The piece's effect as text, with its current value.
+func item_stat_text(item: Dictionary) -> String:
+	var v = item_value(item) * 100.0
+	var number = str(roundi(v)) if absf(v - roundf(v)) < 0.05 else ("%.1f" % v).replace(".", ",")
+	return STAT_TEXT[ITEMS[item.base].stat] % number
+
+## Sum of an equipped stat (0.1 = 10%).
+func gear(stat: String) -> float:
+	var total := 0.0
+	for slot in SLOTS:
+		var item = equipped_item(slot)
+		if not item.is_empty() and ITEMS[item.base].stat == stat:
+			total += item_value(item)
+	return total
+
+func has_trait(id: String) -> bool:
+	for slot in SLOTS:
+		var item = equipped_item(slot)
+		if not item.is_empty() and item["trait"] == id:
+			return true
+	return false
+
+func max_item_level(item: Dictionary) -> int:
+	return RARITY_MAX_LEVEL[item.rarity]
+
+func upgrade_cost(item: Dictionary) -> int:
+	return (item.level + 1) * UPGRADE_STEP[item.rarity]
+
+func salvage_value(item: Dictionary) -> int:
+	return SALVAGE[item.rarity] + int(item.level * UPGRADE_STEP[item.rarity] * 0.5)
+
+## Pieces can be changed at any time; health never exceeds the new maximum.
+func equip(uid: int) -> bool:
+	var item = item_by_uid(uid)
+	if item.is_empty():
+		return false
+	equipped[ITEMS[item.base].slot] = uid
+	hp = minf(hp, max_hp())
+	changed.emit()
+	return true
+
+func unequip(slot: String) -> bool:
+	if int(equipped.get(slot, -1)) < 0:
+		return false
+	equipped[slot] = -1
+	hp = minf(hp, max_hp())
+	changed.emit()
+	return true
+
+func upgrade_item(uid: int) -> bool:
+	var item = item_by_uid(uid)
+	if item.is_empty() or item.level >= max_item_level(item) or scrap < upgrade_cost(item):
+		return false
+	scrap -= upgrade_cost(item)
+	item.level += 1
+	if item.level >= max_item_level(item):
+		unlock("smith")
+	changed.emit()
+	return true
+
+## Equipped pieces must be taken off before they are salvaged.
+func salvage(uid: int) -> bool:
+	var item = item_by_uid(uid)
+	if item.is_empty() or is_equipped(uid):
+		return false
+	scrap += salvage_value(item)
+	armory.erase(item)
+	run_items.erase(uid)
+	changed.emit()
+	return true
+
+func mastery(id: String) -> int:
+	return int(masteries.get(id, 0))
+
+func mastery_cost(index: int) -> int:
+	return MASTERIES[index].cost * (mastery(MASTERIES[index].id) + 1)
+
+func buy_mastery(index: int) -> bool:
+	if index < 0 or index >= MASTERIES.size():
+		return false
+	var id: String = MASTERIES[index].id
+	if mastery(id) >= MASTERIES[index].max or scrap < mastery_cost(index):
+		return false
+	scrap -= mastery_cost(index)
+	masteries[id] = mastery(id) + 1
 	changed.emit()
 	return true
 
@@ -1335,6 +1589,7 @@ func restart() -> void:
 	chest_tier = 0
 	last_loot = []
 	wheel_result = -1
+	run_items = []
 	run_essence = 0
 	run_kills = 0
 	run_gold = 0
@@ -1363,7 +1618,7 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
 	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
 	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak",
-	"total_chests", "total_spins", "lane_start", "chest_tier"]
+	"total_chests", "total_spins", "lane_start", "chest_tier", "scrap", "next_item_uid", "total_items"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -1375,7 +1630,7 @@ const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready":
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0,
-	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME, "weak_cooldown": 10.0}
+	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME + 1.0, "weak_cooldown": 10.0}
 
 func snapshot() -> Dictionary:
 	var data := {"version": SAVE_VERSION, "discoveries": discoveries.duplicate(), "relics": relics, "offers": offers, "legacy": legacy,
@@ -1396,6 +1651,10 @@ func snapshot() -> Dictionary:
 	data.encounter_kind = encounter_kind
 	data.lanes = lanes.duplicate(true)
 	data.lane = lane
+	data.armory = armory.duplicate(true)
+	data.equipped = equipped.duplicate()
+	data.masteries = masteries.duplicate()
+	data.run_items = run_items.duplicate()
 	return data
 
 func save_game(path: String = SAVE_PATH) -> bool:
@@ -1437,7 +1696,7 @@ static func _migrate(data: Dictionary) -> Dictionary:
 	if not data.has("oath"):
 		data.oath = -1
 	# Before Eclipse, achievements and the expedition log.
-	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak", "total_chests", "total_spins", "lane_start", "chest_tier"]:
+	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak", "total_chests", "total_spins", "lane_start", "chest_tier", "scrap", "total_items"]:
 		if not data.has(key):
 			data[key] = 0
 	for key in ["achievements", "history"]:
@@ -1455,6 +1714,13 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.ember_pos = [0.5, 0.4]
 	if not data.has("weak_pos"):
 		data.weak_pos = [0.0, 0.0]
+	# Before the arsenal: nothing found or equipped yet.
+	if not data.has("armory"):
+		data.armory = []
+		data.equipped = {"weapon": -1, "talisman": -1, "amulet": -1}
+		data.masteries = {}
+		data.run_items = []
+		data.next_item_uid = 1
 	# Before the map: no lanes. A pending route becomes a map on load.
 	if not data.has("lanes"):
 		data.lanes = []
@@ -1553,6 +1819,8 @@ func _read_save(path: String) -> Variant:
 		return null
 	if data.chest_tier != floor(data.chest_tier) or data.chest_tier > 2:
 		return null
+	if not _valid_arsenal(data):
+		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
 	if data.legacy.size() != LEGACY.size() or data.room < 1 or data.room > 10000:
@@ -1567,6 +1835,41 @@ func _read_save(path: String) -> Variant:
 		if not relic in RELIC_IDS:
 			return null
 	return data
+
+static func _valid_arsenal(data: Dictionary) -> bool:
+	if not data.armory is Array or data.armory.size() > ARMORY_SIZE or not data.equipped is Dictionary or not data.masteries is Dictionary or not data.run_items is Array:
+		return false
+	if data.next_item_uid != floor(data.next_item_uid) or data.next_item_uid < 1 or data.scrap != floor(data.scrap):
+		return false
+	var slots := {}
+	for item in data.armory:
+		if not item is Dictionary or not ITEMS.has(item.get("base")) or not item.get("trait") in [""] + TRAIT_IDS:
+			return false
+		for key in ["uid", "rarity", "level"]:
+			var value = item.get(key)
+			if not (value is float or value is int) or value != floor(value) or value < 0:
+				return false
+		if item.rarity > 3 or item.level > RARITY_MAX_LEVEL[int(item.rarity)] or item.uid >= data.next_item_uid or slots.has(int(item.uid)):
+			return false
+		slots[int(item.uid)] = ITEMS[item.base].slot
+	if data.equipped.size() != SLOTS.size():
+		return false
+	for slot in SLOTS:
+		var uid = data.equipped.get(slot)
+		if not (uid is float or uid is int) or uid != floor(uid) or (uid != -1 and slots.get(int(uid), "") != slot):
+			return false
+	for id in data.masteries:
+		var known := false
+		for entry in MASTERIES:
+			if entry.id == id:
+				var level = data.masteries[id]
+				known = (level is float or level is int) and level == floor(level) and level >= 0 and level <= entry.max
+		if not known:
+			return false
+	for uid in data.run_items:
+		if not (uid is float or uid is int) or not slots.has(int(uid)):
+			return false
+	return true
 
 ## A save this version cannot read (corrupt, or written by a newer version) is
 ## copied aside before a fresh expedition overwrites it. Returns the copy.
@@ -1621,6 +1924,16 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	encounter_kind = data.encounter_kind
 	lanes = data.lanes.duplicate(true)
 	lane = int(data.lane)
+	armory = []
+	for item in data.armory:
+		armory.append({"uid": int(item.uid), "base": item.base, "rarity": int(item.rarity), "level": int(item.level), "trait": item["trait"]})
+	equipped = {}
+	for slot in SLOTS:
+		equipped[slot] = int(data.equipped[slot])
+	masteries = {}
+	for id in data.masteries:
+		masteries[id] = int(data.masteries[id])
+	run_items = data.run_items.map(func(uid): return int(uid))
 	var boss_count = boss_attacks
 	spawn_enemy(false)
 	boss_attacks = boss_count

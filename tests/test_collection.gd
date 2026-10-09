@@ -17,7 +17,7 @@ func run():
 	var s = State.new()
 	s.restart()
 	check(s.discoveries == ["enemy:slime"], "First encounter reveals only its own entry")
-	check(s.collection_catalog().size() == 19, "Catalog includes enemies, relics and synergies")
+	check(s.collection_catalog().size() == 28, "Catalog includes enemies, relics, synergies and the arsenal")
 	s.spawn_enemy(false)
 	check(s.discoveries.size() == 1, "Repeated encounters are deduplicated")
 	s.offers = [0]
@@ -48,7 +48,7 @@ func run():
 	game.show_collection("pause")
 	check(game.modal_type == "collection" and game.state.paused, "Collection pauses combat")
 	var names: Array = game.modal_buttons().map(func(b): return b.text)
-	check(names.has("Enemigos") and names.has("Reliquias") and names.has("Sinergias"), "All catalog categories are navigable")
+	check(names.has("Enemigos") and names.has("Reliquias") and names.has("Sinergias") and names.has("Arsenal"), "All catalog categories are navigable")
 	check(names.has("Logros") and names.has("Registro"), "Achievements and the expedition log have their own tabs")
 	game.state.unlock("first_kill")
 	game.show_collection("pause", "Logros")

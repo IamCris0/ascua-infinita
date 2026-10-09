@@ -115,6 +115,24 @@ func run() -> void:
 			await create_timer(2.2).timeout
 			press(game, "CONTINUAR")
 	check(s.active(), "Combat resumes after the Rueda")
+	# The Arsenal, from the pause menu.
+	game.toggle_pause()
+	check(press(game, "ARSENAL") and game.modal_type == "arsenal" and s.paused, "The pause menu opens the arsenal")
+	var found = s.make_item("boss")
+	s.grant_item(found)
+	game.select_item(found.uid)
+	check(press(game, "EQUIPAR") and s.is_equipped(found.uid), "The sheet equips the selected piece")
+	s.scrap = 1000
+	game.show_arsenal("pause")
+	check(press(game, "MEJORAR") and found.level == 1, "The sheet upgrades the piece")
+	check(press(game, "QUITAR") and not s.is_equipped(found.uid), "The sheet takes the piece off")
+	check(press(game, "DESGUAZAR") and s.item_by_uid(found.uid).is_empty() and game.arsenal_selected == -1, "The sheet salvages a stored piece")
+	check(press(game, "MAESTRÍAS") and game.modal_type == "arsenal", "The masteries tab opens")
+	game.arsenal_action("mastery", 0)
+	check(s.mastery("burst_power") == 1, "A mastery level is bought from its tab")
+	check(press(game, "VOLVER") and game.modal_type == "pause", "Back returns to the pause menu")
+	game.toggle_pause()
+	check(s.active(), "Combat resumes after the arsenal")
 	s.spawn_delay = 0
 	s.burst_cooldown = 0
 	game.try_burst()

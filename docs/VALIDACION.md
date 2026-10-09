@@ -1,5 +1,25 @@
 # Validación del proyecto
 
+## Arsenal (0.8) — 9 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 18 suites sin fallos; partida gráfica de 70 s hasta la cámara 30 sin errores.
+- Nueva `test_arsenal.gd` (54 comprobaciones):
+  - rarezas y rasgos;
+  - cada estadística equipada;
+  - una pieza por ranura;
+  - vida al quitar un amuleto;
+  - mejoras con tope, desguace y arsenal lleno;
+  - maestrías;
+  - rasgos en combate;
+  - botín de jefes y cofres;
+  - guardado y rechazo de arsenales inválidos;
+  - partidas anteriores.
+- `test_ui.gd` (65 comprobaciones): Arsenal desde la pausa; equipar, mejorar, quitar y desguazar con los botones; pestaña de maestrías.
+- `test_progression.gd`: la prueba de élites ya no depende de que el rival anterior fuera élite.
+- Capturas `arsenal.png` y `masteries.png` revisadas.
+- La hoguera con el botón Arsenal cabe sin desplazar.
+- Equilibrio con tres semillas en HOJA_DE_RUTA.md.
+
 ## Mapa, cofres y Rueda (0.7) — 9 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 17 suites sin fallos. La partida gráfica de 70 s llega a la cámara 26 eligiendo caminos, cofres y la Rueda, sin errores.

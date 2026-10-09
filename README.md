@@ -2,7 +2,7 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.7.0-dev**: mapa de caminos, cofres y la Rueda del eclipse, además del combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.8.0-dev**: el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
 
 Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Hay dos formas de jugar mejor que solo hacer clic:
 - **Parada**: alza la guardia justo antes de que llegue un golpe. A tiempo, lo anula, aturde al enemigo y contraatacas; antes de tiempo, solo bloquea la mitad.
@@ -12,6 +12,13 @@ Entre cámaras el portador avanza y el siguiente rival entra caminando. Tras cad
 - **Sendero de las brasas**: descansos y santuarios.
 - **Senda del desafío**: élites y cofres.
 - **Camino del azar**: mercaderes, altares y la **Rueda del eclipse**, una apuesta de oro con diez sectores iguales.
+
+**Arsenal**: los jefes, algunos élites y los cofres dejan piezas de equipo que se conservan al caer:
+- tres ranuras (arma, talismán y amuleto) y nueve piezas;
+- cuatro rarezas: común, rara, épica y legendaria;
+- rasgos especiales en las piezas épicas y legendarias.
+
+Se equipan en cualquier momento desde la pausa o la hoguera. Las **esquirlas** que da el desguace suben las piezas de nivel y compran **maestrías**, mejoras permanentes de Destello, la Parada y el punto débil.
 
 En todas las cámaras hay combate; el icono indica lo que ocurre antes. Los **cofres** se abren a golpes y dan entre una y tres recompensas distintas según su calidad (madera, hierro o eclipse). Todo usa moneda del juego. La barra de cámaras muestra los iconos del camino y, con un clic, vuelve a abrir el mapa. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. La hoguera es un árbol de legado con juramentos ([plan 0.4](docs/PLAN_0_4.md)); al superar la cámara 30 se desbloquean los modos Eclipse, y la Colección guarda logros y el registro de expediciones ([plan 0.5](docs/PLAN_0_5.md)). El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
 
@@ -99,7 +106,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 17 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 18 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -107,14 +114,14 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat, map
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat, map, arsenal
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa
 godot --headless --path . --script tools/simulate.gd -- --sample
 ```
 
-Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel` y `event`).
+Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel`, `event`, `arsenal` y `masteries`).
 
 Al exportar, `export_presets.cfg` ya incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos.
 
