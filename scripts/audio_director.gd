@@ -4,13 +4,13 @@ extends Node
 
 const SFX_DIR = "res://assets/audio/sfx/"
 const MUSIC_DIR = "res://assets/audio/music/"
-const SFX = ["hit_1", "hit_2", "hit_3", "critical", "burst", "hurt", "coin", "buy", "relic", "offer",
+const SFX = ["hit_1", "hit_2", "hit_3", "critical", "burst", "hurt", "coin", "buy", "relic", "offer", "parry", "guard", "weak_appear", "weak_hit", "advance",
 	"die_slime", "die_wisp", "die_sentinel", "die_boss", "boss_appear", "boss_charge", "interrupt",
 	"ember_appear", "ember_take", "fall", "rebirth", "heal", "ui_hover", "ui_click", "ui_open", "ui_close", "ui_denied"]
 const TRACKS = ["menu", "garden", "crypt", "forge", "boss", "camp"]
 # Per-sound base volume (dB) so the mix sits well together.
 const LEVELS = {"ui_hover": -10.0, "ui_click": -6.0, "hit_1": -4.0, "hit_2": -4.0, "hit_3": -4.0, "coin": -8.0,
-	"ember_appear": -4.0, "offer": -4.0, "heal": -3.0}
+	"ember_appear": -4.0, "offer": -4.0, "heal": -3.0, "guard": -8.0, "weak_appear": -6.0, "advance": -9.0}
 
 var streams: Dictionary = {}
 var music: Dictionary = {}

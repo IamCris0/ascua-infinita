@@ -1,9 +1,10 @@
-ASCUA INFINITA — Windows x64 — 0.5.0-dev
+ASCUA INFINITA — Windows x64 — 0.6.0-dev
 
 Extrae todo el ZIP en una carpeta y abre AscuaInfinita.exe.
 Mantén AscuaInfinita.pck junto al ejecutable. No necesitas instalar Godot.
 
-Clic o mantener Espacio: atacar. E: Destello. Escape: menú.
+Clic o mantener Espacio: atacar. E: Destello. R o clic derecho: Parada.
+Clic sobre el punto dorado del enemigo: golpe al punto débil. Escape: menú.
 La colección (con logros y registro) se abre desde el menú y la hoguera.
 En la hoguera compras el árbol de legado y eliges juramento y nivel Eclipse.
 

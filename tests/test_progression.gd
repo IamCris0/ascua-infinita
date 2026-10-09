@@ -119,7 +119,7 @@ func _initialize() -> void:
 	var s = fresh()
 	check(s.hp == s.max_hp() and s.max_hp() == 120, "A new expedition starts at full health")
 	check(s.spawn_delay > 0 and not s.click(), "The first enemy is still arriving")
-	s.tick(0.5)
+	s.tick(s.SPAWN_DELAY + 0.01)
 	check(s.click(), "Click attacks once the enemy has arrived")
 	var hp = s.enemy_hp
 	check(not s.click() and s.enemy_hp == hp, "Rate limit prevents event spam")

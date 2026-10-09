@@ -355,6 +355,56 @@ def sfx():
     print("sfx: %d sounds" % len(out))
 
 
+def sfx_combat():
+    """Sounds added with the active combat of 0.6. They draw noise from their
+    own seed so the older effects and the music render exactly as before."""
+    global rng
+    saved = rng
+    rng = np.random.default_rng(61)
+    out = {}
+
+    # Parada: steel meeting steel, a bright ring and a short scrape.
+    n = int(0.7 * SR)
+    t = t_axis(0.7)
+    ring = sum(np.sin(2 * np.pi * f * t) * w * env_exp(n, d) for f, w, d in [(1560, 0.5, 0.22), (2340, 0.35, 0.16), (3710, 0.25, 0.09), (5120, 0.15, 0.05)])
+    clash = highpass(noise(n), 2200) * env_exp(n, 0.015)
+    scrape = bandpass(noise(n), 3000, 8000) * np.clip(t / 0.02, 0, 1) * np.exp(-t / 0.08) * 0.4
+    body = np.sin(sweep_phase(260, 90, n, 0.5)) * env_exp(n, 0.06)
+    out["parry"] = fade(normalize(reverb(ring * 0.6 + clash + scrape + body * 0.7, 0.22), 0.88))
+
+    # Guard raised: a quick airy swish.
+    n = int(0.22 * SR)
+    t = t_axis(0.22)
+    swish = bandpass(noise(n), 900, 5000) * np.sin(np.pi * np.clip(t / 0.22, 0, 1)) ** 2
+    out["guard"] = fade(normalize(swish, 0.35))
+
+    # Weak point lights up: two soft rising pings.
+    y = np.zeros(int(0.7 * SR))
+    for k, m in enumerate([86, 93]):
+        mix_at(y, fm_bell(midi(m), 0.5, 1.5, 0.5, 0.18) * 0.5, k * 0.07)
+    out["weak_appear"] = fade(normalize(reverb(y, 0.35), 0.4))
+
+    # Weak point struck: a glassy crack over a heavy thump.
+    n = int(0.6 * SR)
+    t = t_axis(0.6)
+    crack = highpass(noise(n), 2600) * env_exp(n, 0.025)
+    chime = sum(np.sin(2 * np.pi * f * t) * env_exp(n, 0.2) for f in [2093, 3136, 4186]) * 0.3
+    thud = np.sin(sweep_phase(240, 45, n, 0.5)) * env_exp(n, 0.1)
+    out["weak_hit"] = fade(normalize(crack * 0.7 + chime + thud, 0.9))
+
+    # Walking on to the next chamber: soft steps in the dark.
+    y = np.zeros(int(1.0 * SR))
+    for k in range(3):
+        step = lowpass(noise(int(0.12 * SR)), 500) * env_exp(int(0.12 * SR), 0.03)
+        mix_at(y, step * (0.8 - k * 0.15), 0.1 + k * 0.3)
+    out["advance"] = fade(normalize(reverb(y, 0.3), 0.3))
+
+    for name, sig in out.items():
+        write_wav(os.path.join(SFX_DIR, name + ".wav"), sig)
+    rng = saved
+    print("sfx: %d combat sounds" % len(out))
+
+
 # ---------------------------------------------------------------- music
 class Song:
     def __init__(self, bpm, bars, beats_per_bar=4):
@@ -574,6 +624,10 @@ def write_ogg(name, x):
 
 
 if __name__ == "__main__":
+    import sys
     sfx()
+    sfx_combat()
+    if "--sfx" in sys.argv:
+        sys.exit(0)
     for name, fn in [("menu", song_menu), ("garden", song_garden), ("crypt", song_crypt), ("forge", song_forge), ("boss", song_boss), ("camp", song_camp)]:
         write_ogg(name, fn())

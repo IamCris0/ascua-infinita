@@ -77,6 +77,27 @@ func run() -> void:
 	s.ember_active = true
 	game.arena.ember_clicked.emit()
 	check(not s.ember_active and s.total_embers == 1, "Clicking an ember collects it")
+	s.spawn_delay = 0
+	s.parry_cooldown = 0
+	s.attack_timer = s.attack_interval() - 0.2
+	s.stun_time = 0
+	s.charging = false
+	if s.next_is_heavy():
+		s.boss_attacks += 1
+	game.refresh()
+	check(game.parry_label.text.begins_with("¡PARA!") and not game.parry_button.disabled, "The parry button calls the moment to guard")
+	var guard_key = InputEventKey.new()
+	guard_key.keycode = KEY_R
+	guard_key.pressed = true
+	game._unhandled_key_input(guard_key)
+	check(s.parry_window > 0, "R raises the guard")
+	game.refresh()
+	check(game.parry_label.text == "GUARDIA ALZADA", "The parry button shows the raised guard")
+	s.weak_active = true
+	s.weak_timer = 2.0
+	s.click_cooldown = 0
+	game.arena.weak_clicked.emit()
+	check(not s.weak_active and s.total_weak == 1, "Clicking the weak point strikes it")
 	game.confirm_retreat()
 	check(game.modal_type == "retreat" and s.paused, "Retreat asks for confirmation")
 	var bank = s.run_essence
@@ -163,6 +184,19 @@ func run() -> void:
 	check(s.enemy_hp == paused_hp, "Held attack cannot bypass pause")
 	held.pressed = false
 	Input.parse_input_event(held)
+	# Hit-stops are off in QA runs; enable them for one call (no save happens).
+	s.reduced_motion = false
+	game.qa_mode = false
+	game.hitstop(0.05)
+	game.qa_mode = true
+	check(Engine.time_scale < 0.1, "A hit-stop slows the action")
+	await create_timer(0.12, true, false, true).timeout
+	check(Engine.time_scale == 1.0, "The action resumes on its own after a hit-stop")
+	s.reduced_motion = true
+	game.qa_mode = false
+	game.hitstop(0.05)
+	game.qa_mode = true
+	check(Engine.time_scale == 1.0, "Reduced motion has no hit-stops")
 	print("UI: %d checks, %d failures" % [checks, failures])
 	game.queue_free()
 	await process_frame

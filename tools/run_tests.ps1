@@ -34,6 +34,7 @@ $suites = @(
     @('tests/test_legacy_tree.gd'),
     @('tests/test_boss_intro.gd'),
     @('tests/test_eclipse.gd'),
+    @('tests/test_active_combat.gd'),
     @('tests/test_collection.gd', '--qa'),
     @('tests/test_ui.gd', '--qa')
 )

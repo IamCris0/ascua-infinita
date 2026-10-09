@@ -2,9 +2,13 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.5.0-dev**: Caminos del Eclipse, Constelación del Legado y modos Eclipse.
+Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.6.0-dev**: combate activo con Parada y puntos débiles, sobre los Caminos del Eclipse, la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
 
-Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. La hoguera es un árbol de legado con juramentos ([plan 0.4](docs/PLAN_0_4.md)); al superar la cámara 30 se desbloquean los modos Eclipse, y la Colección guarda logros y el registro de expediciones ([plan 0.5](docs/PLAN_0_5.md)). El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
+Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Hay dos formas de jugar mejor que solo hacer clic:
+- **Parada**: alza la guardia justo antes de que llegue un golpe. A tiempo, lo anula, aturde al enemigo y contraatacas; antes de tiempo, solo bloquea la mitad.
+- **Punto débil**: de vez en cuando se ilumina un punto dorado sobre el enemigo. Un clic encima es un crítico seguro.
+
+Entre cámaras el portador avanza y el siguiente rival entra caminando. Tras cada reliquia eliges entre descanso, élite o un evento opcional. Santuario, mercader y altar ya son jugables con recursos provisionales. Cada ambiente tiene su jefe: el Rey sin Brasa en el Jardín, la Campanera Vacía en las Criptas y el Forjador Ciego en la Forja. La hoguera es un árbol de legado con juramentos ([plan 0.4](docs/PLAN_0_4.md)); al superar la cámara 30 se desbloquean los modos Eclipse, y la Colección guarda logros y el registro de expediciones ([plan 0.5](docs/PLAN_0_5.md)). El [plan de la fase 0.3](docs/PLAN_0_3.md) distingue lo implementado de lo pendiente, sobre todo el arte definitivo.
 
 ![Partida de Ascua Infinita](docs/preview.png)
 
@@ -21,6 +25,8 @@ También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con *
 | Clic sobre el escenario / mantener Espacio | Atacar; Espacio repite al mismo ritmo máximo |
 | Clic sobre una ascua errante / F | Atraparla |
 | E | Destello (y, contra el Rey, interrumpir su Brasa) |
+| R / clic derecho | Parada: alzar la guardia justo antes de un golpe |
+| Clic sobre el punto dorado | Golpe al punto débil: crítico seguro |
 | 1 · 2 · 3 · 4 | Comprar filo, lucero, armadura u ojo de brasa |
 | Q | Cambiar la cantidad de compra: ×1, ×10 o máximo |
 | 1 · 2 · 3 en el pacto | Elegir reliquia |
@@ -87,7 +93,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 14 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 16 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -95,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # adem�
 El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si falla alguna suite. Para lanzar una suite suelta:
 
 ```powershell
-godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse
+godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
 godot --path . --script tests/soak.gd -- --qa
