@@ -16,7 +16,7 @@ func run() -> void:
 	var audio = load("res://scripts/audio_director.gd").new()
 	root.add_child(audio)
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
-	check(audio.music.size() == 6 and audio.streams.size() == audio.SFX.size() and audio.SFX.size() == 32, "All music and effects can be loaded")
+	check(audio.music.size() == 6 and audio.streams.size() == audio.SFX.size() and audio.SFX.size() == 40, "All music and effects can be loaded")
 	audio.play_music("garden", 0.8)
 	await create_timer(0.05).timeout
 	audio.duck(12, 0.1)

@@ -115,6 +115,18 @@ func test_combat_persistence() -> void:
 		file.close()
 		check(s._read_save(SAVE) == null, "Invalid combat state rejected: " + str(invalid))
 
+## Clears whatever decision the journey left pending: relic, map, chest or event.
+func settle(s) -> void:
+	for i in range(4):
+		if not s.offers.is_empty():
+			s.choose_relic(s.offers[0])
+		elif s.journey_phase == "map":
+			s.choose_lane(0)
+		elif s.journey_phase == "chest":
+			s.open_chest()
+		elif s.journey_phase == "event":
+			s.resolve_encounter(false)
+
 func _initialize() -> void:
 	var s = fresh()
 	check(s.hp == s.max_hp() and s.max_hp() == 120, "A new expedition starts at full health")
@@ -149,13 +161,11 @@ func _initialize() -> void:
 	check(not s.click() and s.enemy_hp == hp, "Relic choice blocks battle")
 	check(not s.choose_relic(999), "Unknown relic rejected")
 	check(s.choose_relic(s.offers[0]) and s.relics.size() == 1, "Chosen relic equipped")
-	check(s.choose_route(0), "A milestone also offers a route")
+	check(s.choose_lane(0), "A milestone also opens the map")
 	while s.room < 10:
+		settle(s)
 		s.damage_enemy(1e9)
-		if not s.offers.is_empty():
-			s.choose_relic(s.offers[0])
-		if s.journey_phase == "route":
-			s.choose_route(0)
+		settle(s)
 	check(s.is_boss() and s.enemy_kind() == "boss", "Every tenth room is a boss")
 	s.tick(s.BOSS_INTRO_FULL)
 	# Boss: every third blow is a charged ember that Destello interrupts.
@@ -178,10 +188,7 @@ func _initialize() -> void:
 	s.hp = s.max_hp()
 	s.damage_enemy(1e9)
 	check(s.run_essence >= bank + 5 and s.biome() == 1 and s.run_bosses == 1, "Boss rewards and biome transition")
-	if not s.offers.is_empty():
-		s.choose_relic(s.offers[0])
-	if s.journey_phase == "route":
-		s.choose_route(0)
+	settle(s)
 	# Echo of the crypts: enemies recover health while the bearer rests the blade.
 	s.spawn_delay = 0
 	s.enemy_hp = s.enemy_max * 0.5

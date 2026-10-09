@@ -9,6 +9,11 @@ const BACKGROUNDS = ["res://assets/gemini/backgrounds/garden.png", "res://assets
 # awake, pact sealed, broken), prepared by tools/sprites/key_imagegen.py.
 const EVENTS = "res://assets/art/imagegen/final/events-v1.png"
 const EVENT_CELL = 360
+# Map icons and chests drawn by tools/sprites/make_loot_art.py, stored at 4x.
+const MAP_ICONS = "res://assets/art/loot/map_icons.png"
+const MAP_ICON_ORDER = ["fight", "elite", "rest", "chest", "shrine", "merchant", "altar", "wheel", "milestone", "boss"]
+const CHESTS = "res://assets/art/loot/chests.png"
+const CHEST_CELL = Vector2(160, 136)
 
 static var _shared = null
 
@@ -19,6 +24,9 @@ var relics: Dictionary = {}
 var ui: Dictionary = {}
 var backgrounds: Array[Texture2D] = []
 var events: Texture2D
+var map_icons: Texture2D
+var chests: Texture2D
+var _atlas_cache: Dictionary = {}
 var heading_font: Font
 var button_font: Font
 var logo_font: Font
@@ -53,6 +61,8 @@ func _init() -> void:
 	for path in BACKGROUNDS:
 		backgrounds.append(load(path))
 	events = load(EVENTS)
+	map_icons = load(MAP_ICONS)
+	chests = load(CHESTS)
 	heading_font = _font("res://assets/fonts/Jersey10-Regular.ttf")
 	button_font = heading_font
 	logo_font = heading_font
@@ -149,6 +159,22 @@ func event_art(index: int) -> AtlasTexture:
 	a.atlas = events
 	a.region = Rect2((index % 4) * EVENT_CELL, int(index / 4.0) * EVENT_CELL, EVENT_CELL, EVENT_CELL)
 	return a
+
+func _cached_region(key: String, atlas: Texture2D, region: Rect2) -> AtlasTexture:
+	if not _atlas_cache.has(key):
+		var a = AtlasTexture.new()
+		a.atlas = atlas
+		a.region = region
+		_atlas_cache[key] = a
+	return _atlas_cache[key]
+
+## One of the map's node icons (also "milestone" and "boss").
+func map_icon(kind: String) -> AtlasTexture:
+	var index = maxi(0, MAP_ICON_ORDER.find(kind))
+	return _cached_region("map:" + kind, map_icons, Rect2(index * 64, 0, 64, 64))
+
+func chest_art(tier: int, opened: bool) -> AtlasTexture:
+	return _cached_region("chest:%d:%d" % [tier, int(opened)], chests, Rect2(Vector2(CHEST_CELL.x * int(opened), CHEST_CELL.y * tier), CHEST_CELL))
 
 func upgrade_icon(kind: int) -> Texture2D:
 	if kind == 2 and characters.hero.has("portrait"):
