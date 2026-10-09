@@ -27,8 +27,17 @@ func run() -> void:
 			get_root().get_viewport().get_texture().get_image().save_png("user://soak_%04d.png" % frames)
 		if game.modal_type == "relic":
 			game.choose_relic(s.offers[randi() % s.offers.size()])
-		elif game.modal_type == "route":
-			game.choose_journey(s.run_kills % 3)
+		elif game.modal_type == "map":
+			game.choose_lane(s.run_kills % 3)
+		elif game.modal_type == "chest":
+			if not game.chest_view.is_open():
+				game.chest_view.knock()
+			else:
+				game.press_modal_button("CONTINUAR")
+		elif game.modal_type == "wheel":
+			if not game.press_modal_button("CONTINUAR") and not game.wheel_view.spinning() and game.wheel_view.result < 0:
+				if not game.press_modal_button("GIRAR"):
+					game.press_modal_button("MARCHARSE")
 		elif game.modal_type == "event":
 			game.resolve_journey(s.can_accept_encounter())
 		elif game.modal_type == "summary":

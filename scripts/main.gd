@@ -11,6 +11,7 @@ const FlyLayer = preload("res://scripts/fly_layer.gd")
 const TitleArt = preload("res://scripts/title_art.gd")
 const UiFactory = preload("res://scripts/ui_factory.gd")
 const LegacyTree = preload("res://scripts/legacy_tree.gd")
+const JourneyScreens = preload("res://scripts/journey_screens.gd")
 # Read from project.godot so a single setting names every build.
 var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
@@ -69,6 +70,9 @@ var parry_fill: ProgressBar
 var parry_label: Label
 # Real-time end of a hit-stop; the engine runs slowed until then.
 var hitstop_until: int = 0
+# Live views of the chest and wheel screens, for their keyboard shortcuts.
+var chest_view
+var wheel_view
 var log_label: Label
 var status_label: Label
 var rule_label: Label
@@ -222,6 +226,11 @@ func connect_state() -> void:
 		audio.play("heal" if kind == "heal" else "ember_take")
 	)
 	state.relic_offered.connect(func(): audio.play("offer"))
+	state.node_entered.connect(func(node):
+		if node == "rest":
+			arena.show_banner("DESCANSO", "Recuperas vida antes del combate", Color("86e0bd"), 1.8)
+			audio.play("heal")
+	)
 	state.purchased.connect(func(_kind, _count): audio.play("buy", 0.06))
 	state.achievement_unlocked.connect(func(id):
 		arena.show_toast("★  LOGRO  ·  " + state.achievement_name(id))
@@ -819,7 +828,8 @@ func refresh() -> void:
 	retreat_button.disabled = state.dead or not state.active()
 	status_label.text = "● GUARDADO" if state.save_error.is_empty() else state.save_error
 	room_track.queue_redraw()
-	if screen == "game":
+	# Chest and wheel screens stay until their rewards have been seen.
+	if screen == "game" and not modal_type in ["chest", "wheel"]:
 		if state.dead and modal_type.is_empty() and fall_timer < 0:
 			show_camp()
 		elif not state.offers.is_empty() and modal_type != "relic" and not state.dead:
@@ -984,6 +994,14 @@ func close_modal(resume: bool = true) -> void:
 		state.paused = false
 	refresh()
 
+## Presses the first visible, enabled modal button whose text starts with `prefix`.
+func press_modal_button(prefix: String) -> bool:
+	for b in modal_buttons():
+		if b.text.begins_with(prefix) and b.is_visible_in_tree() and not b.disabled:
+			b.pressed.emit()
+			return true
+	return false
+
 func modal_buttons() -> Array:
 	var found: Array = []
 	var stack: Array = [modal_panel]
@@ -1007,7 +1025,7 @@ func show_howto(return_to: String) -> void:
 		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián, interrumpe las cargas del Rey y del Acólito y agrieta la coraza del Forjador."],
 		[lib.upgrade_icon(2), "PARADA [R] o clic derecho: alza la guardia cuando la barra del golpe entra en la zona azul. En el último instante (zona brillante) es una parada perfecta: sin daño, enemigo aturdido y contraataque. Antes de tiempo solo bloqueas la mitad; si no llega nada, la guardia tarda en recargarse."],
 		[lib.upgrade_icon(3), "Cuando brille un PUNTO DÉBIL dorado sobre el enemigo, haz clic encima: crítico seguro y Destello más cerca. Espacio no lo alcanza."],
-		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y una ruta: descansar, desafiar a un élite o visitar un evento. El combate espera tu decisión."],
+		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y un camino en el mapa: descansos, élites, cofres, mercaderes, altares o la Rueda del eclipse. El combate espera tu decisión. Clic en la barra de cámaras para volver a ver el mapa."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]
 	]
@@ -1185,9 +1203,9 @@ func show_relics() -> void:
 	suspend_button(v)
 
 # Pending decisions survive in the save; Continue reopens them.
-func suspend_button(parent: Node) -> void:
+func suspend_button(parent: Node) -> Button:
 	ui.separator(parent)
-	ui.button(parent, "GUARDAR Y VOLVER AL MENÚ", func():
+	return ui.button(parent, "GUARDAR Y VOLVER AL MENÚ", func():
 		persist()
 		show_title()
 	, 42, 15)
@@ -1199,56 +1217,25 @@ func choose_relic(index: int) -> void:
 		persist()
 
 func show_journey() -> void:
-	var route = state.journey_phase == "route"
-	var v = modal(state.journey_phase, "CAMINOS DEL ECLIPSE  ·  CÁMARA %d" % state.room,
-		"Elige tu camino" if route else state.encounter_name(),
-		"El combate está detenido. Puedes decidir con calma." , 880)
-	if route:
-		var choices = [
-			["SENDERO TRANQUILO  [1]", "Recuperas hasta un %d%% de vida. El siguiente enemigo no será élite." % roundi(state.rest_heal() * 100), lib.relics.heart],
-			["DESAFÍO ÉLITE  [2]", "Siguiente enemigo: ×2,2 vida y ×1,3 daño. Recompensa: ×2,5 oro y una ascua extra.", lib.relics.fang],
-			["VISITAR: " + state.encounter_name().to_upper() + "  [3]", "Un encuentro opcional. Verás el trato antes de aceptarlo; puedes marcharte gratis.", encounter_art()]]
-		for i in range(choices.size()):
-			var row = HBoxContainer.new()
-			row.add_theme_constant_override("separation", 14)
-			v.add_child(row)
-			ui.icon_slot(row, choices[i][2], 62)
-			var col = VBoxContainer.new()
-			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(col)
-			ui.button(col, choices[i][0], func(): choose_journey(i), 44, 17)
-			ui.wrap_label(col, choices[i][1], 15, Kit.MUTED)
-	else:
-		var description = "Recupera hasta un %d%% de tu vida máxima, sin coste." % roundi(state.shrine_heal() * 100)
-		if state.encounter_kind == "merchant":
-			description = "Un lucero adicional por %d de oro (20%% menos que en la forja). Tienes %d de oro." % [state.encounter_cost(), int(state.gold)]
-		elif state.encounter_kind == "altar":
-			description = "Entrega %d de vida actual para ganar +20%% al daño de clics y luceros durante esta expedición. Los pactos se suman. Debes sobrevivir al pago." % state.encounter_cost()
-		var art = ui.icon_slot(v, encounter_art(), 200, Color("6b5a44"))
-		art.get_parent().size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		if state.encounter_kind == "shrine" and not state.reduced_motion:
-			# The lit shrine flickers between its two burning states.
-			var flicker = art.create_tween().set_loops()
-			flicker.tween_callback(func(): art.texture = lib.event_art(2)).set_delay(0.35)
-			flicker.tween_callback(func(): art.texture = lib.event_art(1)).set_delay(0.35)
-		ui.wrap_label(v, description, 18, Kit.TEXT)
-		ui.label(v, "Vida: %d / %d   ·   Pactos: %d" % [int(state.hp), int(state.max_hp()), state.altar_pacts], 16, Kit.TEAL)
-		ui.button(v, "ACEPTAR  [1]", func(): resolve_journey(true), 52).disabled = not state.can_accept_encounter()
-		ui.button(v, "SEGUIR SIN ACEPTAR  [2]", func(): resolve_journey(false), 48)
-	suspend_button(v)
+	JourneyScreens.show(self)
 
-## Encounter illustration, lit so it reads at route-icon size too.
-func encounter_art() -> Texture2D:
-	match state.encounter_kind:
-		"merchant": return lib.portrait("merchant")
-		"altar": return lib.event_art(5)
-	return lib.event_art(1)
-
-func choose_journey(index: int) -> void:
-	if state.choose_route(index):
+func choose_lane(index: int) -> void:
+	if state.choose_lane(index):
 		audio.play("ui_click")
 		close_modal()
 		persist()
+
+## Leaves a chest or wheel screen once its rewards have been seen.
+func finish_loot() -> void:
+	chest_view = null
+	wheel_view = null
+	close_modal()
+	persist()
+
+## The map of the current stretch, from the chamber track.
+func show_map() -> void:
+	if screen == "game" and modal_type.is_empty() and state.active() and not state.lanes.is_empty():
+		JourneyScreens.show_map(self, true)
 
 func resolve_journey(accept: bool) -> void:
 	if state.resolve_encounter(accept):
@@ -1370,6 +1357,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		match modal_type:
 			"pause": close_modal()
 			"options", "howto", "collection": _return_from(modal_return)
+			"map_view": close_modal()
 			"retreat", "confirm": close_modal(screen == "game")
 			"":
 				# Esc first skips a boss entrance; otherwise it opens the pause menu.
@@ -1385,8 +1373,20 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		if i < state.offers.size():
 			choose_relic(state.offers[i])
 		return
-	if modal_type == "route" and key >= KEY_1 and key <= KEY_3:
-		choose_journey(key - KEY_1)
+	if modal_type == "map" and key >= KEY_1 and key <= KEY_3:
+		choose_lane(key - KEY_1)
+		return
+	if modal_type == "chest" and key in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_1]:
+		if chest_view != null and not chest_view.is_open():
+			chest_view.knock()
+		else:
+			press_modal_button("CONTINUAR")
+		return
+	if modal_type == "wheel":
+		match key:
+			KEY_1: press_modal_button("GIRAR")
+			KEY_2: press_modal_button("MARCHARSE")
+			KEY_ENTER, KEY_KP_ENTER: press_modal_button("CONTINUAR")
 		return
 	if modal_type == "event" and key in [KEY_1, KEY_2]:
 		resolve_journey(key == KEY_1)
@@ -1435,14 +1435,29 @@ func capture() -> void:
 		start_game(false)
 		refresh()
 		match shot:
-			"route", "event":
+			"map":
 				state.offers.clear()
-				state.journey_phase = shot
-				state.encounter_kind = "merchant"
+				state.make_lanes(state.room)
+				state.journey_phase = "map"
+				show_journey()
+			"chest":
+				state.offers.clear()
+				state.journey_phase = "chest"
+				state.chest_tier = 1
+				show_journey()
+				for i in range(3):
+					chest_view.knock()
+			"wheel", "event":
+				state.offers.clear()
+				state.journey_phase = "event"
+				state.encounter_kind = "wheel" if shot == "wheel" else "merchant"
+				state.gold = 2400
 				for a in args:
 					if a.begins_with("--encounter="):
 						state.encounter_kind = a.substr(12)
 				show_journey()
+				if shot == "wheel":
+					press_modal_button("GIRAR")
 			"relic": show_relics()
 			"camp":
 				state.finish_run()
@@ -1460,7 +1475,7 @@ func capture() -> void:
 				state.spawn_delay = state.BOSS_INTRO_FULL - 1.4
 			"options": show_options("pause")
 			"howto": show_howto("welcome")
-	await get_tree().create_timer(1.6 if shot in ["preview", "boss", "crypt", "forge"] else 0.8).timeout
+	await get_tree().create_timer({"preview": 1.6, "boss": 1.6, "crypt": 1.6, "forge": 1.6, "chest": 1.9, "wheel": 4.3}.get(shot, 0.8)).timeout
 	if shot in ["preview", "boss", "crypt", "forge"]:
 		for i in range(6):
 			state.click()
@@ -1487,7 +1502,7 @@ func demo_state(shot: String) -> void:
 	state.wisps = 3
 	state.armor = 2
 	state.focus = 1
-	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6, "intro": 30, "preview": 9}.get(shot, 8)
+	state.room = {"boss": 10, "crypt": 14, "forge": 24, "map": 16, "chest": 12, "wheel": 13, "event": 6, "intro": 30, "preview": 9}.get(shot, 8)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--room="):
 			state.room = int(a.substr(7))
@@ -1528,6 +1543,13 @@ func demo_state(shot: String) -> void:
 # ================================================================ room track
 class RoomTrack extends Control:
 	var main
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		tooltip_text = "Clic para ver el mapa del tramo"
+	func _gui_input(e: InputEvent) -> void:
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			main.show_map()
+			accept_event()
 	func _draw() -> void:
 		if main == null:
 			return
@@ -1550,6 +1572,13 @@ class RoomTrack extends Control:
 				col = Color("e0645a") if not current else col
 			if i > 0:
 				draw_line(Vector2(gap * (i - 0.5) + 7, c.y), Vector2(c.x - radius - 2, c.y), Color("3a404d"), 2.0)
+			var node: String = s.node_at(r)
+			if not node.is_empty() and node != "fight":
+				# Lane chambers show what they hold.
+				if current:
+					draw_circle(c, 12.0, col)
+				draw_texture_rect(main.lib.map_icon(node), Rect2(c - Vector2.ONE * 10, Vector2.ONE * 20), false, Color(1, 1, 1, 0.45 if done else 1.0))
+				continue
 			draw_circle(c, radius + 2.0, Color("07080b"))
 			draw_circle(c, radius, col)
 			if boss:

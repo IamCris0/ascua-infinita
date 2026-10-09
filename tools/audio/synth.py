@@ -405,6 +405,74 @@ def sfx_combat():
     print("sfx: %d combat sounds" % len(out))
 
 
+def sfx_loot():
+    """Map, chests and the Rueda del eclipse (0.7), on their own seed."""
+    global rng
+    saved = rng
+    rng = np.random.default_rng(73)
+    out = {}
+
+    # Chest lock rattling under a blow.
+    n = int(0.25 * SR)
+    rattle = np.zeros(n)
+    for k in range(4):
+        mix_at(rattle, bandpass(noise(int(0.04 * SR)), 1500, 6000) * env_exp(int(0.04 * SR), 0.01) * (1 - k * 0.2), k * 0.035)
+    mix_at(rattle, np.sin(sweep_phase(180, 90, int(0.2 * SR), 0.5)) * env_exp(int(0.2 * SR), 0.05) * 0.6, 0)
+    out["chest_hit"] = fade(normalize(rattle, 0.6))
+
+    # Chest opening: a wooden creak, then a bright swell of bells.
+    n = int(1.6 * SR)
+    t = t_axis(1.6)
+    creak = np.zeros(n)
+    m = int(0.35 * SR)
+    mix_at(creak, bandpass(saw(sweep_phase(95, 140, m, 1.0)) + noise(m) * 0.3, 300, 2400) * np.sin(np.linspace(0, np.pi, m)) * 0.5, 0)
+    swell = np.zeros(n)
+    for k, mm in enumerate([72, 76, 79, 84]):
+        mix_at(swell, fm_bell(midi(mm), 1.1, 2.0, 1.0, 0.45) * 0.4, 0.3 + k * 0.06)
+    shimmer = highpass(noise(n), 5000) * np.clip((t - 0.3) / 0.1, 0, 1) * np.exp(-np.clip(t - 0.3, 0, None) / 0.4) * 0.15
+    out["chest_open"] = fade(normalize(reverb(creak + swell + shimmer, 0.35, 1.2), 0.8))
+
+    # A rare chest: the same with a low choir underneath and a longer tail.
+    y = np.zeros(int(2.6 * SR))
+    mix_at(y, out["chest_open"] * 0.8, 0)
+    mix_at(y, sum(soft_saw(midi(mm), 2.0, 1500) for mm in [48, 55, 60, 64]) * env_adsr(int(2.0 * SR), 0.4, 0.3, 0.7, 1.0) * 0.3, 0.25)
+    for k, mm in enumerate([88, 91, 96]):
+        mix_at(y, fm_bell(midi(mm), 1.2, 2.0, 0.8, 0.5) * 0.25, 0.7 + k * 0.08)
+    out["chest_rare"] = fade(normalize(reverb(y, 0.45, 1.4), 0.85))
+
+    # Each reward revealed.
+    out["loot"] = fade(normalize(reverb(fm_bell(midi(84), 0.4, 2.0, 0.7, 0.15) + fm_bell(midi(91), 0.4, 2.0, 0.6, 0.12) * 0.5, 0.25), 0.4))
+
+    # Wheel peg passing the pointer.
+    n = int(0.05 * SR)
+    out["wheel_tick"] = fade(normalize(bandpass(noise(n), 2000, 7000) * env_exp(n, 0.006) + np.sin(2 * np.pi * 1300 * t_axis(0.05)) * env_exp(n, 0.01) * 0.5, 0.35))
+
+    # Wheel lands on a prize: a short fanfare.
+    y = np.zeros(int(1.4 * SR))
+    for k, mm in enumerate([67, 71, 74, 79]):
+        mix_at(y, soft_saw(midi(mm), 0.5, 2400) * env_adsr(int(0.5 * SR), 0.01, 0.1, 0.6, 0.3) * 0.5, k * 0.09)
+    mix_at(y, sum(soft_saw(midi(mm), 0.9, 2000) for mm in [67, 71, 74, 79]) * env_adsr(int(0.9 * SR), 0.02, 0.2, 0.6, 0.5) * 0.3, 0.36)
+    out["wheel_win"] = fade(normalize(reverb(y, 0.3), 0.75))
+
+    # Wheel lands on nothing: two falling muted notes.
+    y = np.zeros(int(0.9 * SR))
+    for k, mm in enumerate([62, 57]):
+        mix_at(y, soft_saw(midi(mm), 0.35, 700) * env_adsr(int(0.35 * SR), 0.01, 0.1, 0.5, 0.2) * 0.6, k * 0.18)
+    out["wheel_lose"] = fade(normalize(reverb(y, 0.3), 0.5))
+
+    # Map unrolled: paper rustle and a soft chord.
+    n = int(0.9 * SR)
+    t = t_axis(0.9)
+    rustle = bandpass(noise(n), 800, 6000) * np.sin(np.pi * np.clip(t / 0.4, 0, 1)) ** 2 * 0.5
+    chord = sum(fm_bell(midi(mm), 0.9, 1.0, 0.4, 0.5) for mm in [64, 69, 71]) * 0.15
+    out["map_open"] = fade(normalize(reverb(rustle + chord, 0.3), 0.4))
+
+    for name, sig in out.items():
+        write_wav(os.path.join(SFX_DIR, name + ".wav"), sig)
+    rng = saved
+    print("sfx: %d loot sounds" % len(out))
+
+
 # ---------------------------------------------------------------- music
 class Song:
     def __init__(self, bpm, bars, beats_per_bar=4):
@@ -627,6 +695,7 @@ if __name__ == "__main__":
     import sys
     sfx()
     sfx_combat()
+    sfx_loot()
     if "--sfx" in sys.argv:
         sys.exit(0)
     for name, fn in [("menu", song_menu), ("garden", song_garden), ("crypt", song_crypt), ("forge", song_forge), ("boss", song_boss), ("camp", song_camp)]:

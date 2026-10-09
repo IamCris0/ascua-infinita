@@ -93,7 +93,9 @@ Jugar de forma activa ya supera el muro de la cámara 30, y el juego pasivo qued
 - «Cómo jugar», los controles, los botones y el LEEME de Windows explican la Parada y el punto débil.
 - El guardado conserva la guardia, el punto débil y sus contadores. Las partidas anteriores cargan con valores neutros.
 
-## Fase B · Mapa y fortuna (0.7)
+## Fase B · Mapa y fortuna (0.7) — implementada el 9 de octubre de 2026
+
+Capturas: [mapa](map.png), [cofre](chest.png) y [Rueda](wheel.png).
 
 **Mapa de caminos**
 - Tras cada hito (cada 5 cámaras), después de la reliquia, se abre un mapa con tres caminos para las 5 cámaras siguientes. Sustituye a la elección actual de descanso, élite o evento.
@@ -115,6 +117,58 @@ Jugar de forma activa ya supera el muro de la cámara 30, y el juego pasivo qued
 **Rueda del eclipse**
 - Evento de apuesta con oro de la expedición: giras la rueda y la recompensa depende del sector.
 - Todo es moneda del juego. Sin dinero real, sin anuncios.
+
+### Resultado de la fase B
+
+**Un cambio sobre la propuesta**
+
+En la propuesta, las cámaras de descanso, cofre o evento no tenían combate. En la versión final, **todas las cámaras mantienen su combate** y el nodo decide lo que ocurre antes:
+- élite: el rival es élite;
+- descanso: curación al llegar y rival nunca élite;
+- cofre o evento: una pantalla previa.
+
+Así no cambian la escala de enemigos, los roles fijos (Guardián en la 6, Acólito en la 8) ni las ascuas por victoria. Los roles aparecen bajo cada columna del mapa porque esperan en cualquier camino.
+
+**Caminos**
+
+Cada camino tiene un carácter y garantiza lo que lo define. Ningún nodo se repite más de lo permitido: una Rueda, dos élites, dos cofres, dos descansos y un evento de cada tipo.
+
+| Camino | Contenido habitual | Siempre incluye |
+|---|---|---|
+| Sendero de las brasas | Combates, descansos, santuario, mercader | Un descanso |
+| Senda del desafío | Élites, cofres, altar | Un élite y un cofre |
+| Camino del azar | Rueda, mercader, altar, santuario | La Rueda |
+
+**Cofres**
+- Madera, hierro o eclipse: 60%, 30% y 10% antes de la cámara 20; 45%, 45% y 10% desde la 20.
+- Dan una, dos o tres recompensas, todas distintas: oro (4, 6 o 9 victorias), ascuas (1, 2 o 4), un 35% de vida, un lucero, un nivel de forja o una reliquia a elegir.
+- El de madera nunca trae reliquia y el del eclipse siempre.
+- Se abren con tres golpes al cerrojo y las recompensas salen una a una.
+
+**Rueda del eclipse**
+- La apuesta equivale a 2,5 victorias de la cámara.
+- Tiene diez sectores iguales: Nada ×3, Oro ×2 ×2, Oro ×3, Vida, Reliquia, Cofre de hierro y Ascuas. La pantalla muestra los diez, así que lo que se ve es la probabilidad real.
+- El resultado se decide al pagar; la animación solo lo muestra, y recargar la partida no permite volver a tirar.
+
+**Equilibrio**
+
+Bot con 12 expediciones; cámaras alcanzadas en las expediciones 9–12. El bot elige siempre el mismo camino, acepta santuarios y mercaderes, y rechaza altares y la Rueda.
+
+| Intentos/s | 0.6 (ruta de descanso) | Sendero | Desafío | Azar |
+|---|---|---|---|---|
+| 0 | 20, 20, 20, 20 | 20, 30, 20, 30 | 19, 20, 29, 27 | 20, 20, 20, 24 |
+| 1 | 30, 30, 30, 30 | 30, 30, 30, 30 | 30, 30, 30, 30 | 30, 30, 30, 30 |
+| 3 | 30, 40, 40, 40 | 40, 40, 40, 40 | 37, 40, 44, 46 | 40, 40, 39, 40 |
+| 5 | 50, 50, 50, 50 | 50, 50, 53, 50 | 40, 50, 50, 47 | 50, 41, 50, 50 |
+
+- El mapa apenas mueve la profundidad.
+- El Desafío trae entre un 15% y un 20% más de ascuas a igual profundidad (élites y cofres), a cambio de más riesgo: con 5 intentos/s llega algo menos lejos.
+
+**Otros cambios**
+- Ocho sonidos sintetizados: cerrojo, apertura, apertura rara, recompensa, clic de la rueda, premio, nada y mapa.
+- Iconos del mapa y cofres en pixel art generados por `tools/sprites/make_loot_art.py`.
+- Logros 15 y 16: Cazatesoros (15 cofres) y La rueda sonríe (Oro ×3).
+- Las partidas con una ruta pendiente de la versión anterior la convierten en mapa al cargar.
 
 ## Fase C · Arsenal (0.8)
 

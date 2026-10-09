@@ -59,17 +59,62 @@ func run() -> void:
 	check(press(game, "GUARDAR Y VOLVER") and game.screen == "title" and s.offers.size() == 3, "Relic choice can be suspended at the title")
 	game.start_game(false)
 	check(game.modal_type == "relic", "Continue returns to the pending relic choice")
-	check(press(game, "ELEGIR") and s.relics.size() == 1 and game.modal_type == "route", "Relic button opens the route choice")
-	check(not s.active() and press(game, "GUARDAR Y VOLVER") and game.screen == "title", "Route choice can be suspended at the title")
+	check(press(game, "ELEGIR") and s.relics.size() == 1 and game.modal_type == "map", "Relic button opens the map")
+	check(not s.active() and press(game, "GUARDAR Y VOLVER") and game.screen == "title", "The map can be suspended at the title")
 	game.start_game(false)
-	check(game.modal_type == "route", "Continue returns to the pending route")
-	check(press(game, "SENDERO TRANQUILO") and s.active() and not game.overlay.visible, "Safe route returns to combat")
-	s.journey_phase = "route"
-	s.encounter_kind = "merchant"
-	game.refresh()
-	check(press(game, "VISITAR:") and game.modal_type == "event", "Event route opens the announced encounter")
+	check(game.modal_type == "map", "Continue returns to the pending map")
+	s.lanes[0] = ["merchant", "fight", "fight", "fight"]
+	check(press(game, "1 ·") and s.lane == 0 and game.modal_type == "event", "A lane button chooses the lane and opens its first event")
 	var companions = s.wisps
 	check(press(game, "ACEPTAR") and s.wisps == companions + 1 and s.active(), "Merchant purchase grants one companion and resumes combat")
+	game.show_map()
+	check(game.modal_type == "map_view" and s.paused, "The chamber track opens the map of the stretch")
+	var esc_key = InputEventKey.new()
+	esc_key.keycode = KEY_ESCAPE
+	esc_key.pressed = true
+	game._unhandled_key_input(esc_key)
+	check(game.modal_type.is_empty() and s.active(), "Esc closes the map and resumes")
+	# A chest: knock, reveal, continue.
+	s.journey_phase = "chest"
+	s.chest_tier = 1
+	game.refresh()
+	check(game.modal_type == "chest" and not s.active(), "A chest chamber opens the chest screen")
+	var space = InputEventKey.new()
+	space.keycode = KEY_SPACE
+	space.pressed = true
+	for i in range(3):
+		game._unhandled_key_input(space)
+	check(game.chest_view.is_open() and s.total_chests == 1 and s.paused, "Knocking opens the chest while combat waits")
+	game.refresh()
+	check(game.modal_type == "chest", "The rewards stay on screen")
+	await create_timer(2.2).timeout
+	check(press(game, "CONTINUAR") and game.modal_type != "chest", "Continue leaves the chest")
+	if game.modal_type == "relic":
+		press(game, "ELEGIR")
+	check(s.active(), "Combat resumes after the chest")
+	# The Rueda del eclipse.
+	s.journey_phase = "event"
+	s.encounter_kind = "wheel"
+	s.gold = 100000
+	game.refresh()
+	check(game.modal_type == "wheel", "A wheel chamber opens the Rueda")
+	var digit = InputEventKey.new()
+	digit.keycode = KEY_1
+	digit.pressed = true
+	game._unhandled_key_input(digit)
+	check(s.total_spins == 1 and game.wheel_view.spinning() and s.paused, "1 spins the wheel while combat waits")
+	await create_timer(4.0).timeout
+	check(not game.wheel_view.spinning() and game.wheel_view.sector_at_pointer() == s.wheel_result, "The wheel stops on the sector the rules chose")
+	check(press(game, "CONTINUAR") and game.modal_type != "wheel", "Continue leaves the Rueda")
+	for i in range(3):
+		if game.modal_type == "relic":
+			press(game, "ELEGIR")
+		elif game.modal_type == "chest":
+			for k in range(3):
+				game.chest_view.knock()
+			await create_timer(2.2).timeout
+			press(game, "CONTINUAR")
+	check(s.active(), "Combat resumes after the Rueda")
 	s.spawn_delay = 0
 	s.burst_cooldown = 0
 	game.try_burst()

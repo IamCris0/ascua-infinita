@@ -1,6 +1,6 @@
 extends SceneTree
 ## Balance probe: a simple bot plays several expeditions and reports how far it gets.
-## godot --headless --path . --script tools/simulate.gd
+## godot --headless --path . --script tools/simulate.gd [-- --sample] [-- --lane=1]
 const State = preload("res://scripts/run_state.gd")
 
 ## Share of parries and weak points a player at this cadence lands: an idle
@@ -8,7 +8,7 @@ const State = preload("res://scripts/run_state.gd")
 func skill_for(cps: float) -> float:
 	return clampf(cps * 0.18, 0.0, 0.85)
 
-func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary:
+func play(s, cps: float, buy_strategy: String, max_minutes: float, lane_choice: int = 0) -> Dictionary:
 	var dt = 0.05
 	var click_every = 1.0 / cps if cps > 0 else INF
 	var click_acc = 0.0
@@ -21,8 +21,13 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary
 		click_acc += dt
 		if not s.offers.is_empty():
 			s.choose_relic(s.offers[s.rng.randi_range(0, s.offers.size() - 1)])
-		if s.journey_phase == "route":
-			s.choose_route(0)
+		# The bot keeps to the safe lane and takes the free or useful deals.
+		if s.journey_phase == "map" and s.offers.is_empty():
+			s.choose_lane(lane_choice)
+		if s.journey_phase == "chest":
+			s.open_chest()
+		if s.journey_phase == "event":
+			s.resolve_encounter(s.can_accept_encounter() and s.encounter_kind in ["shrine", "merchant"])
 		if s.ember_active and s.rng.randf() < 0.02:
 			s.collect_ember()
 		# Active play: each blow is met with a perfect parry, a block or nothing,
@@ -95,6 +100,11 @@ func spend_legacy(s, focus: String = "") -> void:
 		s.set_oath(best_oath)
 
 func _initialize() -> void:
+	# --lane=N keeps the bot on one lane of the map (0 safe, 1 risk, 2 chance).
+	var lane_choice = 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--lane="):
+			lane_choice = int(arg.substr(7))
 	if "--sample" in OS.get_cmdline_user_args():
 		for cps in [0.0, 1.0, 3.0, 5.0]:
 			var rooms: Array = []
@@ -103,7 +113,7 @@ func _initialize() -> void:
 				var sample = State.new()
 				sample.rng.seed = seed_value
 				sample.restart()
-				var result = play(sample, cps, "balanced", 40)
+				var result = play(sample, cps, "balanced", 40, lane_choice)
 				rooms.append(result.room)
 				minutes += result.minutes
 			print("SAMPLE cps %.0f: rooms %s, mean minutes %.2f" % [cps, rooms, minutes / 5])
@@ -115,7 +125,7 @@ func _initialize() -> void:
 		var line = "cps %.0f:" % cps
 		for run in range(12):
 			s.restart()
-			var r = play(s, cps, "balanced", 40)
+			var r = play(s, cps, "balanced", 40, lane_choice)
 			line += "  [#%d sala %d, %.1f min, +%d]" % [run + 1, r.room, r.minutes, r.essence]
 			s.finish_run()
 			spend_legacy(s)

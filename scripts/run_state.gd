@@ -25,6 +25,9 @@ signal parry_started
 signal parried(full: bool)
 signal weak_appeared
 signal weak_struck
+signal node_entered(node: String)
+signal chest_opened(tier: int, loot: Array)
+signal wheel_spun(index: int)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -95,8 +98,39 @@ const ACHIEVEMENTS = [
 	{"id": "eclipse", "name": "Más allá del eclipse", "description": "Supera la cámara 30 en Eclipse 1 o superior."},
 	{"id": "collection", "name": "Memoria del eclipse", "description": "Completa la colección."},
 	{"id": "parry", "name": "Guardia perfecta", "description": "Para 25 golpes enemigos."},
-	{"id": "weak", "name": "Ojo certero", "description": "Acierta 50 puntos débiles."}]
+	{"id": "weak", "name": "Ojo certero", "description": "Acierta 50 puntos débiles."},
+	{"id": "chests", "name": "Cazatesoros", "description": "Abre 15 cofres."},
+	{"id": "jackpot", "name": "La rueda sonríe", "description": "Consigue Oro ×3 en la Rueda del eclipse."}]
 const HISTORY_SIZE = 8
+# Mapa de caminos. After each milestone relic the map offers three lanes for
+# the next four chambers; the fifth (milestone or boss) is shared. Every node
+# is still a fight: the node adds what happens around it.
+const LANE_LENGTH = 4
+const LANES = [
+	{"id": "safe", "name": "Sendero de las brasas", "hint": "Descansos y santuarios para llegar entero.", "weights": {"fight": 4, "rest": 3, "shrine": 2, "merchant": 1, "chest": 1}, "must": ["rest"]},
+	{"id": "risk", "name": "Senda del desafío", "hint": "Élites y cofres: más peligro, más botín.", "weights": {"fight": 2, "elite": 4, "chest": 3, "altar": 1}, "must": ["elite", "chest"]},
+	{"id": "luck", "name": "Camino del azar", "hint": "Mercaderes, altares y la Rueda del eclipse.", "weights": {"fight": 2, "wheel": 3, "merchant": 2, "altar": 2, "chest": 1, "shrine": 1}, "must": ["wheel"]}]
+const NODES = {
+	"fight": {"name": "Combate", "hint": "Un rival corriente."},
+	"elite": {"name": "Élite", "hint": "Rival élite: ×2,2 vida y ×1,3 daño. Paga ×2,5 oro y una ascua más."},
+	"rest": {"name": "Descanso", "hint": "Recuperas vida al llegar y el rival nunca es élite."},
+	"chest": {"name": "Cofre", "hint": "Un cofre antes del combate: oro, ascuas, luceros, forja o una reliquia."},
+	"shrine": {"name": "Santuario de la brasa", "hint": "Cura sin coste antes del combate."},
+	"merchant": {"name": "Mercader de cenizas", "hint": "Vende un lucero más barato que la forja."},
+	"altar": {"name": "Altar del eclipse", "hint": "Cambia vida por daño durante la expedición."},
+	"wheel": {"name": "Rueda del eclipse", "hint": "Apuesta oro y gira: premios… o nada."}}
+const EVENT_NODES = ["shrine", "merchant", "altar", "wheel"]
+# How many times one lane may hold a node; plain fights have no limit.
+const NODE_MAX = {"elite": 2, "rest": 2, "chest": 2, "shrine": 1, "merchant": 1, "altar": 1, "wheel": 1}
+const CHEST_NAMES = ["Cofre de madera", "Cofre de hierro", "Cofre del eclipse"]
+# Chest rewards: gold scales with the chamber, a relic is rarer in plain chests.
+const LOOT_WEIGHTS = {"gold": 5, "essence": 3, "heal": 2, "wisp": 2, "forge": 2}
+const LOOT_RELIC = [0, 1, 3]
+const LOOT_GOLD = [4.0, 6.0, 9.0]
+const LOOT_ESSENCE = [1, 2, 4]
+# The Rueda has ten equal sectors; each one lands one time in ten.
+const WHEEL = ["gold2", "nothing", "heal", "gold3", "nothing", "relic", "gold2", "chest", "nothing", "essence"]
+const WHEEL_NAMES = {"gold2": "Oro ×2", "gold3": "Oro ×3", "nothing": "Nada", "heal": "Vida", "relic": "Reliquia", "chest": "Cofre", "essence": "Ascuas"}
 const OATH_ECHO = 8
 const OATH_SWARM = 11
 const OATH_LAST_BREATH = 13
@@ -210,6 +244,13 @@ var offers: Array = []
 var journey_phase: String = ""
 var encounter_kind: String = ""
 var altar_pacts: int = 0
+var lanes: Array = []
+var lane: int = -1
+var lane_start: int = 0
+var chest_tier: int = 0
+# Rewards of the last chest or spin, for the screen that reveals them.
+var last_loot: Array = []
+var wheel_result: int = -1
 var run_essence: int = 0
 var run_kills: int = 0
 var run_gold: float = 0
@@ -230,6 +271,8 @@ var total_interrupts: int = 0
 var total_armor_breaks: int = 0
 var total_parries: int = 0
 var total_weak: int = 0
+var total_chests: int = 0
+var total_spins: int = 0
 var fight_clicks: int = 0
 var last_banked: int = 0
 var total_kills: int = 0
@@ -546,6 +589,11 @@ func heavy_damage() -> float:
 	if is_forge_keeper():
 		return enemy_damage() * FORGE_POUR
 	return enemy_damage() * (1.6 if enemy_role() == "acolyte" else 3.0)
+
+## Gold of an ordinary victory in this chamber, for prices and prizes that
+## must not depend on whether the current rival is an elite or a boss.
+func room_reward() -> float:
+	return (16 + room * 6.5) * gold_multiplier()
 
 func kill_reward() -> float:
 	return (16 + room * 6.5) * gold_multiplier() * (3.0 if is_boss() else 1.0) * (2.5 if enemy_elite else 1.0)
@@ -940,14 +988,20 @@ func defeat_enemy() -> void:
 	best = maxi(best, room)
 	spawn_enemy()
 	if grant_relic:
-		journey_phase = "route"
-		encounter_kind = ["shrine", "merchant", "altar"][rng.randi_range(0, 2)]
-		var pool: Array = range(RELICS.size())
-		offers.clear()
-		for i in range(3):
-			var pick = rng.randi_range(0, pool.size() - 1)
-			offers.append(pool.pop_at(pick))
-		relic_offered.emit()
+		journey_phase = "map"
+		encounter_kind = ""
+		make_lanes(room)
+		_offer_relics()
+	else:
+		_enter_node()
+
+func _offer_relics() -> void:
+	var pool: Array = range(RELICS.size())
+	offers.clear()
+	for i in range(3):
+		var pick = rng.randi_range(0, pool.size() - 1)
+		offers.append(pool.pop_at(pick))
+	relic_offered.emit()
 
 func spawn_enemy(roll_elite: bool = true) -> void:
 	fight_clicks = 0
@@ -961,7 +1015,10 @@ func spawn_enemy(roll_elite: bool = true) -> void:
 	pending_hit = 0
 	pending_damage = 0
 	if roll_elite:
-		enemy_elite = not is_boss() and room >= 6 and rng.randf() < (0.24 if eclipse >= 1 else 0.12)
+		match node_at(room):
+			"elite": enemy_elite = not is_boss()
+			"rest": enemy_elite = false
+			_: enemy_elite = not is_boss() and room >= 6 and rng.randf() < (0.24 if eclipse >= 1 else 0.12)
 	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0) * (1.25 if is_boss() and eclipse >= 4 else 1.0)
 	enemy_max *= [1.0, 0.85, 1.3][enemy_index()] if not is_boss() else 1.0
 	enemy_hp = enemy_max
@@ -989,55 +1046,211 @@ func choose_relic(index: int) -> bool:
 	changed.emit()
 	return true
 
-# Routes are resolved only after the relic choice. Both decisions suspend combat.
-func choose_route(index: int) -> bool:
-	if journey_phase != "route" or not offers.is_empty() or dead or paused or index < 0 or index > 2:
+func _weighted(weights: Dictionary) -> String:
+	var total := 0
+	for key in weights:
+		total += weights[key]
+	var roll = rng.randi_range(1, total)
+	for key in weights:
+		roll -= weights[key]
+		if roll <= 0:
+			return key
+	return weights.keys()[0]
+
+## Three lanes for the chambers from `first`; the choice waits on the map.
+func make_lanes(first: int) -> void:
+	lane_start = first
+	lane = -1
+	lanes = []
+	for spec in LANES:
+		var nodes: Array = []
+		var weights: Dictionary = spec.weights.duplicate()
+		for k in range(LANE_LENGTH):
+			var node = _weighted(weights)
+			nodes.append(node)
+			if nodes.count(node) >= NODE_MAX.get(node, LANE_LENGTH):
+				weights.erase(node)
+		# Each lane keeps its character: what it must hold goes to random spots.
+		var spots: Array = range(LANE_LENGTH)
+		for i in range(spots.size() - 1, 0, -1):
+			var j = rng.randi_range(0, i)
+			var swap = spots[i]
+			spots[i] = spots[j]
+			spots[j] = swap
+		for i in range(spec.must.size()):
+			if not nodes.has(spec.must[i]):
+				nodes[spots[i]] = spec.must[i]
+		lanes.append(nodes)
+
+## What the chosen lane holds in chamber `at`, or "" outside it.
+func node_at(at: int) -> String:
+	if lane < 0 or lane >= lanes.size() or at < lane_start or at >= lane_start + LANE_LENGTH:
+		return ""
+	return lanes[lane][at - lane_start]
+
+## Lanes are chosen only after the relic. Both decisions suspend combat.
+func choose_lane(index: int) -> bool:
+	if journey_phase != "map" or not offers.is_empty() or dead or paused or index < 0 or index >= lanes.size():
 		return false
-	journey_phase = "event" if index == 2 else ""
-	enemy_elite = index == 1
-	spawn_enemy(false)
-	if index == 0:
-		hp = minf(max_hp(), hp + max_hp() * rest_heal())
-		event.emit("Sendero tranquilo · recuperas hasta un %d%% de vida. Siguiente rival sin élite." % roundi(rest_heal() * 100))
-	elif index == 1:
-		event.emit("Desafío élite · más peligro a cambio de oro y ascuas.")
-	if index != 2:
-		encounter_kind = ""
+	lane = index
+	journey_phase = ""
+	event.emit("Camino elegido · " + LANES[index].name)
+	spawn_enemy()
+	_enter_node()
 	changed.emit()
 	return true
 
+## Arriving at a chamber of the lane: rest heals at once; chests and events
+## wait for the player before the fight.
+func _enter_node() -> void:
+	var node = node_at(room)
+	match node:
+		"rest":
+			var amount = minf(max_hp() - hp, max_hp() * rest_heal())
+			hp += amount
+			event.emit("Descanso · recuperas %d de vida" % int(amount))
+		"chest":
+			journey_phase = "chest"
+			var roll = rng.randf()
+			chest_tier = 2 if roll < 0.1 else (1 if roll < (0.4 if room < 20 else 0.55) else 0)
+			event.emit(CHEST_NAMES[chest_tier] + " · ábrelo antes del combate")
+		"shrine", "merchant", "altar", "wheel":
+			journey_phase = "event"
+			encounter_kind = node
+	if not node.is_empty():
+		node_entered.emit(node)
+
 func encounter_name() -> String:
-	return {"shrine": "Santuario de la brasa", "merchant": "Mercader de cenizas", "altar": "Altar del eclipse"}.get(encounter_kind, "Encuentro")
+	return NODES[encounter_kind].name if NODES.has(encounter_kind) else "Encuentro"
 
 func encounter_cost() -> int:
-	return maxi(1, int(price(1) * 0.8)) if encounter_kind == "merchant" else int(ceil(max_hp() * 0.25))
+	match encounter_kind:
+		"merchant": return maxi(1, int(price(1) * 0.8))
+		"wheel": return maxi(1, int(room_reward() * 2.5))
+	return int(ceil(max_hp() * 0.25))
+
+# ---------------------------------------------------------------- chests and the wheel
+func roll_loot(tier: int) -> Array:
+	var loot: Array = []
+	var weights: Dictionary = LOOT_WEIGHTS.duplicate()
+	if LOOT_RELIC[tier] > 0:
+		weights["relic"] = LOOT_RELIC[tier]
+	if hp >= max_hp() * 0.9:
+		weights.erase("heal")
+	for i in range(tier + 1):
+		var kind = _weighted(weights)
+		# Each reward of a chest is different; an eclipse chest always holds a relic.
+		if tier == 2 and i == tier and weights.has("relic"):
+			kind = "relic"
+		weights.erase(kind)
+		loot.append(_loot_entry(kind, tier))
+	return loot
+
+func _loot_entry(kind: String, tier: int) -> Dictionary:
+	match kind:
+		"gold": return {"kind": kind, "amount": floor(room_reward() * LOOT_GOLD[tier])}
+		"essence": return {"kind": kind, "amount": LOOT_ESSENCE[tier]}
+		"heal": return {"kind": kind, "amount": floor(max_hp() * 0.35)}
+		"forge": return {"kind": kind, "amount": [0, 2, 3][rng.randi_range(0, 2)]}
+	return {"kind": kind, "amount": 1}
+
+func loot_text(entry: Dictionary) -> String:
+	match entry.kind:
+		"gold": return "+%d de oro" % int(entry.amount)
+		"essence": return "+%d ascuas" % int(entry.amount)
+		"heal": return "+%d de vida" % int(entry.amount)
+		"wisp": return "Un lucero se une"
+		"forge": return UPGRADES[int(entry.amount)].name + " +1"
+		"relic": return "Una reliquia a elegir"
+		"chest": return "Un cofre de hierro"
+		"nothing": return "Nada"
+	return ""
+
+func _apply_loot(entry: Dictionary) -> void:
+	match entry.kind:
+		"gold": _gain_gold(entry.amount)
+		"essence": run_essence += int(entry.amount)
+		"heal": hp = minf(max_hp(), hp + entry.amount)
+		"wisp": wisps += 1
+		"forge":
+			match int(entry.amount):
+				0: blade += 1
+				2:
+					armor += 1
+					hp = minf(max_hp(), hp + 30)
+				3: focus += 1
+		"relic": _offer_relics()
+		"chest":
+			journey_phase = "chest"
+			chest_tier = 1
+
+func open_chest() -> Array:
+	if journey_phase != "chest" or dead or paused:
+		return []
+	journey_phase = ""
+	total_chests += 1
+	if total_chests >= 15:
+		unlock("chests")
+	var loot = roll_loot(chest_tier)
+	for entry in loot:
+		_apply_loot(entry)
+	last_loot = loot
+	event.emit(CHEST_NAMES[chest_tier] + " · " + ", ".join(loot.map(func(entry): return loot_text(entry))))
+	chest_opened.emit(chest_tier, loot)
+	changed.emit()
+	return loot
+
+## Pays the bet and lands on one of ten equal sectors.
+func _spin_wheel(bet: int) -> void:
+	gold -= bet
+	total_spins += 1
+	wheel_result = rng.randi_range(0, WHEEL.size() - 1)
+	var sector: String = WHEEL[wheel_result]
+	var entry := {"kind": "nothing", "amount": 0}
+	match sector:
+		"gold2", "gold3":
+			entry = {"kind": "gold", "amount": bet * (2 if sector == "gold2" else 3)}
+			if sector == "gold3":
+				unlock("jackpot")
+		"heal": entry = {"kind": "heal", "amount": floor(max_hp() * 0.5)}
+		"essence": entry = {"kind": "essence", "amount": 3}
+		"relic": entry = {"kind": "relic", "amount": 1}
+		"chest": entry = {"kind": "chest", "amount": 1}
+	last_loot = [entry]
+	wheel_spun.emit(wheel_result)
+	event.emit("Rueda del eclipse · " + WHEEL_NAMES[sector] + ("" if entry.kind == "nothing" else ": " + loot_text(entry)))
+	_apply_loot(entry)
 
 func can_accept_encounter() -> bool:
 	if journey_phase != "event" or dead or paused:
 		return false
 	match encounter_kind:
 		"shrine": return true
-		"merchant": return gold >= encounter_cost()
+		"merchant", "wheel": return gold >= encounter_cost()
 		"altar": return hp > encounter_cost()
 	return false
 
 func resolve_encounter(accept: bool) -> bool:
 	if journey_phase != "event" or dead or paused or (accept and not can_accept_encounter()):
 		return false
-	if accept:
-		match encounter_kind:
-			"shrine": hp = minf(max_hp(), hp + max_hp() * shrine_heal())
-			"merchant":
-				gold -= encounter_cost()
-				wisps += 1
-			"altar":
-				hp -= encounter_cost()
-				altar_pacts += 1
-		event.emit(encounter_name() + " · trato completado")
-	else:
-		event.emit(encounter_name() + " · sigues tu camino")
+	var kind = encounter_kind
+	var cost = encounter_cost()
 	journey_phase = ""
 	encounter_kind = ""
+	if accept:
+		match kind:
+			"shrine": hp = minf(max_hp(), hp + max_hp() * shrine_heal())
+			"merchant":
+				gold -= cost
+				wisps += 1
+			"altar":
+				hp -= cost
+				altar_pacts += 1
+			"wheel": _spin_wheel(cost)
+		if kind != "wheel":
+			event.emit(NODES[kind].name + " · trato completado")
+	else:
+		event.emit(NODES[kind].name + " · sigues tu camino")
 	changed.emit()
 	return true
 
@@ -1116,6 +1329,12 @@ func restart() -> void:
 	journey_phase = ""
 	encounter_kind = ""
 	altar_pacts = 0
+	lanes = []
+	lane = -1
+	lane_start = 0
+	chest_tier = 0
+	last_loot = []
+	wheel_result = -1
 	run_essence = 0
 	run_kills = 0
 	run_gold = 0
@@ -1143,7 +1362,8 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 	"best", "runs", "total_kills", "total_bosses", "total_elites", "total_embers", "total_gold", "saved_at",
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
 	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
-	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak"]
+	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak",
+	"total_chests", "total_spins", "lane_start", "chest_tier"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -1174,6 +1394,8 @@ func snapshot() -> Dictionary:
 	data.history = history.duplicate(true)
 	data.journey_phase = journey_phase
 	data.encounter_kind = encounter_kind
+	data.lanes = lanes.duplicate(true)
+	data.lane = lane
 	return data
 
 func save_game(path: String = SAVE_PATH) -> bool:
@@ -1215,7 +1437,7 @@ static func _migrate(data: Dictionary) -> Dictionary:
 	if not data.has("oath"):
 		data.oath = -1
 	# Before Eclipse, achievements and the expedition log.
-	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak"]:
+	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak", "total_chests", "total_spins", "lane_start", "chest_tier"]:
 		if not data.has(key):
 			data[key] = 0
 	for key in ["achievements", "history"]:
@@ -1233,6 +1455,10 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.ember_pos = [0.5, 0.4]
 	if not data.has("weak_pos"):
 		data.weak_pos = [0.0, 0.0]
+	# Before the map: no lanes. A pending route becomes a map on load.
+	if not data.has("lanes"):
+		data.lanes = []
+		data.lane = -1
 	return data
 
 func _read_save(path: String) -> Variant:
@@ -1270,9 +1496,21 @@ func _read_save(path: String) -> Variant:
 	for id in data.discoveries:
 		if not id is String or not known.has(id):
 			return null
-	if not data.get("journey_phase") in ["", "route", "event"] or not data.get("encounter_kind") in ["", "shrine", "merchant", "altar"]:
+	# "route" is the phase of saves made before the map; it carries the
+	# encounter it announced and becomes a map when loaded.
+	if not data.get("journey_phase") in ["", "route", "map", "event", "chest"] or not data.get("encounter_kind") in [""] + EVENT_NODES:
 		return null
-	if data.journey_phase.is_empty() != data.encounter_kind.is_empty():
+	if (data.journey_phase in ["route", "event"]) == data.encounter_kind.is_empty():
+		return null
+	if not data.lanes is Array or data.lanes.size() > LANES.size() or not (data.lane is float or data.lane is int) or data.lane != floor(data.lane) or data.lane < -1 or data.lane >= data.lanes.size():
+		return null
+	for nodes in data.lanes:
+		if not nodes is Array or nodes.size() != LANE_LENGTH:
+			return null
+		for node in nodes:
+			if not NODES.has(node):
+				return null
+	if data.journey_phase == "map" and (data.lanes.size() != LANES.size() or data.lane != -1):
 		return null
 	for key in NUMBER_KEYS:
 		if not data.has(key) or not (data[key] is float or data[key] is int) or not is_finite(float(data[key])) or float(data[key]) < 0:
@@ -1307,9 +1545,13 @@ func _read_save(path: String) -> Variant:
 			return null
 	if data.altar_pacts != floor(data.altar_pacts) or data.altar_pacts > 10000:
 		return null
-	if data.journey_phase == "event" and not data.offers.is_empty():
+	if data.journey_phase in ["event", "chest"] and not data.offers.is_empty():
 		return null
-	if not data.journey_phase.is_empty() and (data.dead or int(data.room) <= 1 or (int(data.room) - 1) % 5 != 0):
+	if not data.journey_phase.is_empty() and (data.dead or int(data.room) <= 1):
+		return null
+	if data.journey_phase in ["route", "map"] and (int(data.room) - 1) % 5 != 0:
+		return null
+	if data.chest_tier != floor(data.chest_tier) or data.chest_tier > 2:
 		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
@@ -1377,6 +1619,8 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	offers = data.offers.map(func(v): return int(v))
 	journey_phase = data.journey_phase
 	encounter_kind = data.encounter_kind
+	lanes = data.lanes.duplicate(true)
+	lane = int(data.lane)
 	var boss_count = boss_attacks
 	spawn_enemy(false)
 	boss_attacks = boss_count
@@ -1384,6 +1628,10 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 		set(key, int(data[key]) if COMBAT_DEFAULTS[key] is int else data[key])
 	ember_pos = Vector2(float(data.ember_pos[0]), float(data.ember_pos[1]))
 	weak_pos = Vector2(float(data.weak_pos[0]), float(data.weak_pos[1]))
+	if journey_phase == "route":
+		journey_phase = "map"
+		encounter_kind = ""
+		make_lanes(room)
 	forge_armor = clampf(forge_armor, 0, forge_armor_max()) if charging and is_forge_keeper() else 0.0
 	enemy_hp = clampf(data.enemy_hp, 0.01, enemy_max)
 	attack_timer = clampf(data.attack_timer, 0, attack_interval())

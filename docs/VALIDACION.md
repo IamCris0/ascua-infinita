@@ -1,5 +1,24 @@
 # Validación del proyecto
 
+## Mapa, cofres y Rueda (0.7) — 9 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 17 suites sin fallos. La partida gráfica de 70 s llega a la cámara 26 eligiendo caminos, cofres y la Rueda, sin errores.
+- `test_map.gd` es nueva (41 comprobaciones):
+  - caminos: carácter, límites y nodos válidos;
+  - descanso, élite y cofre en su cámara, con el combate congelado mientras tanto;
+  - tablas de botín;
+  - Rueda: pago exacto de cada sector, cobertura de los diez y rechazo sin oro;
+  - guardado, conversión de rutas antiguas y rechazo de mapas inválidos;
+  - logros.
+- `test_journey.gd` adaptada al mapa.
+- `test_ui.gd` (56 comprobaciones):
+  - botones de camino;
+  - mapa desde la barra de cámaras y Esc;
+  - cofre con teclado;
+  - la Rueda se detiene en el sector que eligieron las reglas.
+- Capturas revisadas: `map.png`, `chest.png` y `wheel.png`.
+- Equilibrio por camino en HOJA_DE_RUTA.md.
+
 ## Combate activo (0.6) — 8 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 16 suites, cero fallos. Partida gráfica de 70 s sin errores (9.086 fotogramas, 33 bajas).
