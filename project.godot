@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Ascua Infinita"
 config/description="Un clic enciende la llama. Cada caída la hace eterna."
-config/version="0.7.0-dev"
+config/version="0.8.0-dev"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 boot_splash/bg_color=Color(0.039, 0.047, 0.067, 1)

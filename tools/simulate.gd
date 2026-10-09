@@ -1,6 +1,6 @@
 extends SceneTree
 ## Balance probe: a simple bot plays several expeditions and reports how far it gets.
-## godot --headless --path . --script tools/simulate.gd [-- --sample] [-- --lane=1]
+## godot --headless --path . --script tools/simulate.gd [-- --sample] [-- --lane=1 --seed=7 --no-arsenal]
 const State = preload("res://scripts/run_state.gd")
 
 ## Share of parries and weak points a player at this cadence lands: an idle
@@ -99,19 +99,52 @@ func spend_legacy(s, focus: String = "") -> void:
 	if best_oath >= 0:
 		s.set_oath(best_oath)
 
+## Equips the strongest piece of each slot, salvages the rest, then spends the
+## esquirlas on the cheapest upgrade or mastery until nothing is affordable.
+func manage_arsenal(s) -> void:
+	for slot in s.SLOTS:
+		var best := {}
+		for item in s.armory:
+			if s.ITEMS[item.base].slot != slot:
+				continue
+			if best.is_empty() or s.item_value(item) / s.ITEMS[item.base].base > s.item_value(best) / s.ITEMS[best.base].base:
+				best = item
+		if not best.is_empty():
+			s.equip(best.uid)
+	for item in s.armory.duplicate():
+		if not s.is_equipped(item.uid):
+			s.salvage(item.uid)
+	while true:
+		var cost = INF
+		var action = Callable()
+		for slot in s.SLOTS:
+			var item = s.equipped_item(slot)
+			if not item.is_empty() and item.level < s.max_item_level(item) and s.upgrade_cost(item) < cost:
+				cost = s.upgrade_cost(item)
+				action = s.upgrade_item.bind(item.uid)
+		for i in range(s.MASTERIES.size()):
+			if s.mastery(s.MASTERIES[i].id) < s.MASTERIES[i].max and s.mastery_cost(i) < cost:
+				cost = s.mastery_cost(i)
+				action = s.buy_mastery.bind(i)
+		if not action.is_valid() or cost > s.scrap or not action.call():
+			break
+
 func _initialize() -> void:
 	# --lane=N keeps the bot on one lane of the map (0 safe, 1 risk, 2 chance).
 	var lane_choice = 0
+	var seed_value = 42
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--lane="):
 			lane_choice = int(arg.substr(7))
+		elif arg.begins_with("--seed="):
+			seed_value = int(arg.substr(7))
 	if "--sample" in OS.get_cmdline_user_args():
 		for cps in [0.0, 1.0, 3.0, 5.0]:
 			var rooms: Array = []
 			var minutes = 0.0
-			for seed_value in [7, 19, 42, 73, 101]:
+			for sample_seed in [7, 19, 42, 73, 101]:
 				var sample = State.new()
-				sample.rng.seed = seed_value
+				sample.rng.seed = sample_seed
 				sample.restart()
 				var result = play(sample, cps, "balanced", 40, lane_choice)
 				rooms.append(result.room)
@@ -121,7 +154,7 @@ func _initialize() -> void:
 		return
 	for cps in [0.0, 1.0, 3.0, 5.0]:
 		var s = State.new()
-		s.rng.seed = 42
+		s.rng.seed = seed_value
 		var line = "cps %.0f:" % cps
 		for run in range(12):
 			s.restart()
@@ -129,5 +162,7 @@ func _initialize() -> void:
 			line += "  [#%d sala %d, %.1f min, +%d]" % [run + 1, r.room, r.minutes, r.essence]
 			s.finish_run()
 			spend_legacy(s)
+			if not "--no-arsenal" in OS.get_cmdline_user_args():
+				manage_arsenal(s)
 		print(line)
 	quit()

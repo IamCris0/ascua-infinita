@@ -5,8 +5,8 @@ func run(game) -> void:
 	var failures: Array[String] = []
 	if game.lib.characters.size() < 5 or game.lib.backgrounds.size() != 3:
 		failures.append("Missing character or background resources")
-	if game.lib.map_icons == null or game.lib.chests == null:
-		failures.append("Missing map icons or chests")
+	if game.lib.map_icons == null or game.lib.chests == null or game.lib.item_icons == null:
+		failures.append("Missing map, chest or equipment art")
 	if game.audio.streams.size() != game.audio.SFX.size() or game.audio.music.size() != game.audio.TRACKS.size():
 		failures.append("Missing audio")
 	for path in ["res://assets/art/atlas.json", "res://assets/art/imagegen/characters.json"]:

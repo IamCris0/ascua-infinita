@@ -202,6 +202,8 @@ func _initialize() -> void:
 	s.click_cooldown = 0
 	check(s.click() and not s.echo_healing(), "A manual attack stops the crypt echo")
 	# Elite enemies.
+	s.enemy_elite = false
+	s.spawn_enemy(false)
 	var base_max = s.enemy_max
 	var base_reward = s.kill_reward()
 	s.enemy_elite = true

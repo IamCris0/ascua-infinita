@@ -7,6 +7,7 @@ automatically, then stored at 4x so the game can show it at any size.
 Outputs:
   assets/art/loot/map_icons.png   ten 16 px icons in a row (see ICONS)
   assets/art/loot/chests.png      3 tiers x (closed, open), 40 x 34 px cells
+  assets/art/loot/items.png       nine equipment pieces and the shard (see ITEMS)
 """
 import math
 import os
@@ -287,6 +288,189 @@ def icon_crown():
 ICONS = [icon_fight, icon_elite, icon_rest, icon_chest, icon_shrine, icon_merchant, icon_altar, icon_wheel, icon_star, icon_crown]
 
 
+# ---------------------------------------------------------------- equipment (0.8)
+def item_ash_sword():
+    c = Canvas(16, 16)
+    for t in range(10):  # blade with a glowing ember edge
+        c.set(13 - t, 1 + t, "c")
+        c.set(14 - t, 1 + t, "o")
+    c.set(14, 1, "y")
+    c.line(1, 9, 5, 13, "n")
+    c.line(2, 9, 6, 13, "C")
+    c.line(2, 12, 1, 13, "B")
+    c.set(0, 14, "o")
+    c.outline()
+    return c
+
+
+def item_comet_blade():
+    c = Canvas(16, 16)
+    c.rows(2, 1, [
+        "..........y.",
+        ".........yty",
+        "........tt.y",
+        ".......tw...",
+        "......tw....",
+        ".....tw.....",
+        "....tw......",
+        "...Ttw......",
+        "..TTt.......",
+        ".gGT........",
+        "gGg.........",
+        ".b..........",
+        "b...........",
+    ])
+    c.outline()
+    return c
+
+
+def item_rune_spear():
+    c = Canvas(16, 16)
+    c.rows(6, 0, [
+        "..p.",
+        ".ppP",
+        ".pyP",
+        "ppyP",
+        ".pPP",
+        "..P.",
+    ])
+    for y in range(6, 16):
+        c.set(7, y, "b")
+        c.set(8, y, "B")
+    c.rect(6, 6, 9, 6, "g")
+    c.set(7, 10, "p")
+    c.set(8, 12, "p")
+    c.outline()
+    return c
+
+
+def item_wisp_lantern():
+    c = Canvas(16, 16)
+    c.rows(3, 0, [
+        "....SS....",
+        "...S..S...",
+        "..SSSSSS..",
+        "..S.tt.S..",
+        ".S.tTwt.S.",
+        ".S.twwt.S.",
+        ".S.tTTt.S.",
+        ".S..tt..S.",
+        "..SSSSSS..",
+        "...SggS...",
+        "...SSSS...",
+    ])
+    c.outline()
+    return c
+
+
+def item_black_hourglass():
+    c = Canvas(16, 16)
+    c.rows(3, 1, [
+        "gggggggggg",
+        ".GnnnnnnG.",
+        ".Gn.yy.nG.",
+        "..Gnyyn G.".replace(" ", "G")[:10],
+        "...Gnn G..".replace(" ", "G")[:10],
+        "....yy....",
+        "...Gnn G..".replace(" ", "G")[:10],
+        "..Gn.. nG.".replace(" ", "n")[:10],
+        ".Gn.yy.nG.",
+        ".GnyyyynG.",
+        ".Gnyyyyng.",
+        "gggggggggg",
+    ])
+    c.outline()
+    return c
+
+
+def item_silver_bell():
+    c = Canvas(16, 16)
+    c.rows(3, 1, [
+        "....SS....",
+        "...SwsS...",
+        "..SwssS...",
+        "..SwssSS..",
+        ".SwsssSS..",
+        ".SwsssSS..",
+        ".SwssssS..",
+        "SwsssssSS.",
+        "SSSSSSSSS.",
+        "....gg....",
+        "....gG....",
+    ])
+    c.outline()
+    return c
+
+
+def item_moss_charm():
+    c = Canvas(16, 16)
+    c.line(3, 0, 7, 5, "C")
+    c.line(12, 0, 8, 5, "C")
+    c.disc(8, 10, 4, "E")
+    c.disc(8, 10, 3, "e")
+    c.disc(7, 9, 1, "y")
+    c.rect(7, 5, 8, 6, "g")
+    c.outline()
+    return c
+
+
+def item_split_coin():
+    c = Canvas(16, 16)
+    c.disc(7, 8, 6, "G")
+    c.disc(7, 8, 5, "g")
+    c.ring(7, 8, 3, "G")
+    c.rect(6, 6, 8, 10, "y")
+    # A jagged crack splits the coin in two.
+    for x, y in ((8, 2), (7, 3), (8, 4), (9, 5), (8, 6), (7, 7), (8, 8), (9, 9), (8, 10), (7, 11), (8, 12), (9, 13), (8, 14)):
+        c.set(x, y, "d")
+    c.outline()
+    return c
+
+
+def item_forge_scale():
+    c = Canvas(16, 16)
+    c.rows(2, 1, [
+        "....OOOO....",
+        "..OOooooOO..",
+        ".OooyyyyooO.",
+        ".OoyyooyyoO.",
+        "OooyoOOoyooO",
+        "OooOOooOOooO",
+        "OoOooooooOoO",
+        ".OoooyyoooO.",
+        ".OOooyyooOO.",
+        "..OOooooOO..",
+        "...OOooOO...",
+        ".....OO.....",
+    ])
+    c.outline()
+    return c
+
+
+def item_scrap():
+    c = Canvas(16, 16)
+    c.rows(1, 1, [
+        ".....w........",
+        "....wsS.......",
+        "....wsS.......",
+        "...wssSS......",
+        "...wssSS...w..",
+        "..wsssSS..wsS.",
+        "..wssSSS..wsS.",
+        "..SSSSSS.wssSS",
+        ".w.......wssSS",
+        "wsS......SSSSS",
+        "wssS..........",
+        "SSSS..........",
+    ])
+    c.outline()
+    return c
+
+
+ITEMS = [item_ash_sword, item_comet_blade, item_rune_spear, item_wisp_lantern, item_black_hourglass,
+         item_silver_bell, item_moss_charm, item_split_coin, item_forge_scale, item_scrap]
+
+
 # ---------------------------------------------------------------- chests
 TIERS = [
     # body light, body dark, plank line, band light, band dark, lock, lock dark, inner glow
@@ -364,3 +548,7 @@ if __name__ == "__main__":
         for opened in (0, 1):
             sheet.paste(chest(tier, opened).image(), (CHEST_W * opened, CHEST_H * tier))
     save(sheet, "chests.png")
+    sheet = Image.new("RGBA", (16 * len(ITEMS), 16), (0, 0, 0, 0))
+    for i, fn in enumerate(ITEMS):
+        sheet.paste(fn().image(), (16 * i, 0))
+    save(sheet, "items.png")

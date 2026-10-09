@@ -13,6 +13,9 @@ const EVENT_CELL = 360
 const MAP_ICONS = "res://assets/art/loot/map_icons.png"
 const MAP_ICON_ORDER = ["fight", "elite", "rest", "chest", "shrine", "merchant", "altar", "wheel", "milestone", "boss"]
 const CHESTS = "res://assets/art/loot/chests.png"
+# Equipment pieces in the order of run_state.ITEM_IDS, then the esquirla.
+const ITEM_ICONS = "res://assets/art/loot/items.png"
+const ITEM_ORDER = ["ash_sword", "comet_blade", "rune_spear", "wisp_lantern", "black_hourglass", "silver_bell", "moss_charm", "split_coin", "forge_scale", "scrap"]
 const CHEST_CELL = Vector2(160, 136)
 
 static var _shared = null
@@ -26,6 +29,7 @@ var backgrounds: Array[Texture2D] = []
 var events: Texture2D
 var map_icons: Texture2D
 var chests: Texture2D
+var item_icons: Texture2D
 var _atlas_cache: Dictionary = {}
 var heading_font: Font
 var button_font: Font
@@ -63,6 +67,7 @@ func _init() -> void:
 	events = load(EVENTS)
 	map_icons = load(MAP_ICONS)
 	chests = load(CHESTS)
+	item_icons = load(ITEM_ICONS)
 	heading_font = _font("res://assets/fonts/Jersey10-Regular.ttf")
 	button_font = heading_font
 	logo_font = heading_font
@@ -172,6 +177,11 @@ func _cached_region(key: String, atlas: Texture2D, region: Rect2) -> AtlasTextur
 func map_icon(kind: String) -> AtlasTexture:
 	var index = maxi(0, MAP_ICON_ORDER.find(kind))
 	return _cached_region("map:" + kind, map_icons, Rect2(index * 64, 0, 64, 64))
+
+## An equipment piece by its base id, or "scrap" for the esquirla.
+func item_icon(base: String) -> AtlasTexture:
+	var index = maxi(0, ITEM_ORDER.find(base))
+	return _cached_region("item:" + base, item_icons, Rect2(index * 64, 0, 64, 64))
 
 func chest_art(tier: int, opened: bool) -> AtlasTexture:
 	return _cached_region("chest:%d:%d" % [tier, int(opened)], chests, Rect2(Vector2(CHEST_CELL.x * int(opened), CHEST_CELL.y * tier), CHEST_CELL))

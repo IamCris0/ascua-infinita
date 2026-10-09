@@ -12,6 +12,7 @@ const TitleArt = preload("res://scripts/title_art.gd")
 const UiFactory = preload("res://scripts/ui_factory.gd")
 const LegacyTree = preload("res://scripts/legacy_tree.gd")
 const JourneyScreens = preload("res://scripts/journey_screens.gd")
+const ArsenalScreen = preload("res://scripts/arsenal_screen.gd")
 # Read from project.godot so a single setting names every build.
 var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
@@ -73,6 +74,8 @@ var hitstop_until: int = 0
 # Live views of the chest and wheel screens, for their keyboard shortcuts.
 var chest_view
 var wheel_view
+# Piece shown in the Arsenal's sheet.
+var arsenal_selected: int = -1
 var log_label: Label
 var status_label: Label
 var rule_label: Label
@@ -226,6 +229,10 @@ func connect_state() -> void:
 		audio.play("heal" if kind == "heal" else "ember_take")
 	)
 	state.relic_offered.connect(func(): audio.play("offer"))
+	state.item_found.connect(func(item):
+		arena.show_toast("BOTÍN  ·  %s (%s)" % [state.item_name(item), state.RARITIES[item.rarity].to_lower()])
+		audio.play("chest_rare" if item.rarity >= 2 else "loot")
+	)
 	state.node_entered.connect(func(node):
 		if node == "rest":
 			arena.show_banner("DESCANSO", "Recuperas vida antes del combate", Color("86e0bd"), 1.8)
@@ -1027,7 +1034,8 @@ func show_howto(return_to: String) -> void:
 		[lib.upgrade_icon(3), "Cuando brille un PUNTO DÉBIL dorado sobre el enemigo, haz clic encima: crítico seguro y Destello más cerca. Espacio no lo alcanza."],
 		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y un camino en el mapa: descansos, élites, cofres, mercaderes, altares o la Rueda del eclipse. El combate espera tu decisión. Clic en la barra de cámaras para volver a ver el mapa."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
-		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]
+		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."],
+		[lib.item_icon("ash_sword"), "Los jefes, algunos élites y los cofres dejan piezas de equipo que se conservan al caer. Equípalas, mejóralas con esquirlas y compra maestrías en el ARSENAL (pausa u hoguera)."]
 	]
 	for tip in tips:
 		var row = HBoxContainer.new()
@@ -1057,7 +1065,7 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 	var v = modal("collection", "MEMORIAS DEL ECLIPSE", "Colección · %d / %d" % [state.discoveries.size(), catalog.size()], "Tus descubrimientos permanecen al renacer. Lo desconocido se revela al encontrarlo.", 820)
 	var tabs = HBoxContainer.new()
 	v.add_child(tabs)
-	for section in ["Enemigos", "Reliquias", "Sinergias", "Logros", "Registro"]:
+	for section in ["Enemigos", "Reliquias", "Sinergias", "Arsenal", "Logros", "Registro"]:
 		var tab = ui.button(tabs, section, func(): show_collection(return_to, section), 42, 16)
 		tab.disabled = section == category
 	var scroll = ScrollContainer.new()
@@ -1093,6 +1101,41 @@ func show_collection(return_to: String, category: String = "Enemigos") -> void:
 		ui.separator(list)
 	ui.button(v, "VOLVER", func(): _return_from(modal_return), 48)
 	persist()
+
+func show_arsenal(return_to: String, tab: String = "Equipo") -> void:
+	modal_return = return_to
+	state.paused = true
+	if state.item_by_uid(arsenal_selected).is_empty():
+		arsenal_selected = -1
+	var v = modal("arsenal", "ARSENAL DEL PORTADOR", "Equipo y maestrías", "", 1240)
+	ArsenalScreen.build(self, v, tab)
+	ui.button(v, "VOLVER", func(): _return_from(modal_return), 48)
+
+func select_item(uid: int) -> void:
+	arsenal_selected = uid
+	audio.play("ui_click")
+	show_arsenal(modal_return, "Equipo")
+
+## Equip, take off, upgrade or salvage a piece, or buy a mastery level.
+func arsenal_action(kind: String, value: int) -> void:
+	var ok := false
+	match kind:
+		"equip": ok = state.equip(value)
+		"unequip":
+			var item = state.item_by_uid(value)
+			ok = not item.is_empty() and state.unequip(state.ITEMS[item.base].slot)
+		"upgrade": ok = state.upgrade_item(value)
+		"salvage":
+			ok = state.salvage(value)
+			if ok:
+				arsenal_selected = -1
+		"mastery": ok = state.buy_mastery(value)
+	if not ok:
+		audio.play("ui_denied")
+		return
+	audio.play({"salvage": "chest_hit", "upgrade": "relic", "mastery": "relic"}.get(kind, "buy"), 0.04)
+	persist()
+	show_arsenal(modal_return, "Maestrías" if kind == "mastery" else "Equipo")
 
 func show_options(return_to: String) -> void:
 	modal_return = return_to
@@ -1160,6 +1203,7 @@ func toggle_pause_menu() -> void:
 	ui.button(v, "CONTINUAR", func(): close_modal(), 56, 21)
 	ui.button(v, "OPCIONES", func(): show_options("pause"), 50)
 	ui.button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
+	ui.button(v, "ARSENAL", func(): show_arsenal("pause"), 50)
 	ui.button(v, "COLECCIÓN", func(): show_collection("pause"), 50)
 	ui.button(v, "MENÚ PRINCIPAL", func():
 		persist()
@@ -1284,6 +1328,14 @@ func show_summary() -> void:
 	ui.label(gain, "+%d ascuas" % state.last_banked, 34, Kit.TEAL, true)
 	if state.eclipse > 0:
 		ui.label(gain, "Eclipse %d: +%d%%" % [state.eclipse, roundi(state.ECLIPSE_BONUS * state.eclipse * 100)], 16, Kit.RUNE, true).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if not state.run_items.is_empty():
+		var found: Array = []
+		for uid in state.run_items:
+			var item = state.item_by_uid(uid)
+			if not item.is_empty():
+				found.append("%s (%s)" % [state.item_name(item), state.RARITIES[item.rarity].to_lower()])
+		if not found.is_empty():
+			ui.wrap_label(v, "Botín para el arsenal: " + ", ".join(found), 16, Kit.GOLD)
 	ui.button(v, "IR A LA HOGUERA   →", func(): show_camp(), 58, 21)
 	persist()
 
@@ -1298,7 +1350,7 @@ func show_camp() -> void:
 		persist()
 		show_title()
 	, 58)
-	menu_b.custom_minimum_size.x = 240
+	menu_b.custom_minimum_size.x = 210
 	if state.eclipse_unlocked > 0:
 		var eclipse_b = ui.button(actions, "ECLIPSE %d" % state.eclipse, func():
 			state.set_eclipse((state.eclipse + 1) % (state.eclipse_unlocked + 1))
@@ -1307,7 +1359,8 @@ func show_camp() -> void:
 		, 58)
 		eclipse_b.custom_minimum_size.x = 200
 		eclipse_b.tooltip_text = eclipse_text()
-	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 200
+	ui.button(actions, "ARSENAL", func(): show_arsenal("camp"), 58).custom_minimum_size.x = 170
+	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 170
 	var go = ui.button(actions, "RENACER   →   NUEVA EXPEDICIÓN  [ENTER]", rebirth, 58, 21)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	persist()
@@ -1356,7 +1409,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if key == KEY_ESCAPE:
 		match modal_type:
 			"pause": close_modal()
-			"options", "howto", "collection": _return_from(modal_return)
+			"options", "howto", "collection", "arsenal": _return_from(modal_return)
 			"map_view": close_modal()
 			"retreat", "confirm": close_modal(screen == "game")
 			"":
@@ -1459,6 +1512,16 @@ func capture() -> void:
 				if shot == "wheel":
 					press_modal_button("GIRAR")
 			"relic": show_relics()
+			"arsenal", "masteries":
+				state.scrap = 64
+				state.masteries = {"burst_power": 2, "guard_window": 1, "riposte": 3}
+				for spec in [["ash_sword", 2, 3, "vampire"], ["wisp_lantern", 1, 2, ""], ["moss_charm", 3, 6, "steady"], ["comet_blade", 0, 0, ""], ["black_hourglass", 2, 0, "keen"], ["split_coin", 1, 1, ""], ["rune_spear", 0, 2, ""], ["forge_scale", 1, 0, ""], ["silver_bell", 0, 1, ""]]:
+					state.armory.append({"uid": state.next_item_uid, "base": spec[0], "rarity": spec[1], "level": spec[2], "trait": spec[3]})
+					state.next_item_uid += 1
+				for uid in [1, 2, 3]:
+					state.equip(uid)
+				arsenal_selected = 1
+				show_arsenal("pause", "Maestrías" if shot == "masteries" else "Equipo")
 			"camp":
 				state.finish_run()
 				fall_timer = -1.0

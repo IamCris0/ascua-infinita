@@ -170,7 +170,9 @@ Bot con 12 expediciones; cámaras alcanzadas en las expediciones 9–12. El bot 
 - Logros 15 y 16: Cazatesoros (15 cofres) y La rueda sonríe (Oro ×3).
 - Las partidas con una ruta pendiente de la versión anterior la convierten en mapa al cargar.
 
-## Fase C · Arsenal (0.8)
+## Fase C · Arsenal (0.8) — implementada el 9 de octubre de 2026
+
+Capturas: [equipo](arsenal.png) y [maestrías](masteries.png).
 
 **Equipamiento**
 - Tres ranuras: arma, talismán y amuleto.
@@ -185,6 +187,69 @@ Bot con 12 expediciones; cámaras alcanzadas en las expediciones 9–12. El bot 
 
 **Maestrías**
 - Mejoras permanentes de Destello y Parada, por ejemplo una ventana de parada más amplia o un Destello que encadena.
+
+### Resultado de la fase C
+
+**Equipamiento**
+- Nueve piezas, tres por ranura:
+
+| Ranura | Pieza | Efecto (base común) |
+|---|---|---|
+| Arma | Espada de ceniza · Hoja del cometa · Lanza rúnica | +5% clic · +1,5% crítico · +8% Destello |
+| Talismán | Farol de luceros · Reloj de arena negra · Campanilla de plata | +5% luceros · −2,5% recarga de Destello · +2,5% velocidad de luceros |
+| Amuleto | Amuleto de musgo · Moneda partida · Escama de forja | +4% vida · +5% oro · −2% daño recibido |
+
+- Rareza ×1 / ×1,35 / ×1,8 / ×2,4. Cada nivel suma un 8% del valor base; el nivel máximo es 4, 6, 8 o 10 según la rareza.
+- Las épicas tienen un 40% de probabilidad de traer **rasgo** y las legendarias siempre lo traen. Hay seis:
+  - Sed de brasas: los críticos curan.
+  - Ojo de halcón: más puntos débiles.
+  - Pulso sereno: parada perfecta más larga.
+  - Espinas de obsidiana: el bloqueo devuelve daño.
+  - Buena estrella: cofres mejores.
+  - Imán de ascuas: más ascuas errantes.
+- **Origen**:
+  - Todos los jefes dejan una pieza y esquirlas.
+  - Los élites tienen un 15% de probabilidad, sin legendarias.
+  - Los cofres pueden traer una pieza (más probable y mejor cuanto mejor es el cofre) o esquirlas.
+- Arsenal de 24 piezas. Lleno, lo nuevo se funde en esquirlas.
+- **Cambio sobre la propuesta**: las piezas se equipan en cualquier momento (pausa u hoguera), no solo entre expediciones.
+
+**Mejora, desguace y maestrías**
+- Mejorar cuesta (nivel + 1) × 2, 3, 5 u 8 esquirlas según la rareza. Desguazar devuelve 2, 5, 12 o 30 esquirlas más la mitad de lo invertido. Las piezas equipadas no se pueden desguazar.
+- Seis maestrías:
+  - Destello ardiente (+8% de daño por nivel);
+  - Recarga veloz (−4%);
+  - Guardia amplia (+0,04 s de parada perfecta);
+  - Contraataque (+0,5×);
+  - Guardia firme (el bloqueo detiene un 5% más);
+  - Ojo afilado (+0,25 s y +0,2× al punto débil).
+- Cada nivel de maestría cuesta su precio base (9 a 15 esquirlas) multiplicado por el nivel que alcanza.
+
+**Equilibrio**
+
+El bot equipa lo mejor, desguaza el resto y gasta las esquirlas en lo más barato. Con una sola semilla, el Arsenal parecía llevar a la cámara 60 desde la sexta expedición. Con tres semillas resultó ser un caso de suerte, así que la comparación usa medias. Cámara media de las expediciones 9–12, tres semillas:
+
+| Intentos/s | Sin Arsenal | Primera versión | Versión final |
+|---|---|---|---|
+| 0 | 20,9 | 22,2 | 21,8 |
+| 1 | 32,6 | 38,3 | 32,4 |
+| 3 | 41,9 | 46,9 | 47,8 |
+| 5 | 50,6 | 55,8 | 58,2 |
+
+- El Arsenal añade unas cinco cámaras al juego activo.
+- La versión final suaviza el crecimiento:
+  - una legendaria a nivel 10 multiplica su base por 4,3 en lugar de 6,4;
+  - las maestrías cuestan un 50% más;
+  - los jefes dan menos esquirlas.
+
+  Así queda margen para los personajes de la fase D.
+- Las diferencias entre versiones con jugador activo están dentro del ruido de tres semillas.
+- `tools/simulate.gd` acepta ahora `--seed=N` y `--no-arsenal`.
+
+**Otros cambios**
+- Iconos de las piezas y de las esquirlas dibujados por `make_loot_art.py`.
+- Pestaña **Arsenal** en la Colección (nueve entradas) y el botín en el resumen de cada expedición.
+- Logros 17 y 18: Leyenda forjada (una legendaria) y Mano de herrero (una pieza al nivel máximo).
 
 ## Fase D · Portadores (0.9)
 
