@@ -21,6 +21,10 @@ signal achievement_unlocked(id: String)
 signal echo_strike
 signal attack_started
 signal burst_released(interrupted: bool)
+signal parry_started
+signal parried(full: bool)
+signal weak_appeared
+signal weak_struck
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -89,7 +93,9 @@ const ACHIEVEMENTS = [
 	{"id": "oath", "name": "Juramentado", "description": "Compra tu primer juramento."},
 	{"id": "idle_boss", "name": "Los luceros bastan", "description": "Derrota a un jefe sin atacar con clic durante el combate."},
 	{"id": "eclipse", "name": "Más allá del eclipse", "description": "Supera la cámara 30 en Eclipse 1 o superior."},
-	{"id": "collection", "name": "Memoria del eclipse", "description": "Completa la colección."}]
+	{"id": "collection", "name": "Memoria del eclipse", "description": "Completa la colección."},
+	{"id": "parry", "name": "Guardia perfecta", "description": "Para 25 golpes enemigos."},
+	{"id": "weak", "name": "Ojo certero", "description": "Acierta 50 puntos débiles."}]
 const HISTORY_SIZE = 8
 const OATH_ECHO = 8
 const OATH_SWARM = 11
@@ -108,7 +114,8 @@ const ENEMY_NAMES = [
 ]
 const BOSS_TITLES = ["SEÑOR DEL JARDÍN", "SEÑOR DE LAS CRIPTAS", "SEÑOR DE LA FORJA"]
 const EMBER_KINDS = ["gold", "fury", "heal", "spark"]
-const SPAWN_DELAY = 0.35
+# Between chambers the bearer walks on and the next rival arrives on foot.
+const SPAWN_DELAY = 1.1
 const BOSS_INTRO = 1.6
 # The first meeting with each boss earns a longer entrance: the walk-in, then
 # a closer look with its name and how to face it. Skipping leaves a moment.
@@ -127,6 +134,31 @@ const ECHO_REGEN = 0.03
 const FORGE_ARMOR = 0.12
 const FORGE_BURST = 1.5
 const FORGE_POUR = 2.4
+# Parada: a short guard. A normal blow that lands early in it (a perfect
+# parry) is cancelled, the enemy is stunned and the bearer ripostes; later in
+# the guard it is only blocked. Charged blows are never cancelled. A guard that
+# catches nothing leaves a longer recovery, so mashing does not pay.
+const PARRY_WINDOW = 0.5
+const PARRY_PERFECT = 0.25
+const PARRY_WHIFF = 1.6
+const PARRY_RECOVER = 0.4
+const PARRY_STUN = 0.8
+const PARRY_RIPOSTE = 2.0
+# Share of the blow that still lands: blocked normal blow, charged blow after a
+# perfect guard, charged blow after a late one, boss blow after a perfect parry.
+# Bosses are too heavy to turn aside completely, so they stay a test of
+# health and damage (simulation: without this, skilled play skipped the
+# room-30 wall entirely).
+const PARRY_BLOCK = 0.5
+const PARRY_HEAVY = 0.5
+const PARRY_HEAVY_BLOCK = 0.75
+const PARRY_BOSS = 0.5
+# Punto débil: a spot that lights up on the enemy. Only an aimed click reaches
+# it; the hit is a sure critical with a bonus and speeds up Destello.
+const WEAK_FIRST = 4.0
+const WEAK_TIME = 2.6
+const WEAK_BONUS = 1.5
+const WEAK_RECHARGE = 1.5
 
 var rng = RandomNumberGenerator.new()
 # Expedition
@@ -148,6 +180,13 @@ var pending_hit: float = 0
 var pending_damage: float = 0
 var pending_critical: bool = false
 var pending_echo: bool = false
+var parry_window: float = 0
+var parry_cooldown: float = 0
+var weak_active: bool = false
+var weak_timer: float = 0
+var weak_cooldown: float = WEAK_FIRST
+# Offset of the weak point from the enemy's centre, each axis in -1..1.
+var weak_pos: Vector2 = Vector2.ZERO
 var last_breath_used: bool = false
 var burst_cooldown: float = 0
 var combo: int = 0
@@ -189,6 +228,8 @@ var achievements: Array = []
 var history: Array = []
 var total_interrupts: int = 0
 var total_armor_breaks: int = 0
+var total_parries: int = 0
+var total_weak: int = 0
 var fight_clicks: int = 0
 var last_banked: int = 0
 var total_kills: int = 0
@@ -262,6 +303,10 @@ func unlock_earned() -> void:
 		unlock("first_kill")
 	if total_embers >= 25:
 		unlock("embers")
+	if total_parries >= 25:
+		unlock("parry")
+	if total_weak >= 50:
+		unlock("weak")
 	for k in range(LEGACY.size()):
 		if is_oath(k) and legacy_level(k) > 0:
 			unlock("oath")
@@ -559,6 +604,8 @@ func tick(delta: float) -> void:
 	manual_rest = minf(2, manual_rest + delta)
 	click_cooldown = maxf(0, click_cooldown - delta)
 	burst_cooldown = maxf(0, burst_cooldown - delta)
+	parry_window = maxf(0, parry_window - delta)
+	parry_cooldown = maxf(0, parry_cooldown - delta)
 	fury_time = maxf(0, fury_time - delta)
 	combo_time = maxf(0, combo_time - delta)
 	if combo_time <= 0:
@@ -581,6 +628,7 @@ func tick(delta: float) -> void:
 			damage_enemy(damage, pending_critical, false)
 			if not active() or spawn_delay > 0:
 				return
+	_tick_weak(delta)
 	if echo_healing():
 		enemy_hp = minf(enemy_max, enemy_hp + enemy_max * ECHO_REGEN * delta)
 	auto_timer += delta
@@ -602,6 +650,13 @@ func tick(delta: float) -> void:
 			boss_attacks += 1
 			bell_resonance = 0
 			forge_armor = 0
+			if parry_window > 0:
+				var share = PARRY_HEAVY if perfect_guard() else PARRY_HEAVY_BLOCK
+				damage *= share
+				parry_window = 0
+				parry_cooldown = PARRY_RECOVER
+				parried.emit(false)
+				event.emit("Parada parcial · el golpe cargado pierde un %d%%" % roundi((1.0 - share) * 100))
 			_hit_hero(damage, true, spell)
 	else:
 		attack_timer += delta
@@ -615,10 +670,72 @@ func tick(delta: float) -> void:
 					forge_armor = forge_armor_max()
 				event.emit(charge_name() + " · " + charge_hint())
 				boss_charge_started.emit()
+			elif parry_window > 0:
+				_guard_blow()
 			else:
 				boss_attacks += 1
 				_hit_hero(enemy_damage(), false)
 	changed.emit()
+
+func can_parry() -> bool:
+	return can_strike() and parry_cooldown <= 0
+
+## Raises the guard. The blow decides the outcome when it lands.
+func parry() -> bool:
+	if not can_parry():
+		return false
+	parry_window = PARRY_WINDOW
+	parry_cooldown = PARRY_WHIFF
+	parry_started.emit()
+	return true
+
+## A blow landing now would meet a perfect parry: the guard went up just in time.
+func perfect_guard() -> bool:
+	return parry_window > 0 and parry_window >= PARRY_WINDOW - PARRY_PERFECT
+
+## Seconds until the next normal blow lands, or -1 when none is coming.
+func blow_in() -> float:
+	if not can_strike() or charging or stun_time > 0 or next_is_heavy():
+		return -1.0
+	return maxf(0, attack_interval() - attack_timer)
+
+func _guard_blow() -> void:
+	var perfect = perfect_guard()
+	boss_attacks += 1
+	parry_window = 0
+	parry_cooldown = PARRY_RECOVER
+	if not perfect:
+		parried.emit(false)
+		event.emit("Bloqueo · el golpe pierde la mitad")
+		_hit_hero(enemy_damage() * PARRY_BLOCK, false)
+		return
+	stun_time = PARRY_STUN
+	total_parries += 1
+	if total_parries >= 25:
+		unlock("parry")
+	parried.emit(true)
+	event.emit("¡Parada perfecta! " + enemy_name() + " queda aturdido")
+	if is_boss() and PARRY_BOSS > 0:
+		_hit_hero(enemy_damage() * PARRY_BOSS, false)
+	damage_enemy(click_damage() * PARRY_RIPOSTE, false, false)
+
+func _tick_weak(delta: float) -> void:
+	if weak_active:
+		weak_timer = maxf(0, weak_timer - delta)
+		if weak_timer <= 0:
+			weak_active = false
+			weak_cooldown = rng.randf_range(6, 10)
+		return
+	weak_cooldown = maxf(0, weak_cooldown - delta)
+	if weak_cooldown <= 0:
+		weak_active = true
+		weak_timer = WEAK_TIME
+		weak_pos = Vector2(rng.randf_range(-0.7, 0.7), rng.randf_range(-0.6, 0.5))
+		weak_appeared.emit()
+
+## An aimed click on the lit weak point.
+func strike_weak() -> bool:
+	return weak_active and click(true)
 
 func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 	if shelter_ready and has_synergy("shelter"):
@@ -689,8 +806,8 @@ func collect_ember() -> String:
 	changed.emit()
 	return kind
 
-func click() -> bool:
-	if not can_strike() or click_cooldown > 0:
+func click(weak: bool = false) -> bool:
+	if not can_strike() or click_cooldown > 0 or (weak and not weak_active):
 		return false
 	click_cooldown = CLICK_INTERVAL
 	manual_rest = 0
@@ -699,8 +816,16 @@ func click() -> bool:
 	combo_time = 1.5
 	if charging and bell_silence():
 		bell_resonance = mini(3, bell_resonance + 1)
-	pending_critical = rng.randf() < critical_chance()
-	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0)
+	pending_critical = weak or rng.randf() < critical_chance()
+	pending_damage = click_damage() * (1 + combo * 0.015) * (critical_multiplier() if pending_critical else 1.0) * (WEAK_BONUS if weak else 1.0)
+	if weak:
+		weak_active = false
+		weak_cooldown = rng.randf_range(6, 10)
+		burst_cooldown = maxf(0, burst_cooldown - WEAK_RECHARGE)
+		total_weak += 1
+		if total_weak >= 50:
+			unlock("weak")
+		weak_struck.emit()
 	pending_echo = oath == OATH_ECHO and combo % 10 == 0
 	if pending_echo:
 		pending_damage *= 3
@@ -826,6 +951,10 @@ func defeat_enemy() -> void:
 
 func spawn_enemy(roll_elite: bool = true) -> void:
 	fight_clicks = 0
+	parry_window = 0
+	weak_active = false
+	weak_timer = 0
+	weak_cooldown = WEAK_FIRST
 	bell_resonance = 0
 	forge_armor = 0
 	shield_hits = 4 if enemy_role() == "guardian" else 0
@@ -948,6 +1077,8 @@ func finish_run() -> void:
 	pending_damage = 0
 	charging = false
 	ember_active = false
+	weak_active = false
+	parry_window = 0
 	offers.clear()
 	journey_phase = ""
 	encounter_kind = ""
@@ -997,6 +1128,7 @@ func restart() -> void:
 	auto_timer = 0
 	click_cooldown = 0
 	burst_cooldown = 0
+	parry_cooldown = 0
 	fury_time = 0
 	combo = 0
 	combo_time = 0
@@ -1011,17 +1143,19 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 	"best", "runs", "total_kills", "total_bosses", "total_elites", "total_embers", "total_gold", "saved_at",
 	"burst_cooldown", "attack_timer", "run_kills", "run_gold", "run_time", "run_bosses", "boss_attacks",
 	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
-	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks"]
+	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
 const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready": false, "last_breath_used": false, "bell_resonance": 0, "forge_armor": 0.0, "shield_hits": 0, "pending_hit": 0.0, "pending_damage": 0.0, "pending_critical": false, "auto_timer": 0.0, "click_cooldown": 0.0, "combo": 0,
 	"combo_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
-	"ember_active": false, "ember_timer": 0.0}
+	"ember_active": false, "ember_timer": 0.0,
+	"parry_window": 0.0, "parry_cooldown": 0.0, "weak_active": false, "weak_timer": 0.0, "weak_cooldown": WEAK_FIRST}
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
-	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0}
+	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0,
+	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME, "weak_cooldown": 10.0}
 
 func snapshot() -> Dictionary:
 	var data := {"version": SAVE_VERSION, "discoveries": discoveries.duplicate(), "relics": relics, "offers": offers, "legacy": legacy,
@@ -1034,6 +1168,7 @@ func snapshot() -> Dictionary:
 	for key in COMBAT_DEFAULTS:
 		data[key] = get(key)
 	data.ember_pos = [ember_pos.x, ember_pos.y]
+	data.weak_pos = [weak_pos.x, weak_pos.y]
 	data.oath = oath
 	data.achievements = achievements.duplicate()
 	data.history = history.duplicate(true)
@@ -1080,7 +1215,7 @@ static func _migrate(data: Dictionary) -> Dictionary:
 	if not data.has("oath"):
 		data.oath = -1
 	# Before Eclipse, achievements and the expedition log.
-	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks"]:
+	for key in ["eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak"]:
 		if not data.has(key):
 			data[key] = 0
 	for key in ["achievements", "history"]:
@@ -1096,6 +1231,8 @@ static func _migrate(data: Dictionary) -> Dictionary:
 			data[key] = COMBAT_DEFAULTS[key]
 	if not data.has("ember_pos"):
 		data.ember_pos = [0.5, 0.4]
+	if not data.has("weak_pos"):
+		data.weak_pos = [0.0, 0.0]
 	return data
 
 func _read_save(path: String) -> Variant:
@@ -1159,6 +1296,11 @@ func _read_save(path: String) -> Variant:
 		return null
 	for coordinate in data.ember_pos:
 		if not (coordinate is float or coordinate is int) or not is_finite(float(coordinate)) or coordinate < 0 or coordinate > 1:
+			return null
+	if not data.weak_pos is Array or data.weak_pos.size() != 2:
+		return null
+	for coordinate in data.weak_pos:
+		if not (coordinate is float or coordinate is int) or not is_finite(float(coordinate)) or coordinate < -1 or coordinate > 1:
 			return null
 	for key in ["legacy", "relics", "offers"]:
 		if not data.get(key) is Array:
@@ -1241,6 +1383,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	for key in COMBAT_DEFAULTS:
 		set(key, int(data[key]) if COMBAT_DEFAULTS[key] is int else data[key])
 	ember_pos = Vector2(float(data.ember_pos[0]), float(data.ember_pos[1]))
+	weak_pos = Vector2(float(data.weak_pos[0]), float(data.weak_pos[1]))
 	forge_armor = clampf(forge_armor, 0, forge_armor_max()) if charging and is_forge_keeper() else 0.0
 	enemy_hp = clampf(data.enemy_hp, 0.01, enemy_max)
 	attack_timer = clampf(data.attack_timer, 0, attack_interval())

@@ -5,6 +5,8 @@ extends Control
 
 signal clicked
 signal ember_clicked
+signal weak_clicked
+signal guard_clicked
 signal coins(screen_pos: Vector2, amount: int, essence: int)
 
 const Actor = preload("res://scripts/actor.gd")
@@ -204,15 +206,30 @@ func enemy_center() -> Vector2:
 func hero_center() -> Vector2:
 	return hero.position + Vector2(hero.offset.x + 10, -hero.height() * 0.5)
 
+## The lit weak point follows the enemy's body, lunges and knockbacks included.
+func weak_stage_pos() -> Vector2:
+	return enemy_center() + Vector2(state.weak_pos.x * 55.0 * enemy.base_scale, state.weak_pos.y * enemy.height() * 0.38)
+
+## True while the bearer walks on to the next chamber.
+func travelling() -> bool:
+	return state.spawn_delay > 0 and not state.is_boss() and not state.dead and state.active()
+
 func ember_stage_pos() -> Vector2:
 	var r = visible_stage_rect()
 	return r.position + r.size * state.ember_pos + Vector2(0, sin(ambient_time * 2.2) * 8)
 
 # ---------------------------------------------------------------- input
 func _gui_input(e: InputEvent) -> void:
-	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+	if not e is InputEventMouseButton or not e.pressed:
+		return
+	if e.button_index == MOUSE_BUTTON_RIGHT:
+		guard_clicked.emit()
+		accept_event()
+	elif e.button_index == MOUSE_BUTTON_LEFT:
 		if state != null and state.ember_active and e.position.distance_to(stage_to_screen(ember_stage_pos())) < 46:
 			ember_clicked.emit()
+		elif state != null and state.weak_active and e.position.distance_to(stage_to_screen(weak_stage_pos())) < 52.0 * stage.scale.x:
+			weak_clicked.emit()
 		else:
 			clicked.emit()
 		accept_event()
@@ -282,6 +299,30 @@ func on_armor_broken() -> void:
 	add_shake(8.0)
 	enemy.play("hurt")
 	show_banner("¡CORAZA ROTA!", state.enemy_name() + " queda aturdido", Color("ffb070"), 1.6)
+
+func on_parried(full: bool) -> void:
+	var at = hero_center() + Vector2(85, -10)
+	rings.append({"pos": at, "t": 0.0, "dur": 0.45, "radius": 160.0 if full else 110.0, "color": Color("9fe8ff")})
+	burst_particles(at, [Color("9fe8ff"), Color("ffffff"), Color("ffcf7b")], 26 if full else 12, 380.0)
+	effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 260.0 if full else 170.0, "rot": 0.0, "color": Color(0.8, 0.95, 1.0)})
+	add_shake(7.0 if full else 4.0)
+	numbers.append({"pos": at + Vector2(0, -70), "vel": Vector2(0, -70), "life": 1.1, "text": "¡PARADA!" if full else "BLOQUEO", "color": Color("9fe8ff"), "size": 34 if full else 24})
+	if full:
+		# The blow is turned aside: the enemy staggers back instead of landing it.
+		if enemy.has_meta("lunge"):
+			enemy.remove_meta("lunge")
+		enemy_attacking = false
+		enemy.play("hurt")
+		enemy.offset += Vector2(46, 0)
+
+func on_weak_appeared() -> void:
+	rings.append({"pos": weak_stage_pos(), "t": 0.0, "dur": 0.35, "radius": 70.0, "color": Color("ffcf7b")})
+
+func on_weak_struck() -> void:
+	var at = weak_stage_pos()
+	rings.append({"pos": at, "t": 0.0, "dur": 0.4, "radius": 120.0, "color": Color("ffe7a8")})
+	burst_particles(at, [Color("ffe7a8"), Color("ffcf7b"), Color("ffffff")], 18, 320.0)
+	numbers.append({"pos": at + Vector2(0, -60), "vel": Vector2(0, -80), "life": 1.0, "text": "¡PUNTO DÉBIL!", "color": Color("ffe7a8"), "size": 28})
 
 func on_attack_started() -> void:
 	hero.play("attack")
@@ -479,6 +520,10 @@ func _process(delta: float) -> void:
 			enemy.remove_meta("walk_in")
 			enemy.remove_meta("walking")
 			enemy.play("idle")
+	if travelling() and hero.playing("idle"):
+		hero.play("walk")
+	elif not travelling() and hero.playing("walk"):
+		hero.play("idle")
 	# After the walk-in has placed the boss, zoom keeps its screen position
 	# fixed while the stage grows.
 	var zoom = intro_zoom()
@@ -552,13 +597,16 @@ func _process(delta: float) -> void:
 		n.pos += n.vel * delta
 		n.vel.y += 60 * delta
 	numbers = numbers.filter(func(n): return n.life > 0)
+	var drift = 160.0 if travelling() else 0.0
 	for a in ash:
 		if reduced_motion:
 			break
 		a.pos.y -= a.speed * delta
-		a.pos.x += sin(ambient_time * 0.7 + a.phase) * 10 * delta
+		a.pos.x += (sin(ambient_time * 0.7 + a.phase) * 10 - drift) * delta
 		if a.pos.y < -10:
 			a.pos = Vector2(randf() * 1024, 810)
+		if a.pos.x < -10:
+			a.pos.x = 1030
 	backdrop.queue_redraw()
 	lights.queue_redraw()
 	fx_layer.queue_redraw()
@@ -598,6 +646,12 @@ func _draw_lights() -> void:
 	if state.charging:
 		var r = 120.0 + 160.0 * state.charge_progress()
 		lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(-70, -10) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(0.65, 0.4, 1.0, 0.5) if state.is_bell_keeper() else Color(1.0, 0.45, 0.1, 0.7))
+	if state.weak_active and state.spawn_delay <= 0:
+		var r = 60.0 + 8 * sin(ambient_time * 10.0)
+		lights.draw_texture_rect(glow, Rect2(weak_stage_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.8, 0.35, 0.8))
+	if state.parry_window > 0:
+		var r = 120.0
+		lights.draw_texture_rect(glow, Rect2(hero_center() + Vector2(70, 0) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(0.5, 0.9, 1.0, 0.5 * state.parry_window / state.PARRY_WINDOW))
 	if state.fury_time > 0:
 		var r = 130.0
 		lights.draw_texture_rect(glow, Rect2(hero_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.5, 0.2, 0.45))
@@ -651,11 +705,33 @@ func _draw_fx() -> void:
 		fx_layer.draw_circle(at, 15.0, Color("ff9a4a"))
 		fx_layer.draw_circle(at, 9.0, Color("ffe7a8"))
 		fx_layer.draw_arc(at, 30.0, -PI / 2, -PI / 2 + TAU * state.ember_timer / 8.0, 32, Color(1, 0.85, 0.5, 0.85), 3.0)
+	if state.weak_active and state.spawn_delay <= 0:
+		_draw_weak_point()
+	if state.parry_window > 0:
+		var k = state.parry_window / state.PARRY_WINDOW
+		var c = hero_center() + Vector2(64, 0)
+		fx_layer.draw_arc(c, 82, -1.0, 1.0, 24, Color(0.6, 0.95, 1.0, 0.85 * k), 8.0)
+		fx_layer.draw_arc(c, 70, -0.8, 0.8, 24, Color(1, 1, 1, 0.6 * k), 3.0)
 	if state.stun_time > 0:
 		var top = enemy_center() + Vector2(0, -enemy.height() * 0.55)
 		for i in range(3):
 			var a = ambient_time * 4.0 + i * TAU / 3
 			lib.draw_fx(fx_layer, "critical", 0.08, top + Vector2(cos(a) * 46, sin(a) * 12), 54.0, Color(1, 0.95, 0.6), 14.0)
+
+## A gold reticle that tightens as it appears; the outer arc is its time left.
+func _draw_weak_point() -> void:
+	var at = weak_stage_pos()
+	var appear = clampf((state.WEAK_TIME - state.weak_timer) / 0.2, 0, 1)
+	var pulse = 0.5 + 0.5 * sin(ambient_time * 10.0)
+	var r = 26.0 * (1.6 - 0.6 * appear)
+	fx_layer.draw_circle(at, 10.0 + 2.0 * pulse, Color(1.0, 0.82, 0.4, 0.9 * appear))
+	fx_layer.draw_circle(at, 5.0, Color(1, 1, 0.92, appear))
+	fx_layer.draw_arc(at, r, 0, TAU, 32, Color(1.0, 0.75, 0.3, 0.85 * appear), 3.0)
+	for i in range(4):
+		var a = i * PI / 2 + ambient_time * 1.5
+		var d = Vector2(cos(a), sin(a))
+		fx_layer.draw_line(at + d * (r + 4), at + d * (r + 14), Color(1.0, 0.9, 0.6, appear), 3.0)
+	fx_layer.draw_arc(at, r + 22, -PI / 2, -PI / 2 + TAU * state.weak_timer / state.WEAK_TIME, 32, Color(1, 0.85, 0.5, 0.6 * appear), 2.0)
 
 func _draw_overlay() -> void:
 	var font: Font = lib.heading_font
@@ -721,13 +797,32 @@ func _draw_overlay() -> void:
 			_text_center(font, "ATURDIDO", Vector2(cx, tele.position.y + 18), 18, Color("ffe38a"), 4)
 		elif state.spawn_delay <= 0:
 			var warn = state.attack_timer / state.attack_interval()
+			var left = maxf(0, state.attack_interval() - state.attack_timer)
 			overlay.draw_rect(tele.grow(2), Color(0.02, 0.03, 0.05, 0.8))
 			var col = Color("ff7a4a") if warn > 0.8 else Color("8e9cab")
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * warn, tele.size.y)), col)
-			var label = "Golpe en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
+			# The last stretch of a normal wind-up is the parry zone, drawn over
+			# the fill; its brightest end is where a guard becomes a perfect parry.
+			if not state.next_is_heavy():
+				var zone = minf(1.0, state.PARRY_WINDOW / state.attack_interval())
+				var perfect = minf(1.0, state.PARRY_PERFECT / state.attack_interval())
+				var zone_rect = Rect2(tele.position.x + tele.size.x * (1.0 - zone), tele.position.y - 3, tele.size.x * zone, tele.size.y + 6)
+				var perfect_rect = Rect2(tele.position.x + tele.size.x * (1.0 - perfect), tele.position.y - 4, tele.size.x * perfect, tele.size.y + 8)
+				overlay.draw_rect(zone_rect, Color(0.5, 0.9, 1.0, 0.3))
+				overlay.draw_rect(perfect_rect, Color(0.8, 1.0, 1.0, 0.5))
+				overlay.draw_rect(zone_rect, Color(0.6, 0.95, 1.0, 0.9), false, 1.5)
+			var label = "Golpe en %.1f s" % left
+			var label_color = Color("ffb08a") if warn > 0.8 else Color("aab6c1")
 			if state.next_is_heavy():
-				label = "Canaliza en %.1f s" % maxf(0, state.attack_interval() - state.attack_timer)
-			_text_center(body, label, Vector2(cx, tele.end.y + 18), 14, Color("ffb08a") if warn > 0.8 else Color("aab6c1"), 3)
+				label = "Canaliza en %.1f s" % left
+			elif state.parry_window > 0:
+				label = "GUARDIA ALZADA"
+				label_color = Color("9fe8ff")
+			elif left <= state.PARRY_WINDOW and state.can_parry():
+				label = "¡PARA!  [R]"
+				label_color = Color("9fe8ff")
+			var cue = label_color == Color("9fe8ff")
+			_text_center(font if cue else body, label, Vector2(cx, tele.end.y + (22 if cue else 18)), 18 if cue else 14, label_color, 4 if cue else 3)
 	# Combo and fury near the bearer.
 	var hero_top = stage_to_screen(HERO_FEET + Vector2(0, -hero.height() - 18))
 	if state.combo >= 3 and not state.dead:
@@ -749,6 +844,11 @@ func _draw_overlay() -> void:
 	if state.ember_active:
 		var p = stage_to_screen(ember_stage_pos())
 		_text_center(body, "¡Ascua errante!", p + Vector2(0, -44), 14, Color(1, 0.88, 0.6, 0.9), 3)
+	if travelling() and banner.is_empty():
+		var k = clampf(1.0 - state.spawn_delay / state.SPAWN_DELAY, 0, 1)
+		var a = sin(k * PI)
+		_text_center(font, "CÁMARA %d" % state.room, Vector2(w * 0.5, size.y * 0.2), 34, Color(1, 0.9, 0.7, 0.85 * a), 6)
+		_text_center(body, state.enemy_name(), Vector2(w * 0.5, size.y * 0.2 + 28), 15, Color(0.88, 0.86, 0.9, 0.8 * a), 3)
 	_draw_intro(font, body)
 	for i in range(toasts.size()):
 		var toast: Dictionary = toasts[i]

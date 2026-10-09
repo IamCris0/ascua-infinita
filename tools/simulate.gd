@@ -3,11 +3,18 @@ extends SceneTree
 ## godot --headless --path . --script tools/simulate.gd
 const State = preload("res://scripts/run_state.gd")
 
+## Share of parries and weak points a player at this cadence lands: an idle
+## player never guards or aims; a busy one usually does.
+func skill_for(cps: float) -> float:
+	return clampf(cps * 0.18, 0.0, 0.85)
+
 func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary:
 	var dt = 0.05
 	var click_every = 1.0 / cps if cps > 0 else INF
 	var click_acc = 0.0
 	var t = 0.0
+	var skill = skill_for(cps)
+	var guard_plan = ""
 	while not s.dead and t < max_minutes * 60:
 		s.tick(dt)
 		t += dt
@@ -18,6 +25,22 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float) -> Dictionary
 			s.choose_route(0)
 		if s.ember_active and s.rng.randf() < 0.02:
 			s.collect_ember()
+		# Active play: each blow is met with a perfect parry, a block or nothing,
+		# and lit weak points are aimed at.
+		var blow = s.blow_in()
+		if blow < 0 or blow > s.PARRY_WINDOW:
+			guard_plan = ""
+		elif guard_plan.is_empty():
+			var roll = s.rng.randf()
+			guard_plan = "perfect" if roll < skill * 0.6 else ("block" if roll < skill else "none")
+		if guard_plan == "block" and s.can_parry():
+			s.parry()
+			guard_plan = "done"
+		elif guard_plan == "perfect" and blow <= s.PARRY_PERFECT - 0.05 and s.can_parry():
+			s.parry()
+			guard_plan = "done"
+		if s.weak_active and s.click_cooldown <= 0 and s.rng.randf() < skill * 0.1:
+			s.strike_weak()
 		while click_acc >= click_every:
 			click_acc -= click_every
 			s.click()

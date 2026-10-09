@@ -1,5 +1,20 @@
 # Validación del proyecto
 
+## Combate activo (0.6) — 8 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 16 suites, cero fallos. Partida gráfica de 70 s sin errores (9.086 fotogramas, 33 bajas).
+- Nueva `test_active_combat.gd` (49 comprobaciones):
+  - transición entre cámaras;
+  - parada perfecta, bloqueo, guardia fallida y recarga;
+  - cargas y jefes;
+  - punto débil: aparición, alcance solo con clic apuntado, crítico, recarga de Destello y desaparición;
+  - guardado y partidas anteriores;
+  - logros;
+  - clics del escenario y animación de avance.
+- `test_ui.gd` (45): botón y tecla de Parada, clic en el punto débil y pausas de impacto (se activan, se recuperan solas y no existen con *Reducir movimiento*).
+- Captura `preview.png` revisada con el punto débil encendido y el aviso de parada.
+- Equilibrio con el bot antes y después: tablas en HOJA_DE_RUTA.md.
+
 ## Eclipse, logros y registro — 8 de octubre de 2026
 
 - `tools/run_tests.ps1 -Balance`: 15 suites, cero fallos. Nueva `test_eclipse.gd` (33 comprobaciones) y dos comprobaciones de la colección para las pestañas Logros y Registro. La muestra de equilibrio no cambia: el nivel por defecto es Eclipse 0.

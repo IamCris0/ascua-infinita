@@ -64,6 +64,11 @@ var buy_mode: int = 0
 var burst_button: Button
 var burst_fill: ProgressBar
 var burst_label: Label
+var parry_button: Button
+var parry_fill: ProgressBar
+var parry_label: Label
+# Real-time end of a hit-stop; the engine runs slowed until then.
+var hitstop_until: int = 0
 var log_label: Label
 var status_label: Label
 var rule_label: Label
@@ -133,6 +138,7 @@ func _verify_build() -> void:
 	await checker.run(self)
 
 func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 	load("res://scripts/art_library.gd").release()
 
 func connect_state() -> void:
@@ -164,6 +170,24 @@ func connect_state() -> void:
 		arena.on_struck(damage, critical, automatic)
 		if not automatic:
 			audio.play_hit(critical)
+			if critical:
+				hitstop(0.05)
+	)
+	state.parry_started.connect(func(): audio.play("guard", 0.05))
+	state.parried.connect(func(full):
+		arena.on_parried(full)
+		audio.play("parry", 0.04, 0.0 if full else -4.0)
+		hitstop(0.12 if full else 0.06)
+	)
+	state.weak_appeared.connect(func():
+		arena.on_weak_appeared()
+		audio.play("weak_appear", 0.05)
+		if state.total_weak < 2:
+			arena.show_toast("PUNTO DÉBIL  ·  haz clic en el brillo dorado")
+	)
+	state.weak_struck.connect(func():
+		arena.on_weak_struck()
+		audio.play("weak_hit", 0.04)
 	)
 	state.event.connect(add_log)
 	state.hero_hit.connect(func(damage, heavy):
@@ -175,9 +199,16 @@ func connect_state() -> void:
 	state.enemy_defeated.connect(func(kind, elite, boss):
 		arena.on_enemy_defeated(kind, elite, boss)
 		audio.play("die_" + kind, 0.06)
+		# Bosses fall in slow motion; every other victory lands with a beat.
+		if boss:
+			hitstop(0.5, 0.25)
+		else:
+			hitstop(0.1 if elite else 0.06)
 	)
 	state.enemy_changed.connect(func():
 		arena.sync_enemy(true)
+		if not state.is_boss() and screen == "game" and not state.dead:
+			audio.play("advance", 0.05)
 		if state.is_boss() and screen == "game":
 			audio.play("boss_appear")
 			if state.spawn_delay > state.BOSS_INTRO:
@@ -212,9 +243,25 @@ func connect_state() -> void:
 		if state.collect_ember() == "":
 			state.click()
 	)
+	arena.weak_clicked.connect(func():
+		if screen == "game" and not state.strike_weak():
+			state.click()
+	)
+	arena.guard_clicked.connect(try_parry)
 	arena.coins.connect(func(pos, amount, essence): fly.launch(pos, amount, essence))
 
+## Freezes the action for a moment (or slows it, with a larger scale) so a big
+## blow lands with weight. Off in tests and with reduced motion.
+func hitstop(seconds: float, scale: float = 0.05) -> void:
+	if qa_mode or state.reduced_motion:
+		return
+	hitstop_until = maxi(hitstop_until, Time.get_ticks_msec() + int(seconds * 1000.0))
+	Engine.time_scale = minf(Engine.time_scale, scale)
+
 func _process(delta: float) -> void:
+	if hitstop_until > 0 and Time.get_ticks_msec() >= hitstop_until:
+		hitstop_until = 0
+		Engine.time_scale = 1.0
 	time += delta
 	if screen == "game":
 		state.tick(minf(delta, 0.1))
@@ -534,8 +581,12 @@ func build_center(body: Node) -> void:
 	arena.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	frame.add_child(arena)
+	var actions = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	center.add_child(actions)
 	burst_button = Button.new()
 	burst_button.custom_minimum_size.y = 64
+	burst_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	burst_button.focus_mode = Control.FOCUS_NONE
 	burst_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	burst_button.tooltip_text = "Destello: rompe escudos, interrumpe los ataques canalizados y golpea ×1,5 la coraza del Forjador."
@@ -544,7 +595,7 @@ func build_center(body: Node) -> void:
 	burst_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(1.0, 0.7, 0.5)))
 	burst_button.add_theme_stylebox_override("disabled", Kit.button_texture(lib, Color(0.55, 0.52, 0.52)))
 	burst_button.pressed.connect(try_burst)
-	center.add_child(burst_button)
+	actions.add_child(burst_button)
 	burst_fill = ProgressBar.new()
 	burst_fill.show_percentage = false
 	burst_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -561,6 +612,33 @@ func build_center(body: Node) -> void:
 	burst_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	burst_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	burst_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parry_button = Button.new()
+	parry_button.custom_minimum_size = Vector2(236, 64)
+	parry_button.focus_mode = Control.FOCUS_NONE
+	parry_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	parry_button.tooltip_text = "Parada [R] o clic derecho: alza la guardia justo antes de un golpe. Justo a tiempo (zona brillante) es una parada perfecta: el golpe no hace daño, el enemigo queda aturdido y contraatacas. Antes de tiempo solo bloqueas la mitad. Los jefes y los ataques cargados nunca se anulan del todo."
+	parry_button.add_theme_stylebox_override("normal", Kit.button_texture(lib, Color(0.78, 1.05, 1.15)))
+	parry_button.add_theme_stylebox_override("hover", Kit.button_texture(lib, Color(0.9, 1.2, 1.3)))
+	parry_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(0.65, 0.9, 1.0)))
+	parry_button.add_theme_stylebox_override("disabled", Kit.button_texture(lib, Color(0.5, 0.52, 0.55)))
+	parry_button.pressed.connect(try_parry)
+	actions.add_child(parry_button)
+	parry_fill = ProgressBar.new()
+	parry_fill.show_percentage = false
+	parry_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parry_fill.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parry_fill.offset_left = 12
+	parry_fill.offset_right = -12
+	parry_fill.offset_top = 10
+	parry_fill.offset_bottom = -12
+	parry_fill.add_theme_stylebox_override("background", StyleBoxEmpty.new())
+	parry_fill.add_theme_stylebox_override("fill", Kit.flat(Color(0.5, 0.9, 1.0, 0.25), Color(0, 0, 0, 0), 4, 0, 0))
+	parry_button.add_child(parry_fill)
+	parry_label = ui.label(parry_button, "", 20, Color("e6fbff"), true)
+	parry_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parry_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	parry_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	parry_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func build_forge_panel(body: Node) -> void:
 	var right = ui.stone(body, 344)
@@ -635,7 +713,7 @@ func build_footer(root: Node) -> void:
 	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	log_label.clip_text = true
 	log_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	ui.label(row, "CLIC/ESPACIO atacar   E destello   1-4 forja   Q cantidad   ESC menú", 13, Color("78818d"))
+	ui.label(row, "CLIC/ESPACIO atacar   E destello   R parada   1-4 forja   Q cantidad   ESC menú", 13, Color("78818d"))
 	status_label = ui.label(row, "", 13, Kit.TEAL)
 
 func set_buy_mode(index: int) -> void:
@@ -670,6 +748,11 @@ func try_burst() -> void:
 	if screen != "game":
 		return
 	state.burst()
+
+func try_parry() -> void:
+	if screen != "game" or not modal_type.is_empty():
+		return
+	state.parry()
 
 func refresh() -> void:
 	if arena == null or status_label == null:
@@ -732,6 +815,7 @@ func refresh() -> void:
 		burst_label.text = "✦  DESTELLO  ·  %s  [E]" % fmt(state.burst_damage())
 	burst_button.disabled = not ready
 	burst_button.modulate = Color.WHITE if not ready or state.reduced_motion else Color.WHITE.lerp(Color(1.25, 1.1, 0.9), 0.5 + 0.5 * sin(time * (9.0 if state.charging else 4.0)))
+	refresh_parry()
 	retreat_button.disabled = state.dead or not state.active()
 	status_label.text = "● GUARDADO" if state.save_error.is_empty() else state.save_error
 	room_track.queue_redraw()
@@ -744,6 +828,22 @@ func refresh() -> void:
 			show_journey()
 	if state.room != last_room:
 		last_room = state.room
+
+func refresh_parry() -> void:
+	var incoming = state.blow_in()
+	var now = incoming >= 0 and incoming <= state.PARRY_WINDOW and state.can_parry()
+	parry_fill.max_value = state.PARRY_WHIFF
+	parry_fill.value = state.PARRY_WHIFF - state.parry_cooldown if state.parry_cooldown > 0 else 0.0
+	if state.parry_window > 0:
+		parry_label.text = "GUARDIA ALZADA"
+	elif state.parry_cooldown > 0:
+		parry_label.text = "PARADA  ·  %.1f s" % state.parry_cooldown
+	elif now:
+		parry_label.text = "¡PARA!  [R]"
+	else:
+		parry_label.text = "PARADA  [R]"
+	parry_button.disabled = not state.can_parry() and state.parry_window <= 0
+	parry_button.modulate = Color(1.3, 1.45, 1.5) if now and not state.reduced_motion else Color.WHITE
 
 func refresh_relics() -> void:
 	var active_names: Array[String] = []
@@ -905,6 +1005,8 @@ func show_howto(return_to: String) -> void:
 		[lib.fx_icon("slash", 2, 0.12), "Haz clic o mantén ESPACIO para atacar sin pulsar repetidamente. Ritmo máximo: un golpe cada 0,3 s. Encadenarlos suma hasta un 30% de daño."],
 		[lib.upgrade_icon(1), "Empiezas con un lucero que ataca solo. Compra más en la forja; los clics aceleran el combate. Usa Q para comprar ×10 o al máximo."],
 		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián, interrumpe las cargas del Rey y del Acólito y agrieta la coraza del Forjador."],
+		[lib.upgrade_icon(2), "PARADA [R] o clic derecho: alza la guardia cuando la barra del golpe entra en la zona azul. En el último instante (zona brillante) es una parada perfecta: sin daño, enemigo aturdido y contraataque. Antes de tiempo solo bloqueas la mitad; si no llega nada, la guardia tarda en recargarse."],
+		[lib.upgrade_icon(3), "Cuando brille un PUNTO DÉBIL dorado sobre el enemigo, haz clic encima: crítico seguro y Destello más cerca. Espacio no lo alcanza."],
 		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y una ruta: descansar, desafiar a un élite o visitar un evento. El combate espera tu decisión."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."]
@@ -1302,6 +1404,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_ENTER, KEY_KP_ENTER: state.skip_intro()
 		KEY_SPACE: state.click()
 		KEY_E: try_burst()
+		KEY_R: try_parry()
 		KEY_1: purchase(0)
 		KEY_2: purchase(1)
 		KEY_3: purchase(2)
@@ -1384,7 +1487,7 @@ func demo_state(shot: String) -> void:
 	state.wisps = 3
 	state.armor = 2
 	state.focus = 1
-	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6, "intro": 30}.get(shot, 8)
+	state.room = {"boss": 10, "crypt": 14, "forge": 24, "route": 6, "event": 6, "intro": 30, "preview": 9}.get(shot, 8)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--room="):
 			state.room = int(a.substr(7))
@@ -1410,6 +1513,14 @@ func demo_state(shot: String) -> void:
 		state.ember_active = true
 		state.ember_timer = 6.0
 		state.ember_pos = Vector2(0.5, 0.22)
+		# A lit weak point and a blow about to land, caught at the parry cue.
+		state.weak_active = true
+		state.weak_timer = state.WEAK_TIME
+		state.weak_cooldown = 99.0
+		state.weak_pos = Vector2(0.35, -0.25)
+		state.attack_timer = state.attack_interval() - 2.3
+		state.enemy_max *= 3
+		state.enemy_hp = state.enemy_max * 0.8
 	arena.sync_enemy(false)
 	arena.bg_index = state.biome()
 	arena.bg_prev = arena.bg_index
