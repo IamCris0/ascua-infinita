@@ -309,7 +309,9 @@ Bot con 12 expediciones por portador, desbloqueado desde la primera (`--bearer=i
 - A 3 intentos/s, el ruido de tres semillas es grande: el propio Portador pasó de 50 a 42 tras mejorarlo.
 - Sin jugar, la Invocadora y el Errante rinden más, como corresponde a su estilo.
 
-## Fase E · Retos (0.10)
+## Fase E · Retos (0.10) — implementada el 9 de octubre de 2026
+
+Capturas: [retos](retos.png), [logros](logros.png) y [bestiario](bestiary.png).
 
 **Misiones**
 - Tres diarias y dos semanales, generadas a partir de la fecha. Por ejemplo, «Para 10 golpes» o «Vence a 2 jefes».
@@ -323,3 +325,52 @@ Bot con 12 expediciones por portador, desbloqueado desde la primera (`--bearer=i
 - Retratos animados y fichas con historia.
 - Recompensa al completar cada categoría.
 - Página de estadísticas.
+
+### Resultado de la fase E
+
+**Retos**
+- Tres diarios y dos semanales, elegidos con la fecha como semilla: son los mismos para cualquier partida ese día o semana. La semana va de lunes a domingo.
+- Nueve tipos, cada uno con un objetivo diario y otro semanal:
+
+| Reto | Diario | Semanal |
+|---|---|---|
+| Vencer enemigos | 60 | 400 |
+| Vencer élites | 4 | 20 |
+| Derrotar jefes | 2 | 10 |
+| Paradas perfectas | 8 | 40 |
+| Puntos débiles | 10 | 50 |
+| Abrir cofres | 3 | 15 |
+| Interrumpir cargas | 4 | 20 |
+| Atrapar ascuas | 3 | 15 |
+| Llegar a la cámara N en una expedición | 20 | 40 |
+
+- Cada reto diario da 12 ascuas y 4 esquirlas; cada semanal, 50 ascuas y 15 esquirlas.
+- Al completarse, un aviso lo anuncia. La recompensa se reclama a mano y se pierde si el reto se renueva antes.
+
+**Logros**
+- Pasan de 18 a 30, en cinco grupos: Combate, Jefes, Viaje, Botín y Legado.
+- Doce son nuevos:
+  - Exterminador y Leyenda de ceniza (500 y 2.000 victorias);
+  - Intocable (un jefe sin recibir daño);
+  - Más allá y Sin fondo (cámaras 50 y 60);
+  - Noche perpetua (Eclipse 5);
+  - Bolsa llena (100.000 de oro en una expedición);
+  - Jugador empedernido (10 giros);
+  - Maestro (una maestría al máximo);
+  - Muchas manos (todos los portadores);
+  - Constancia (10 retos diarios);
+  - Semana de brasas (un reto semanal).
+- Cada logro tiene una recompensa reclamable, de 5 a 60 ascuas o esquirlas. Los logros conseguidos antes de esta versión la tienen pendiente.
+
+**Colección**
+- Fichas en dos columnas:
+  - enemigos con su retrato animado (silueta mientras no se conocen) y cuántas veces los has vencido;
+  - reliquias, sinergias y piezas con su icono.
+- Completar una categoría da 25 ascuas y 8 esquirlas.
+- Nuevas pestañas: **Registro** (con el portador de cada expedición) y **Estadísticas** (18 cifras, entre ellas el tiempo de combate).
+- La colección se abre también desde la pantalla de título. El título, la pausa y la hoguera muestran cuántas recompensas esperan.
+
+**Equilibrio**
+- Los retos premian el tiempo de juego, no la profundidad, así que el bot no los mide.
+- Para un jugador diario, suman unas 36 ascuas al día más 100 a la semana. Es menos de lo que deja una expedición que pase de la cámara 30, así que completan la progresión sin sustituirla.
+- Los logros dan unas 700 ascuas y 150 esquirlas en total, una sola vez.

@@ -133,6 +133,17 @@ func run() -> void:
 	check(press(game, "VOLVER") and game.modal_type == "pause", "Back returns to the pause menu")
 	game.toggle_pause()
 	check(s.active(), "Combat resumes after the arsenal")
+	# Retos, from the pause menu.
+	s.refresh_missions(s.day_number(Time.get_date_dict_from_system()))
+	s.daily[0].progress = s.daily[0].target
+	game.toggle_pause()
+	var menu: Array = game.modal_buttons().map(func(b): return b.text)
+	check(menu.any(func(t): return t.begins_with("RETOS Y COLECCIÓN") and t.ends_with(")")), "The pause menu shows waiting rewards")
+	check(press(game, "RETOS Y COLECCIÓN") and game.modal_type == "collection", "The pause menu opens the retos")
+	var banked = s.essence
+	check(press(game, "RECLAMAR") and s.daily[0].claimed and s.essence > banked, "A finished reto is claimed from its card")
+	check(press(game, "VOLVER") and game.modal_type == "pause", "Back to the pause menu")
+	game.toggle_pause()
 	s.spawn_delay = 0
 	s.burst_cooldown = 0
 	game.try_burst()
