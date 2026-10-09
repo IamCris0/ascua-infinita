@@ -132,6 +132,7 @@ func _ready() -> void:
 	mouse_exited.connect(func(): hovered = false)
 	resized.connect(_layout)
 	if state != null:
+		apply_bearer()
 		sync_enemy(false)
 		bg_index = state.biome()
 		bg_prev = bg_index
@@ -419,6 +420,7 @@ func on_fallen() -> void:
 	burst_particles(hero_center(), [Color("86e0bd"), Color("ff8a3d")], 30, 200.0)
 
 func on_restart() -> void:
+	apply_bearer()
 	hero.play("idle")
 	hero.alpha = 1.0
 	corpse.alpha = 0.0
@@ -442,6 +444,19 @@ func on_last_breath() -> void:
 	hero.play("hurt")
 	show_banner("ÚLTIMO ALIENTO", "La brasa se niega a apagarse · Destello listo", Color("86e0bd"), 2.0)
 
+func on_walled() -> void:
+	var at = hero_center() + Vector2(80, -10)
+	rings.append({"pos": at, "t": 0.0, "dur": 0.5, "radius": 150.0, "color": Color("ffb070")})
+	burst_particles(at, [Color("ffb070"), Color("ffe7a8")], 20, 320.0)
+	numbers.append({"pos": at + Vector2(0, -70), "vel": Vector2(0, -70), "life": 1.1, "text": "¡MURO!", "color": Color("ffb070"), "size": 30})
+	add_shake(5.0)
+
+## Recolours the bearer on stage for the chosen character.
+func apply_bearer() -> void:
+	var spec: Dictionary = state.BEARERS[state.bearer]
+	hero.hue = spec.hue
+	hero.base_scale = spec.scale
+
 func on_ember_collected(kind: String) -> void:
 	var at = ember_stage_pos()
 	effects.append({"name": "magic" if kind == "heal" else "critical", "t": 0.0, "pos": at, "size": 200.0, "rot": 0.0, "color": Color(1, 1, 1)})
@@ -464,8 +479,12 @@ func burst_particles(at: Vector2, palette: Array, count: int, power: float) -> v
 		var v = Vector2(cos(angle), sin(angle)) * randf_range(power * 0.3, power)
 		particles.append({"pos": at, "vel": v, "life": randf_range(0.35, 0.8), "max": 0.8, "color": palette[randi() % palette.size()], "size": randf_range(3, 7)})
 
+## Companions on stage: the bearer's own, plus the swarm while it lasts.
+func companion_count() -> int:
+	return mini(state.wisps, 6) + state.summoned()
+
 func companion_pos(i: int) -> Vector2:
-	var count = mini(state.wisps, 6)
+	var count = companion_count()
 	var a = ambient_time * 1.6 + i * TAU / maxf(1, count)
 	return HERO_FEET + Vector2(cos(a) * 78, -96 + sin(a) * 26)
 
@@ -540,7 +559,7 @@ func _process(delta: float) -> void:
 			auto_launched = false
 		if state.auto_timer >= interval * 0.78 and not auto_launched and state.auto_damage() > 0:
 			auto_launched = true
-			for i in range(mini(state.wisps, 6)):
+			for i in range(companion_count()):
 				projectiles.append({"from": companion_pos(i), "to": enemy_center(), "t": 0.0, "dur": maxf(0.01, interval - state.auto_timer), "color": Color("86e0bd"), "size": 4.0})
 	if not state.charging:
 		heavy_launched = false
@@ -674,10 +693,17 @@ func _draw_fx() -> void:
 		fx_layer.draw_arc(center, 96, 0, TAU, 48, Color(0.15, 0.08, 0.05, 0.6), 14)
 		fx_layer.draw_arc(center, 96, -PI / 2, -PI / 2 + TAU * k, 48, Color(1.0, 0.45 + 0.25 * heat, 0.15), 10)
 	# Companions orbiting the bearer.
-	for i in range(mini(state.wisps, 6)):
+	for i in range(companion_count()):
 		var pos = companion_pos(i)
 		var frame = lib.frame_at("companion", "idle", ambient_time + i * 0.3)
-		lib.draw_frame(fx_layer, "companion", frame, pos, 1.0)
+		var summoned = i >= mini(state.wisps, 6)
+		lib.draw_frame(fx_layer, "companion", frame, pos, 1.0, Color(0.75, 1.0, 1.0, 0.75) if summoned else Color.WHITE)
+	# Muro de brasas: a wall of embers in front of the bearer until a blow hits it.
+	if state.wall > 0:
+		var c = hero_center() + Vector2(78, 0)
+		var pulse = 0.75 + 0.25 * sin(ambient_time * 6.0)
+		for k in range(3):
+			fx_layer.draw_arc(c, 70 + k * 9, -1.15, 1.15, 24, Color(1.0, 0.55 + 0.1 * k, 0.25, (0.8 - k * 0.2) * pulse), 6.0 - k * 1.5)
 	for p in projectiles:
 		var k = clampf(p.t / p.dur, 0, 1)
 		var pos = p.from.lerp(p.to, k) + Vector2(0, -sin(k * PI) * (40 if p.get("fire", false) else 12))

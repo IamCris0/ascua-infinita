@@ -13,6 +13,7 @@ const UiFactory = preload("res://scripts/ui_factory.gd")
 const LegacyTree = preload("res://scripts/legacy_tree.gd")
 const JourneyScreens = preload("res://scripts/journey_screens.gd")
 const ArsenalScreen = preload("res://scripts/arsenal_screen.gd")
+const BearerScreen = preload("res://scripts/bearer_screen.gd")
 # Read from project.godot so a single setting names every build.
 var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
@@ -58,6 +59,7 @@ var relic_grid: GridContainer
 var relic_hint: Label
 var relic_signature: String = ""
 var best_label: Label
+var bearer_label: Label
 var retreat_button: Button
 var upgrade_cards: Array = []
 var upgrade_buttons: Array[Button] = []
@@ -229,6 +231,18 @@ func connect_state() -> void:
 		audio.play("heal" if kind == "heal" else "ember_take")
 	)
 	state.relic_offered.connect(func(): audio.play("offer"))
+	state.walled.connect(func():
+		arena.on_walled()
+		audio.play("parry", 0.05, -2.0)
+	)
+	state.fortune.connect(func(amount):
+		var at = arena.global_position + arena.stage_to_screen(arena.enemy_center())
+		fly.launch(at, 6, 0)
+		arena.numbers.append({"pos": arena.enemy_center() + Vector2(0, -110), "vel": Vector2(0, -60), "life": 1.2, "text": "+%s ORO" % fmt(amount), "color": Color("ffd37a"), "size": 26})
+	)
+	state.bearer_unlocked.connect(func(id):
+		arena.show_toast("NUEVO PORTADOR  ·  " + state.BEARERS[id].name)
+	)
 	state.item_found.connect(func(item):
 		arena.show_toast("BOTÍN  ·  %s (%s)" % [state.item_name(item), state.RARITIES[item.rarity].to_lower()])
 		audio.play("chest_rare" if item.rarity >= 2 else "loot")
@@ -397,6 +411,7 @@ func show_title() -> void:
 	game_root.hide()
 	title_root.show()
 	title_art.companions = clampi(state.legacy_level(2) + 1, 1, 5)
+	title_art.hero.hue = state.BEARERS[state.bearer].hue
 	for child in title_menu.get_children():
 		title_menu.remove_child(child)
 		child.queue_free()
@@ -544,7 +559,7 @@ func build_top_bar(root: Node) -> void:
 func build_bearer_panel(body: Node) -> void:
 	var left = ui.stone(body, 300)
 	left.add_theme_constant_override("separation", 5)
-	ui.header(left, "EL PORTADOR", "La última brasa")
+	bearer_label = ui.header(left, "PORTADOR", "La última brasa")
 	var hp_row = HBoxContainer.new()
 	left.add_child(hp_row)
 	ui.label(hp_row, "VITALIDAD", 15, Kit.MUTED, true)
@@ -795,6 +810,7 @@ func refresh() -> void:
 	stat_values.burst.text = fmt(state.burst_damage())
 	stat_values.reward.text = fmt(state.kill_reward())
 	best_label.text = "Mejor cámara: %d   ·   Expedición nº %d" % [state.best, state.runs + (0 if state.dead else 1)]
+	bearer_label.text = state.BEARERS[state.bearer].name
 	refresh_relics()
 	for i in range(upgrade_cards.size()):
 		var level: int = [state.blade, state.wisps, state.armor, state.focus][i]
@@ -1035,6 +1051,7 @@ func show_howto(return_to: String) -> void:
 		[lib.relics.eye, "Cada cinco cámaras eliges una reliquia y un camino en el mapa: descansos, élites, cofres, mercaderes, altares o la Rueda del eclipse. El combate espera tu decisión. Clic en la barra de cámaras para volver a ver el mapa."],
 		[lib.fx_icon("embers", 0, 0.1), "Atrapa las ascuas errantes que cruzan el escenario: oro, furia, vida o un Destello inmediato."],
 		[lib.ui.shard, "Al caer o retirarte conservas las ascuas. En la hoguera compras mejoras permanentes y vuelves más fuerte."],
+		[lib.portrait("hero"), "Al conseguir ciertos logros se desbloquean nuevos PORTADORES: la Centinela, la Invocadora y el Errante. Cada uno cambia sus estadísticas y lo que hace Destello. Se eligen en la hoguera."],
 		[lib.item_icon("ash_sword"), "Los jefes, algunos élites y los cofres dejan piezas de equipo que se conservan al caer. Equípalas, mejóralas con esquirlas y compra maestrías en el ARSENAL (pausa u hoguera)."]
 	]
 	for tip in tips:
@@ -1110,6 +1127,21 @@ func show_arsenal(return_to: String, tab: String = "Equipo") -> void:
 	var v = modal("arsenal", "ARSENAL DEL PORTADOR", "Equipo y maestrías", "", 1240)
 	ArsenalScreen.build(self, v, tab)
 	ui.button(v, "VOLVER", func(): _return_from(modal_return), 48)
+
+## Choosing the bearer happens at the bonfire, between expeditions.
+func show_bearers() -> void:
+	var v = modal("bearers", "LA HOGUERA  ·  PORTADORES", "¿Quién llevará la llama?", "Cada portador cambia algunas estadísticas y añade un efecto a Destello. El elegido sale en la próxima expedición.", 1240)
+	BearerScreen.build(self, v)
+	ui.button(v, "VOLVER A LA HOGUERA", show_camp, 50)
+
+func choose_bearer(id: String) -> void:
+	if state.set_bearer(id):
+		arena.apply_bearer()
+		audio.play("rebirth")
+		persist()
+		show_bearers()
+	else:
+		audio.play("ui_denied")
 
 func select_item(uid: int) -> void:
 	arsenal_selected = uid
@@ -1346,22 +1378,26 @@ func show_camp() -> void:
 	ui.separator(v)
 	var actions = HBoxContainer.new()
 	v.add_child(actions)
-	var menu_b = ui.button(actions, "MENÚ PRINCIPAL", func():
+	var menu_b = ui.button(actions, "MENÚ", func():
 		persist()
 		show_title()
 	, 58)
-	menu_b.custom_minimum_size.x = 210
+	menu_b.custom_minimum_size.x = 130
+	var bearer_b = ui.button(actions, "PORTADOR", show_bearers, 58)
+	bearer_b.custom_minimum_size.x = 170
+	bearer_b.tooltip_text = state.BEARERS[state.bearer].name
 	if state.eclipse_unlocked > 0:
 		var eclipse_b = ui.button(actions, "ECLIPSE %d" % state.eclipse, func():
 			state.set_eclipse((state.eclipse + 1) % (state.eclipse_unlocked + 1))
 			audio.play("offer")
 			show_camp()
 		, 58)
-		eclipse_b.custom_minimum_size.x = 200
+		eclipse_b.custom_minimum_size.x = 150
 		eclipse_b.tooltip_text = eclipse_text()
-	ui.button(actions, "ARSENAL", func(): show_arsenal("camp"), 58).custom_minimum_size.x = 170
-	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 170
-	var go = ui.button(actions, "RENACER   →   NUEVA EXPEDICIÓN  [ENTER]", rebirth, 58, 21)
+	ui.button(actions, "ARSENAL", func(): show_arsenal("camp"), 58).custom_minimum_size.x = 150
+	ui.button(actions, "COLECCIÓN", func(): show_collection("camp"), 58).custom_minimum_size.x = 160
+	var go = ui.button(actions, "RENACER   →   [ENTER]", rebirth, 58, 21)
+	go.tooltip_text = "Nueva expedición con " + state.BEARERS[state.bearer].name
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	persist()
 
@@ -1410,6 +1446,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		match modal_type:
 			"pause": close_modal()
 			"options", "howto", "collection", "arsenal": _return_from(modal_return)
+			"bearers": show_camp()
 			"map_view": close_modal()
 			"retreat", "confirm": close_modal(screen == "game")
 			"":
@@ -1526,6 +1563,14 @@ func capture() -> void:
 				state.finish_run()
 				fall_timer = -1.0
 				show_camp()
+			"bearers":
+				state.achievements.append("parry")
+				state.total_chests = 9
+				state.finish_run()
+				fall_timer = -1.0
+				state.set_bearer("sentinel")
+				arena.apply_bearer()
+				show_bearers()
 			"summary":
 				state.finish_run()
 				fall_timer = -1.0

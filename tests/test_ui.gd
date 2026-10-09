@@ -183,8 +183,14 @@ func run() -> void:
 		if b.text == "NIVEL MÁXIMO":
 			capped_button = b.disabled
 	check(capped_button, "The capped permanent upgrade is labelled and disabled")
+	s.unlock("parry")
+	game.show_camp()
+	check(press(game, "PORTADOR") and game.modal_type == "bearers", "The bonfire opens the bearers")
+	check(press(game, "ELEGIR") and s.bearer == "sentinel" and game.arena.hero.hue == s.BEARERS.sentinel.hue, "A bearer card chooses that bearer and recolours the figure")
+	check(press(game, "VOLVER A LA HOGUERA") and game.modal_type == "camp", "Back to the bonfire")
 	var pressed = press(game, "RENACER")
 	check(pressed and s.active() and s.room == 1 and not game.overlay.visible, "Rebirth starts a new expedition")
+	check(game.bearer_label.text == "La Centinela", "The HUD names the bearer")
 	game.show_title()
 	check(game.screen == "title" and game.title_root.visible and not game.game_root.visible, "Main menu is shown")
 	var labels: Array = []

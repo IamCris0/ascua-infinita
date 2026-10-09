@@ -29,6 +29,9 @@ signal node_entered(node: String)
 signal chest_opened(tier: int, loot: Array)
 signal wheel_spun(index: int)
 signal item_found(item: Dictionary)
+signal bearer_unlocked(id: String)
+signal walled
+signal fortune(amount: float)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -179,6 +182,34 @@ const ARMORY_SIZE = 24
 # Chance of each rarity by where a piece is found.
 const RARITY_WEIGHTS = {"elite": [70, 25, 5, 0], "wood": [65, 28, 7, 0], "iron": [45, 38, 14, 3], "eclipse": [20, 40, 30, 10], "boss": [40, 38, 18, 4]}
 const ELITE_DROP = 0.15
+# Portadores: the bearer is chosen at the bonfire. Each one changes a few
+# stats and adds an effect to Destello, which keeps its boss mechanics
+# (interrupts, shields, armour) for everyone. Unlocked by an achievement.
+const BEARER_IDS = ["bearer", "sentinel", "summoner", "wanderer"]
+const BEARERS = {
+	"bearer": {"name": "El Portador", "role": "Equilibrio", "unlock": "", "hue": 0.0, "scale": 1.0,
+		"passive": "Destello recarga un 15% más rápido y golpea un 15% más fuerte.",
+		"technique": "Destello", "technique_text": "Golpea por ocho, interrumpe cargas y rompe escudos.",
+		"burst_cd": 0.85, "burst": 1.15},
+	"sentinel": {"name": "La Centinela", "role": "Guardia", "unlock": "parry", "hue": 0.55, "scale": 1.06,
+		"passive": "+10% de vida y parada perfecta 0,1 s más larga. Sus clics hacen un 15% menos.",
+		"technique": "Muro de brasas", "technique_text": "Destello levanta además un muro que absorbe daño (un 25% de su vida) durante 6 segundos.",
+		"hp": 1.1, "perfect": 0.1, "click": 0.85},
+	"summoner": {"name": "La Invocadora", "role": "Luceros", "unlock": "bell", "hue": 0.42, "scale": 1.0,
+		"passive": "Empieza con un lucero más y sus luceros hacen un 30% más. Sus clics hacen un 20% menos.",
+		"technique": "Llamada del enjambre", "technique_text": "Destello invoca además tres luceros durante 8 segundos.",
+		"start_wisps": 1, "wisp": 1.3, "click": 0.8},
+	"wanderer": {"name": "El Errante", "role": "Fortuna", "unlock": "chests", "hue": 0.8, "scale": 1.0,
+		"passive": "+10% de oro y ascuas errantes más a menudo. −10% de vida.",
+		"technique": "Golpe de fortuna", "technique_text": "Cada Destello deja además oro: un tercio de una victoria de la cámara.",
+		"gold": 1.1, "ember": 0.6, "hp": 0.9}}
+const SUMMON_TIME = 8.0
+const SUMMON_COUNT = 3
+# Muro de brasas absorbs this share of maximum health and fades after a while.
+# A wall that stopped any one blow made charged boss attacks harmless.
+const WALL_SHARE = 0.25
+const WALL_TIME = 6.0
+const FORTUNE = 1.0 / 3.0
 # Maestrías: permanent upgrades of the three skills, bought with esquirlas.
 # Each level costs `cost` times the level it reaches.
 const MASTERIES = [
@@ -337,6 +368,11 @@ var equipped: Dictionary = {"weapon": -1, "talisman": -1, "amulet": -1}
 var scrap: int = 0
 var masteries: Dictionary = {}
 var next_item_uid: int = 1
+var bearer: String = "bearer"
+# Muro de brasas and Llamada del enjambre while they last.
+var wall: float = 0
+var wall_time: float = 0
+var summon_time: float = 0
 # Pieces found during this expedition, for the summary.
 var run_items: Array = []
 var fight_clicks: int = 0
@@ -402,6 +438,10 @@ func unlock(id: String) -> void:
 	achievements.append(id)
 	achievement_unlocked.emit(id)
 	event.emit("Logro · " + achievement_name(id))
+	for key in BEARER_IDS:
+		if BEARERS[key].unlock == id:
+			bearer_unlocked.emit(key)
+			event.emit("Nuevo portador · " + BEARERS[key].name + ". Elígelo en la hoguera")
 
 func achievement_name(id: String) -> String:
 	for entry in ACHIEVEMENTS:
@@ -502,20 +542,20 @@ func legacy_level(kind: int) -> int:
 	return int(legacy[kind]) if kind < legacy.size() else 0
 
 func max_hp() -> float:
-	return (120.0 + legacy_level(1) * 20 + count_relic("heart") * 35 + armor * 15) * (1.0 + gear("hp"))
+	return (120.0 + legacy_level(1) * 20 + count_relic("heart") * 35 + armor * 15) * (1.0 + gear("hp")) * bearer_stat("hp", 1.0)
 
 func power_multiplier() -> float:
 	return (1.0 + legacy_level(0) * 0.08) * (1.0 + altar_pacts * 0.2)
 
 func click_damage() -> float:
 	var base = (5.0 + blade * 3.5 + legacy_level(0) * 2) * (1.0 + count_relic("fang") * 0.3) * power_multiplier()
-	return base * (2.0 if fury_time > 0 else 1.0) * (0.9 if oath == OATH_SWARM else 1.0) * (1.0 + gear("click"))
+	return base * (2.0 if fury_time > 0 else 1.0) * (0.9 if oath == OATH_SWARM else 1.0) * (1.0 + gear("click")) * bearer_stat("click", 1.0)
 
 func wisp_damage() -> float:
-	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier() * (1.0 + gear("wisp"))
+	return (4.0 + legacy_level(2) * 1.0) * (1.0 + count_relic("clock") * 0.4) * power_multiplier() * (1.0 + gear("wisp")) * bearer_stat("wisp", 1.0)
 
 func auto_damage() -> float:
-	return wisps * wisp_damage() * (1.3 if has_synergy("chorus") and manual_rest >= 2.0 else 1.0)
+	return (wisps + summoned()) * wisp_damage() * (1.3 if has_synergy("chorus") and manual_rest >= 2.0 else 1.0)
 
 ## Seconds between companion volleys: Órbita veloz and the Enjambre oath.
 func wisp_interval() -> float:
@@ -531,13 +571,13 @@ func critical_multiplier() -> float:
 	return 2.0 + focus * 0.1
 
 func gold_multiplier() -> float:
-	return (1.0 + 0.35 * count_relic("coin")) * (1.0 + legacy_level(3) * 0.1) * (1.25 if biome() == 2 else 1.0) * (1.0 + gear("gold"))
+	return (1.0 + 0.35 * count_relic("coin")) * (1.0 + legacy_level(3) * 0.1) * (1.25 if biome() == 2 else 1.0) * (1.0 + gear("gold")) * bearer_stat("gold", 1.0)
 
 func burst_damage() -> float:
-	return (click_damage() * 8 + auto_damage() * 3) * (1.0 + count_relic("storm") * 0.25) * (1.0 + gear("burst")) * (1.0 + 0.08 * mastery("burst_power"))
+	return (click_damage() * 8 + auto_damage() * 3) * (1.0 + count_relic("storm") * 0.25) * (1.0 + gear("burst")) * (1.0 + 0.08 * mastery("burst_power")) * bearer_stat("burst", 1.0)
 
 func burst_max_cooldown() -> float:
-	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX)) * (1.2 if eclipse >= 3 else 1.0) * (1.0 - gear("cooldown")) * (1.0 - 0.04 * mastery("burst_haste"))
+	return 12.0 * pow(0.8, count_relic("storm")) * pow(0.94, mini(legacy_level(5), STORM_LEGACY_MAX)) * (1.2 if eclipse >= 3 else 1.0) * (1.0 - gear("cooldown")) * (1.0 - 0.04 * mastery("burst_haste")) * bearer_stat("burst_cd", 1.0)
 
 func legacy_maxed(kind: int) -> bool:
 	return legacy_level(kind) >= LEGACY[kind].max
@@ -723,6 +763,10 @@ func tick(delta: float) -> void:
 	burst_cooldown = maxf(0, burst_cooldown - delta)
 	parry_window = maxf(0, parry_window - delta)
 	parry_cooldown = maxf(0, parry_cooldown - delta)
+	summon_time = maxf(0, summon_time - delta)
+	wall_time = maxf(0, wall_time - delta)
+	if wall_time <= 0:
+		wall = 0
 	fury_time = maxf(0, fury_time - delta)
 	combo_time = maxf(0, combo_time - delta)
 	if combo_time <= 0:
@@ -814,7 +858,7 @@ func perfect_guard() -> bool:
 
 ## Length of the perfect part of the guard: Guardia amplia and Pulso sereno add to it.
 func perfect_window() -> float:
-	return minf(PARRY_WINDOW, PARRY_PERFECT + 0.04 * mastery("guard_window") + (0.1 if has_trait("steady") else 0.0))
+	return minf(PARRY_WINDOW, PARRY_PERFECT + 0.04 * mastery("guard_window") + (0.1 if has_trait("steady") else 0.0) + bearer_stat("perfect", 0.0))
 
 func block_share() -> float:
 	return PARRY_BLOCK - 0.05 * mastery("firm_guard")
@@ -880,6 +924,16 @@ func strike_weak() -> bool:
 	return weak_active and click(true)
 
 func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
+	if wall > 0:
+		var absorbed = minf(amount, wall)
+		wall -= absorbed
+		amount -= absorbed
+		walled.emit()
+		if wall <= 0:
+			wall_time = 0
+		if amount <= 0:
+			event.emit("Muro de brasas · el golpe no te alcanza")
+			return
 	if shelter_ready and has_synergy("shelter"):
 		amount *= 0.6
 		shelter_ready = false
@@ -904,7 +958,7 @@ func _tick_ember(delta: float) -> void:
 		ember_timer = maxf(0, ember_timer - delta)
 		if ember_timer <= 0:
 			ember_active = false
-			ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0)
+			ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0) * bearer_stat("ember", 1.0)
 		return
 	if room < 3:
 		return
@@ -919,7 +973,7 @@ func collect_ember() -> String:
 	if not ember_active or not active():
 		return ""
 	ember_active = false
-	ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0)
+	ember_cooldown = rng.randf_range(35, 70) * (0.5 if has_trait("embers") else 1.0) * bearer_stat("ember", 1.0)
 	total_embers += 1
 	if total_embers >= 25:
 		unlock("embers")
@@ -1002,11 +1056,44 @@ func burst() -> bool:
 			damage *= FORGE_BURST
 		event.emit("DESTELLO · la llama despierta")
 	break_shield()
+	_technique()
 	burst_released.emit(interrupted)
 	var armored = forge_armor > 0
 	damage_enemy(damage, true, false)
 	if armored and forge_armor <= 0 and has_synergy("stormcall"):
 		burst_cooldown *= 0.75
+	return true
+
+## What the chosen bearer adds to Destello.
+func _technique() -> void:
+	match bearer:
+		"sentinel":
+			wall = max_hp() * WALL_SHARE
+			wall_time = WALL_TIME
+		"summoner":
+			summon_time = SUMMON_TIME
+			event.emit("Llamada del enjambre · tres luceros acuden")
+		"wanderer":
+			var amount = floor(room_reward() * FORTUNE)
+			_gain_gold(amount)
+			fortune.emit(amount)
+
+func summoned() -> int:
+	return SUMMON_COUNT if summon_time > 0 else 0
+
+func bearer_stat(key: String, fallback: float) -> float:
+	return float(BEARERS[bearer].get(key, fallback))
+
+func bearer_unlocked_by(id: String) -> bool:
+	var achievement: String = BEARERS[id].unlock
+	return achievement.is_empty() or achievements.has(achievement)
+
+## The bearer is chosen between expeditions, like the oath.
+func set_bearer(id: String) -> bool:
+	if not dead or not BEARERS.has(id) or not bearer_unlocked_by(id):
+		return false
+	bearer = id
+	changed.emit()
 	return true
 
 func break_forge_armor() -> void:
@@ -1534,7 +1621,7 @@ func finish_run() -> void:
 		return
 	last_banked = banked_preview()
 	essence += last_banked
-	history.push_front({"room": room, "kills": run_kills, "bosses": run_bosses, "time": int(run_time), "eclipse": eclipse, "oath": oath, "banked": last_banked})
+	history.push_front({"room": room, "kills": run_kills, "bosses": run_bosses, "time": int(run_time), "eclipse": eclipse, "oath": oath, "banked": last_banked, "bearer": bearer})
 	if history.size() > HISTORY_SIZE:
 		history.resize(HISTORY_SIZE)
 	dead = true
@@ -1543,6 +1630,9 @@ func finish_run() -> void:
 	pending_hit = 0
 	pending_damage = 0
 	charging = false
+	wall = 0
+	wall_time = 0
+	summon_time = 0
 	ember_active = false
 	weak_active = false
 	parry_window = 0
@@ -1571,7 +1661,10 @@ func restart() -> void:
 	room = 1
 	gold = legacy_level(4) * 30.0
 	blade = 0
-	wisps = 1 + mini(legacy_level(9), LEGACY[9].max) + (1 if oath == OATH_SWARM else 0)
+	wisps = 1 + mini(legacy_level(9), LEGACY[9].max) + (1 if oath == OATH_SWARM else 0) + int(bearer_stat("start_wisps", 0))
+	wall = 0
+	wall_time = 0
+	summon_time = 0
 	last_breath_used = false
 	pending_echo = false
 	armor = 0
@@ -1626,11 +1719,12 @@ const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready":
 	"combo_time": 0.0, "spawn_delay": 0.0, "stun_time": 0.0,
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0,
-	"parry_window": 0.0, "parry_cooldown": 0.0, "weak_active": false, "weak_timer": 0.0, "weak_cooldown": WEAK_FIRST}
+	"parry_window": 0.0, "parry_cooldown": 0.0, "weak_active": false, "weak_timer": 0.0, "weak_cooldown": WEAK_FIRST,
+	"wall": 0.0, "wall_time": 0.0, "summon_time": 0.0}
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0,
-	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME + 1.0, "weak_cooldown": 10.0}
+	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME + 1.0, "weak_cooldown": 10.0, "summon_time": SUMMON_TIME, "wall_time": WALL_TIME}
 
 func snapshot() -> Dictionary:
 	var data := {"version": SAVE_VERSION, "discoveries": discoveries.duplicate(), "relics": relics, "offers": offers, "legacy": legacy,
@@ -1655,6 +1749,7 @@ func snapshot() -> Dictionary:
 	data.equipped = equipped.duplicate()
 	data.masteries = masteries.duplicate()
 	data.run_items = run_items.duplicate()
+	data.bearer = bearer
 	return data
 
 func save_game(path: String = SAVE_PATH) -> bool:
@@ -1721,6 +1816,9 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.masteries = {}
 		data.run_items = []
 		data.next_item_uid = 1
+	# Before the bearers there was only the Portador.
+	if not data.has("bearer"):
+		data.bearer = "bearer"
 	# Before the map: no lanes. A pending route becomes a map on load.
 	if not data.has("lanes"):
 		data.lanes = []
@@ -1754,6 +1852,8 @@ func _read_save(path: String) -> Variant:
 			var value = run.get(key)
 			if not (value is float or value is int) or not is_finite(float(value)) or value != floor(value) or value < (-1 if key == "oath" else 0):
 				return null
+		if run.has("bearer") and not run.bearer in BEARER_IDS:
+			return null
 	if not data.has("discoveries"):
 		data.discoveries = []
 	if not data.discoveries is Array:
@@ -1820,6 +1920,8 @@ func _read_save(path: String) -> Variant:
 	if data.chest_tier != floor(data.chest_tier) or data.chest_tier > 2:
 		return null
 	if not _valid_arsenal(data):
+		return null
+	if not data.get("bearer") in BEARER_IDS:
 		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
@@ -1906,6 +2008,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 		var entry := {}
 		for key in ["room", "kills", "bosses", "time", "eclipse", "oath", "banked"]:
 			entry[key] = int(run[key])
+		entry.bearer = run.get("bearer", "bearer")
 		history.append(entry)
 	eclipse_unlocked = mini(eclipse_unlocked, ECLIPSE_MAX)
 	eclipse = mini(eclipse, eclipse_unlocked)
@@ -1934,6 +2037,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	for id in data.masteries:
 		masteries[id] = int(data.masteries[id])
 	run_items = data.run_items.map(func(uid): return int(uid))
+	bearer = data.bearer if bearer_unlocked_by(data.bearer) else "bearer"
 	var boss_count = boss_attacks
 	spawn_enemy(false)
 	boss_attacks = boss_count

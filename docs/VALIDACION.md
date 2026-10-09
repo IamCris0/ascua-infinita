@@ -1,5 +1,21 @@
 # Validación del proyecto
 
+## Portadores (0.9) — 9 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 19 suites sin fallos. La partida gráfica de 70 s llega a la cámara 29 sin errores.
+- `test_bearers.gd` es nueva (30 comprobaciones):
+  - desbloqueo y su aviso;
+  - elección solo en la hoguera y solo de portadores desbloqueados;
+  - cada estadística frente al Portador;
+  - Muro de brasas: absorbe, se rompe y caduca;
+  - el enjambre y su duración;
+  - Golpe de fortuna;
+  - Destello sigue interrumpiendo a los jefes con todos;
+  - guardado, portador sin logro, portador desconocido y partidas anteriores.
+- `test_ui.gd` (69 comprobaciones): la hoguera abre los portadores, la ficha elige y recolorea la figura, y el HUD lo nombra.
+- Captura `bearers.png` revisada. La hoguera con el botón Portador cabe sin desplazar.
+- Equilibrio por portador en HOJA_DE_RUTA.md.
+
 ## Arsenal (0.8) — 9 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 18 suites sin fallos; partida gráfica de 70 s hasta la cámara 30 sin errores.
