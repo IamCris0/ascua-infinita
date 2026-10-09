@@ -1,6 +1,6 @@
 extends SceneTree
 ## Balance probe: a simple bot plays several expeditions and reports how far it gets.
-## godot --headless --path . --script tools/simulate.gd [-- --sample] [-- --lane=1 --seed=7 --no-arsenal]
+## godot --headless --path . --script tools/simulate.gd [-- --sample] [-- --lane=1 --seed=7 --bearer=sentinel --no-arsenal]
 const State = preload("res://scripts/run_state.gd")
 
 ## Share of parries and weak points a player at this cadence lands: an idle
@@ -133,11 +133,14 @@ func _initialize() -> void:
 	# --lane=N keeps the bot on one lane of the map (0 safe, 1 risk, 2 chance).
 	var lane_choice = 0
 	var seed_value = 42
+	var bearer = "bearer"
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--lane="):
 			lane_choice = int(arg.substr(7))
 		elif arg.begins_with("--seed="):
 			seed_value = int(arg.substr(7))
+		elif arg.begins_with("--bearer="):
+			bearer = arg.substr(9)
 	if "--sample" in OS.get_cmdline_user_args():
 		for cps in [0.0, 1.0, 3.0, 5.0]:
 			var rooms: Array = []
@@ -155,6 +158,9 @@ func _initialize() -> void:
 	for cps in [0.0, 1.0, 3.0, 5.0]:
 		var s = State.new()
 		s.rng.seed = seed_value
+		# The chosen bearer plays every expedition from the first.
+		s.achievements = ["parry", "bell", "chests"]
+		s.bearer = bearer
 		var line = "cps %.0f:" % cps
 		for run in range(12):
 			s.restart()

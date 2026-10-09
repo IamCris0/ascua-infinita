@@ -74,3 +74,19 @@ Las cuatro hojas WebP no tienen transparencia: el tablero está dibujado en los 
 El santuario y el altar se muestran como ilustraciones enmarcadas con su fondo oscuro: se borran las líneas de la cuadrícula, se recorta cada estado y se reducen a celdas de 360 × 360 en `final/events-v1.png`. El santuario encendido alterna sus dos estados con llama.
 
 Si se consiguen los PNG originales con alfa real, basta con sustituir los archivos de `assets/source/imagegen/` (cambiando la extensión en el script) y repetir `python tools/sprites/key_imagegen.py` y `godot --headless --path . --script tools/import_imagegen.gd`.
+
+## Portadores — prompts pendientes (9 de octubre de 2026)
+
+La 0.9 añade tres portadores que de momento son el caballero de `hero-v3.png` recoloreado con el shader del actor (giro de tono 0,55, 0,42 y 0,8). Cuando haya arte propio, cada hoja seguirá la especificación común de arriba: 1536 × 1024, seis columnas por cuatro filas de 256 × 256, mirando a la DERECHA, apoyo en y = 224, con el mismo orden de filas que `hero-v3.png`. Se integrarían como personajes `sentinel`, `summoner` y `wanderer` en `characters.json`.
+
+### sentinel-v1.png (La Centinela)
+
+Create a NEW coherent pixel-art animation sprite sheet of a stout armored sentinel woman, facing RIGHT throughout. Heavy rounded steel-blue plate armor, closed visor with a narrow pale-cyan slit, short steel-blue cape, a large round ember-forged shield on her left arm with a glowing orange rim, a short broad sword in her right hand. Sturdy silhouette, slightly larger than the ember knight. Same 16-bit crisp pixel clusters and limited palette as the ember knight sheet. Idle: braced stance behind the shield, breathing. Run: heavy determined run cycle, shield forward. Attack: shield bash forward then short sword thrust RIGHT, recovery. Hurt: shield takes the blow, slide back, recover. Death: drops to one knee, shield falls, armor collapses with fading embers.
+
+### summoner-v1.png (La Invocadora)
+
+Create a NEW coherent pixel-art animation sprite sheet of a slender summoner in a teal hooded mantle, facing RIGHT throughout. Pale mask-like face in the hood shadow with mint eyes, long teal and charcoal robes with ember-gold trims, a slim staff topped by a cage holding a floating mint-green wisp. Same 16-bit crisp pixel clusters and limited palette as the ember knight sheet. Idle: robes swaying, wisp orbiting the staff. Run: gliding run with robes trailing. Attack: raise staff, gather mint light, thrust staff RIGHT releasing a small burst of three mint wisps inside the cell, recovery. Hurt: recoil with robes flaring. Death: kneel, hood falls back, wisps scatter and fade.
+
+### wanderer-v1.png (El Errante)
+
+Create a NEW coherent pixel-art animation sprite sheet of a lean wandering rogue, facing RIGHT throughout. Wide-brimmed dark violet hat, long patched purple travelling coat, gold coins strung on the belt, a curved dagger in the right hand and a small lantern at the hip. Same 16-bit crisp pixel clusters and limited palette as the ember knight sheet. Idle: relaxed stance flipping a gold coin. Run: quick light run with coat tails flying. Attack: crouch, spin, fast dagger slash RIGHT with a short gold trail, recovery. Hurt: stagger back holding the hat. Death: collapse sitting, hat falls, coins spill on the floor.

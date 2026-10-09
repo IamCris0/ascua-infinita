@@ -251,7 +251,9 @@ El bot equipa lo mejor, desguaza el resto y gasta las esquirlas en lo más barat
 - Pestaña **Arsenal** en la Colección (nueve entradas) y el botín en el resumen de cada expedición.
 - Logros 17 y 18: Leyenda forjada (una legendaria) y Mano de herrero (una pieza al nivel máximo).
 
-## Fase D · Portadores (0.9)
+## Fase D · Portadores (0.9) — implementada el 9 de octubre de 2026
+
+Captura: [portadores](bearers.png).
 
 Tres personajes con estadísticas, pasiva y técnica propias, que se desbloquean con logros. Al principio son variaciones de color del portador actual, con prompts preparados para su arte definitivo.
 
@@ -260,6 +262,52 @@ Tres personajes con estadísticas, pasiva y técnica propias, que se desbloquean
 | Portador (actual) | Equilibrado | Destello | Disponible desde el principio |
 | Centinela | Parada más amplia y contraataque mayor | Muro de brasas | Guardia perfecta |
 | Invocadora | Luceros más fuertes y clics más débiles | Llamada del enjambre | Vencer a la Campanera |
+
+### Resultado de la fase D
+
+**Personajes**
+
+Cuatro portadores en lugar de tres, para dar más variedad. Ninguno sustituye a Destello: todos lo conservan contra los jefes (interrumpir, romper escudos y corazas) y le añaden un efecto.
+
+| Portador | Pasiva | Destello añade | Se desbloquea |
+|---|---|---|---|
+| El Portador | Destello recarga un 15% más rápido y golpea un 15% más | — | Desde el principio |
+| La Centinela | +10% de vida, parada perfecta 0,1 s más larga, clics −15% | Muro de brasas: absorbe un 25% de su vida durante 6 s | Guardia perfecta (25 paradas) |
+| La Invocadora | Un lucero más al empezar, luceros +30%, clics −20% | Tres luceros más durante 8 s | Silencio roto (vencer a la Campanera) |
+| El Errante | +10% de oro, ascuas errantes más a menudo, −10% de vida | Un tercio de una victoria en oro | Cazatesoros (15 cofres) |
+
+- **Cuándo se elige**: en la hoguera, entre expediciones, como el juramento.
+- **Ficha de cada portador**: figura, pasiva, técnica y, mientras está bloqueado, el progreso hacia su logro (por ejemplo, 12/25 paradas).
+- **Desbloqueo**: al conseguir el logro, un aviso lo anuncia.
+- **Interfaz**: el HUD muestra el nombre del portador y la pantalla de título lo dibuja con sus colores. El registro de expediciones guarda quién llevó cada una.
+- **Arte provisional**: los nuevos portadores son el caballero recoloreado con el shader del actor. Los prompts para su arte definitivo están en `assets/art/imagegen/README.md`.
+
+**Equilibrio**
+
+Bot con 12 expediciones por portador, desbloqueado desde la primera (`--bearer=id`). Cámara media de las expediciones 9–12, tres semillas.
+
+| Versión | Portador | Intentos/s | 0 | 1 | 3 | 5 |
+|---|---|---|---|---|---|---|
+| Primera | Portador | | 23,9 | 34,2 | 50,0 | 52,6 |
+| Primera | Centinela | | **36,0** | **59,0** | **66,1** | 60,0 |
+| Primera | Invocadora | | 27,5 | 35,5 | 43,2 | 50,4 |
+| Primera | Errante | | 28,9 | 36,9 | 49,6 | 58,8 |
+| Final | Portador | | 22,4 | 36,7 | 42,4 | 57,8 |
+| Final | Centinela | | 24,2 | 34,2 | 52,5 | 59,2 |
+| Final | Invocadora | | 29,8 | 36,1 | 44,2 | 58,1 |
+| Final | Errante | | 27,7 | 36,7 | 45,2 | 58,3 |
+
+**Ajustes de la primera versión a la final**
+- **Muro de brasas**: detenía por completo el siguiente golpe, también las cargas de los jefes, así que la Centinela llegaba a la 59 sin apenas jugar. Ahora absorbe un 25% de su vida y dura 6 s.
+- **Centinela**: su vida extra baja del 25% al 10%.
+- **Errante**: su oro extra baja del 25% al 10%, y Golpe de fortuna, de media victoria a un tercio.
+- **Invocadora**: su penalización a los clics se reduce del 30% al 20%.
+- **Portador**: recibe un 15% más de daño de Destello.
+
+**Lectura de los resultados**
+- A 1 y a 5 intentos/s, los cuatro quedan a menos de tres cámaras entre sí.
+- A 3 intentos/s, el ruido de tres semillas es grande: el propio Portador pasó de 50 a 42 tras mejorarlo.
+- Sin jugar, la Invocadora y el Errante rinden más, como corresponde a su estilo.
 
 ## Fase E · Retos (0.10)
 

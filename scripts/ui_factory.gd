@@ -121,7 +121,9 @@ func hspacer(parent: Node) -> Control:
 func separator(parent: Node) -> void:
 	parent.add_child(HSeparator.new())
 
-func header(parent: Node, overline: String, title: String) -> void:
+## Overline and title; returns the title label so it can change later.
+func header(parent: Node, overline: String, title: String) -> Label:
 	label(parent, overline, 14, Kit.COPPER, true)
 	if not title.is_empty():
-		label(parent, title, 25, Kit.TEXT, true)
+		return label(parent, title, 25, Kit.TEXT, true)
+	return null
