@@ -126,6 +126,8 @@ static func show_event(game) -> void:
 	var description = "Recupera hasta un %d%% de tu vida máxima, sin coste." % roundi(state.shrine_heal() * 100)
 	if state.encounter_kind == "merchant":
 		description = "Un lucero adicional por %d de oro (20%% menos que en la forja). Tienes %d de oro." % [state.encounter_cost(), int(state.gold)]
+	elif state.encounter_kind == "smithy":
+		description = "%s sube dos niveles por %d de oro, el precio de uno solo. Tienes %d de oro." % [state.UPGRADES[state.smithy_kind].name, state.encounter_cost(), int(state.gold)]
 	elif state.encounter_kind == "altar":
 		description = "Entrega %d de vida actual para ganar +20%% al daño de clics y luceros durante esta expedición. Los pactos se suman. Debes sobrevivir al pago." % state.encounter_cost()
 	var art = ui.icon_slot(v, encounter_art(game), 200, Color("6b5a44"))
@@ -145,6 +147,7 @@ static func show_event(game) -> void:
 static func encounter_art(game) -> Texture2D:
 	match game.state.encounter_kind:
 		"merchant": return game.lib.portrait("merchant")
+		"smithy": return game.lib.upgrade_icon(game.state.smithy_kind)
 		"altar": return game.lib.event_art(5)
 	return game.lib.event_art(1)
 

@@ -33,6 +33,7 @@ signal bearer_unlocked(id: String)
 signal walled
 signal fortune(amount: float)
 signal mission_completed(text: String)
+signal thorned(amount: float)
 
 const SAVE_VERSION = 3
 const SAVE_PATH = "user://ascua_save.json"
@@ -43,15 +44,33 @@ const RELICS = [
 	{"id": "heart", "name": "Corazón de musgo", "tag": "SUPERVIVENCIA", "description": "+35 de vida máxima. Recuperas 35 de vida.", "color": "a3c978"},
 	{"id": "coin", "name": "Moneda del olvido", "tag": "FORTUNA", "description": "+35% de oro en esta expedición.", "color": "e8bd75"},
 	{"id": "ash", "name": "Ceniza hambrienta", "tag": "VAMPIRISMO", "description": "Recuperas 4 de vida al vencer a un enemigo.", "color": "be99ea"},
-	{"id": "storm", "name": "Frasco de tormenta", "tag": "DESTELLO", "description": "Destello recarga un 20% más rápido y golpea un 25% más fuerte.", "color": "82bcf5"}
+	{"id": "storm", "name": "Frasco de tormenta", "tag": "DESTELLO", "description": "Destello recarga un 20% más rápido y golpea un 25% más fuerte.", "color": "82bcf5"},
+	{"id": "horn", "name": "Cuerno de guerra", "tag": "CAZA MAYOR", "description": "+30% de daño contra élites y jefes.", "color": "e8d6a8"},
+	{"id": "frost", "name": "Escudo de escarcha", "tag": "GUARDIA", "description": "La parada perfecta aturde 0,6 s más y el bloqueo detiene un 15% más.", "color": "9fd8ff"},
+	{"id": "tear", "name": "Lágrima de fénix", "tag": "REGENERACIÓN", "description": "Recuperas un 0,5% de tu vida máxima por segundo.", "color": "ff9a4a"},
+	{"id": "lens", "name": "Lente de cazador", "tag": "PUNTO DÉBIL", "description": "Los puntos débiles aparecen un 40% más a menudo y duran 1 s más.", "color": "7fe0bf"},
+	{"id": "bag", "name": "Bolsa sin fondo", "tag": "BOTÍN", "description": "Cada cofre trae una recompensa más.", "color": "c48cf5"}
 ]
 const SYNERGIES = [
 	{"id": "precision", "pair": ["fang", "eye"], "name": "Filo del cometa", "description": "Cada crítico manual que impacta reduce 0,4 s la recarga de Destello."},
 	{"id": "chorus", "pair": ["clock", "coin"], "name": "Coro dorado", "description": "Tras 2 s sin atacar manualmente, los luceros hacen un 30% más de daño. Destello no rompe el coro."},
 	{"id": "stormcall", "pair": ["storm", "eye"], "name": "Tormenta certera", "description": "Interrumpir una canalización con Destello reduce un 25% su nueva recarga."},
-	{"id": "shelter", "pair": ["heart", "ash"], "name": "Refugio de musgo", "description": "Vencer a un enemigo protege del 40% del siguiente golpe recibido. No acumula cargas."}
+	{"id": "shelter", "pair": ["heart", "ash"], "name": "Refugio de musgo", "description": "Vencer a un enemigo protege del 40% del siguiente golpe recibido. No acumula cargas."},
+	{"id": "hunter", "pair": ["horn", "lens"], "name": "Cazador implacable", "description": "Acertar el punto débil de un élite o un jefe adelanta 3 s Destello."},
+	{"id": "frostfire", "pair": ["frost", "tear"], "name": "Hielo y llama", "description": "Cada parada perfecta te cura un 5% de tu vida máxima."},
+	{"id": "deep_pockets", "pair": ["bag", "coin"], "name": "Fortuna sin fondo", "description": "Los cofres del mapa nunca son de madera."}
 ]
-const RELIC_IDS = ["fang", "clock", "eye", "heart", "coin", "ash", "storm"]
+const RELIC_IDS = ["fang", "clock", "eye", "heart", "coin", "ash", "storm", "horn", "frost", "tear", "lens", "bag"]
+# Élites always carry an affix; a duel rival carries two. Names agree with
+# "élite", which is feminine.
+const AFFIX_IDS = ["burning", "armored", "swift", "vampiric", "thorny"]
+const AFFIXES = {
+	"burning": {"name": "ardiente", "hint": "Ardiente: sus golpes queman 3 s · párale", "color": "ff8a3d"},
+	"armored": {"name": "acorazada", "hint": "Acorazada: −40% de daño hasta media vida", "color": "aab6c1"},
+	"swift": {"name": "veloz", "hint": "Veloz: ataca un 35% más rápido", "color": "ffe38a"},
+	"vampiric": {"name": "vampírica", "hint": "Vampírica: se cura al golpearte", "color": "e0645a"},
+	"thorny": {"name": "espinosa", "hint": "Espinosa: tus clics te hieren · usa luceros", "color": "6fcf7e"}}
+const BURN_TIME = 3.0
 const UPGRADES = [
 	{"name": "Filo de ascua", "description": "+3,5 daño por clic", "base": 15, "growth": 1.52},
 	{"name": "Lucero guardián", "description": "+1 lucero que ataca solo", "base": 25, "growth": 1.55},
@@ -147,9 +166,9 @@ const HISTORY_SIZE = 8
 # is still a fight: the node adds what happens around it.
 const LANE_LENGTH = 4
 const LANES = [
-	{"id": "safe", "name": "Sendero de las brasas", "hint": "Descansos y santuarios para llegar entero.", "weights": {"fight": 4, "rest": 3, "shrine": 2, "merchant": 1, "chest": 1}, "must": ["rest"]},
-	{"id": "risk", "name": "Senda del desafío", "hint": "Élites y cofres: más peligro, más botín.", "weights": {"fight": 2, "elite": 4, "chest": 3, "altar": 1}, "must": ["elite", "chest"]},
-	{"id": "luck", "name": "Camino del azar", "hint": "Mercaderes, altares y la Rueda del eclipse.", "weights": {"fight": 2, "wheel": 3, "merchant": 2, "altar": 2, "chest": 1, "shrine": 1}, "must": ["wheel"]}]
+	{"id": "safe", "name": "Sendero de las brasas", "hint": "Descansos, santuarios y la fragua para llegar entero.", "weights": {"fight": 4, "rest": 3, "shrine": 2, "merchant": 1, "chest": 1, "smithy": 1}, "must": ["rest"]},
+	{"id": "risk", "name": "Senda del desafío", "hint": "Élites, duelos y cofres: más peligro, más botín.", "weights": {"fight": 2, "elite": 4, "chest": 3, "altar": 1, "duel": 1}, "must": ["elite", "chest"]},
+	{"id": "luck", "name": "Camino del azar", "hint": "Mercaderes, altares, la fragua y la Rueda del eclipse.", "weights": {"fight": 2, "wheel": 3, "merchant": 2, "altar": 2, "chest": 1, "shrine": 1, "smithy": 1}, "must": ["wheel"]}]
 const NODES = {
 	"fight": {"name": "Combate", "hint": "Un rival corriente."},
 	"elite": {"name": "Élite", "hint": "Rival élite: ×2,2 vida y ×1,3 daño. Paga ×2,5 oro y una ascua más."},
@@ -158,10 +177,12 @@ const NODES = {
 	"shrine": {"name": "Santuario de la brasa", "hint": "Cura sin coste antes del combate."},
 	"merchant": {"name": "Mercader de cenizas", "hint": "Vende un lucero más barato que la forja."},
 	"altar": {"name": "Altar del eclipse", "hint": "Cambia vida por daño durante la expedición."},
-	"wheel": {"name": "Rueda del eclipse", "hint": "Apuesta oro y gira: premios… o nada."}}
-const EVENT_NODES = ["shrine", "merchant", "altar", "wheel"]
+	"wheel": {"name": "Rueda del eclipse", "hint": "Apuesta oro y gira: premios… o nada."},
+	"smithy": {"name": "Fragua errante", "hint": "Sube dos niveles de una mejora de forja por el precio de uno."},
+	"duel": {"name": "Duelo", "hint": "Un élite con dos afijos. Vencerlo te da una pieza del Arsenal."}}
+const EVENT_NODES = ["shrine", "merchant", "altar", "wheel", "smithy"]
 # How many times one lane may hold a node; plain fights have no limit.
-const NODE_MAX = {"elite": 2, "rest": 2, "chest": 2, "shrine": 1, "merchant": 1, "altar": 1, "wheel": 1}
+const NODE_MAX = {"elite": 2, "rest": 2, "chest": 2, "shrine": 1, "merchant": 1, "altar": 1, "wheel": 1, "smithy": 1, "duel": 1}
 const CHEST_NAMES = ["Cofre de madera", "Cofre de hierro", "Cofre del eclipse"]
 # Chest rewards: gold scales with the chamber, a relic is rarer in plain chests.
 const LOOT_WEIGHTS = {"gold": 5, "essence": 3, "heal": 2, "wisp": 2, "forge": 2}
@@ -325,6 +346,9 @@ var enemy_hp: float = 24
 var enemy_max: float = 24
 var enemy_elite: bool = false
 var shield_hits: int = 0
+var affixes: Array = []
+var burn_time: float = 0
+var burn_dps: float = 0
 var bell_resonance: int = 0
 var forge_armor: float = 0
 var manual_rest: float = 0
@@ -370,6 +394,8 @@ var lanes: Array = []
 var lane: int = -1
 var lane_start: int = 0
 var chest_tier: int = 0
+# Forge upgrade the Fragua errante offers (an index into UPGRADES).
+var smithy_kind: int = 0
 # Rewards of the last chest or spin, for the screen that reveals them.
 var last_loot: Array = []
 var wheel_result: int = -1
@@ -847,6 +873,8 @@ func enemy_hint() -> String:
 		return "Escudo roto · daño completo"
 	if enemy_role() == "acolyte":
 		return "Canaliza Eco · interrumpe con Destello"
+	if enemy_elite and not affixes.is_empty():
+		return "  ·  ".join(affixes.map(func(id): return AFFIXES[id].hint))
 	return ""
 
 func break_shield() -> void:
@@ -862,7 +890,31 @@ func enemy_name() -> String:
 			return "FORJADOR CIEGO"
 		return "CAMPANERA VACÍA" if is_bell_keeper() else "EL REY SIN BRASA"
 	var title = "Guardián del Umbral" if enemy_role() == "guardian" else ("Acólito del Eco" if enemy_role() == "acolyte" else ENEMY_NAMES[biome()][enemy_index()])
-	return ("Élite · " if enemy_elite else "") + title
+	if not enemy_elite:
+		return title
+	var words: Array = affixes.map(func(id): return AFFIXES[id].name)
+	return ("Élite " + " y ".join(words) if not words.is_empty() else "Élite") + " · " + title
+
+## The rival's own name, without the élite label.
+func enemy_title() -> String:
+	if is_boss():
+		return enemy_name()
+	return "Guardián del Umbral" if enemy_role() == "guardian" else ("Acólito del Eco" if enemy_role() == "acolyte" else ENEMY_NAMES[biome()][enemy_index()])
+
+## "ÉLITE ARDIENTE Y VELOZ", for the plate over an élite.
+func affix_label() -> String:
+	var words: Array = affixes.map(func(id): return AFFIXES[id].name)
+	return ("ÉLITE " + " Y ".join(words) if not words.is_empty() else "ÉLITE").to_upper()
+
+func has_affix(id: String) -> bool:
+	return enemy_elite and affixes.has(id)
+
+func _roll_affixes(count: int) -> Array:
+	var pool: Array = AFFIX_IDS.duplicate()
+	var picked: Array = []
+	for i in range(count):
+		picked.append(pool.pop_at(rng.randi_range(0, pool.size() - 1)))
+	return picked
 
 func boss_title() -> String:
 	return "GUARDIANA DEL ECO" if is_bell_keeper() else BOSS_TITLES[biome()]
@@ -870,7 +922,7 @@ func boss_title() -> String:
 func attack_interval() -> float:
 	if is_boss():
 		return 4.0
-	return [5.6, 4.8, 6.6][enemy_index()]
+	return [5.6, 4.8, 6.6][enemy_index()] * (0.65 if has_affix("swift") else 1.0)
 
 func enemy_damage() -> float:
 	var raw = (5 + room * 1.35) * (1.7 if is_boss() else 1.0) * (1.3 if enemy_elite else 1.0) * (1.15 if biome() == 2 else 1.0) * (1.15 if eclipse >= 2 else 1.0)
@@ -974,10 +1026,20 @@ func tick(delta: float) -> void:
 				burst_cooldown = maxf(0, burst_cooldown - 0.4)
 			if pending_critical and has_trait("vampire"):
 				hp = minf(max_hp(), hp + max_hp() * 0.01)
+			var thorny = has_affix("thorny")
 			damage_enemy(damage, pending_critical, false)
+			if thorny:
+				var thorns = enemy_damage() * 0.08
+				thorned.emit(thorns)
+				_lose_health(thorns)
 			if not active() or spawn_delay > 0:
 				return
 	_tick_weak(delta)
+	if count_relic("tear") > 0:
+		hp = minf(max_hp(), hp + max_hp() * 0.005 * count_relic("tear") * delta)
+	_tick_burn(delta)
+	if not active():
+		return
 	if echo_healing():
 		enemy_hp = minf(enemy_max, enemy_hp + enemy_max * ECHO_REGEN * delta)
 	auto_timer += delta
@@ -1047,20 +1109,20 @@ func perfect_window() -> float:
 	return minf(PARRY_WINDOW, PARRY_PERFECT + 0.04 * mastery("guard_window") + (0.1 if has_trait("steady") else 0.0) + bearer_stat("perfect", 0.0))
 
 func block_share() -> float:
-	return PARRY_BLOCK - 0.05 * mastery("firm_guard")
+	return maxf(0.1, PARRY_BLOCK - 0.05 * mastery("firm_guard") - 0.15 * count_relic("frost"))
 
 func riposte_power() -> float:
 	return PARRY_RIPOSTE + 0.5 * mastery("riposte")
 
 func weak_duration() -> float:
-	return WEAK_TIME + 0.25 * mastery("weak_eye")
+	return WEAK_TIME + 0.25 * mastery("weak_eye") + 1.0 * count_relic("lens")
 
 func weak_bonus() -> float:
 	return WEAK_BONUS + 0.2 * mastery("weak_eye")
 
 ## Seconds before the next weak point: Ojo de halcón halves the wait.
 func _weak_wait() -> float:
-	return rng.randf_range(6, 10) * (0.5 if has_trait("keen") else 1.0)
+	return rng.randf_range(6, 10) * (0.5 if has_trait("keen") else 1.0) / (1.0 + 0.4 * count_relic("lens"))
 
 ## Seconds until the next normal blow lands, or -1 when none is coming.
 func blow_in() -> float:
@@ -1081,7 +1143,9 @@ func _guard_blow() -> void:
 		if has_trait("thorns") and active():
 			damage_enemy(through * 2.0, false, true)
 		return
-	stun_time = PARRY_STUN
+	stun_time = PARRY_STUN + 0.6 * count_relic("frost")
+	if has_synergy("frostfire"):
+		hp = minf(max_hp(), hp + max_hp() * 0.05)
 	total_parries += 1
 	progress_mission("parries")
 	if total_parries >= 25:
@@ -1129,9 +1193,22 @@ func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 	amount *= 1.0 - gear("guard")
 	if amount > 0:
 		fight_hits += 1
+		if has_affix("burning"):
+			burn_time = BURN_TIME
+			burn_dps = amount * 0.2
+		if has_affix("vampiric"):
+			enemy_hp = minf(enemy_max, enemy_hp + enemy_max * 0.1)
 	hp = maxf(0, hp - amount)
 	hero_hit.emit(amount, heavy)
 	event.emit(((spell if not spell.is_empty() else charge_name()).capitalize() if heavy else "El enemigo golpea") + " · −%d de vida" % int(amount))
+	_check_death()
+
+## Burns and thorns hurt outside of blows; both can end the expedition.
+func _lose_health(amount: float) -> void:
+	hp = maxf(0, hp - amount)
+	_check_death()
+
+func _check_death() -> void:
 	if hp <= 0 and oath == OATH_LAST_BREATH and not last_breath_used:
 		hp = max_hp() * 0.3
 		last_breath_used = true
@@ -1141,6 +1218,13 @@ func _hit_hero(amount: float, heavy: bool, spell: String = "") -> void:
 		event.emit("Último aliento · la brasa se niega a apagarse. Destello listo y furia")
 	if hp <= 0:
 		finish_run()
+
+func _tick_burn(delta: float) -> void:
+	if burn_time <= 0:
+		return
+	var step = minf(delta, burn_time)
+	burn_time = maxf(0, burn_time - delta)
+	_lose_health(burn_dps * step)
 
 func _tick_ember(delta: float) -> void:
 	if ember_active:
@@ -1211,6 +1295,8 @@ func click(weak: bool = false) -> bool:
 		burst_cooldown = maxf(0, burst_cooldown - WEAK_RECHARGE)
 		total_weak += 1
 		progress_mission("weak")
+		if has_synergy("hunter") and (enemy_elite or is_boss()):
+			burst_cooldown = maxf(0, burst_cooldown - 3.0)
 		if total_weak >= 50:
 			unlock("weak")
 		weak_struck.emit()
@@ -1304,6 +1390,10 @@ func break_forge_armor() -> void:
 func damage_enemy(amount: float, critical: bool = false, automatic: bool = false) -> void:
 	if not active():
 		return
+	if enemy_elite or is_boss():
+		amount *= 1.0 + 0.3 * count_relic("horn")
+	if has_affix("armored") and enemy_hp > enemy_max * 0.5:
+		amount *= 0.6
 	if shield_hits > 0:
 		if shield_hits == 1:
 			break_shield()
@@ -1332,6 +1422,9 @@ func _gain_gold(amount: float) -> void:
 
 func defeat_enemy() -> void:
 	var boss = is_boss()
+	if node_at(room) == "duel":
+		event.emit("Duelo ganado · el rival deja una pieza del Arsenal")
+		grant_item(make_item("boss"))
 	if has_synergy("shelter"):
 		shelter_ready = true
 	var reward = kill_reward()
@@ -1405,6 +1498,8 @@ func _offer_relics() -> void:
 func spawn_enemy(roll_elite: bool = true) -> void:
 	fight_clicks = 0
 	fight_hits = 0
+	burn_time = 0
+	burn_dps = 0
 	parry_window = 0
 	weak_active = false
 	weak_timer = 0
@@ -1416,9 +1511,10 @@ func spawn_enemy(roll_elite: bool = true) -> void:
 	pending_damage = 0
 	if roll_elite:
 		match node_at(room):
-			"elite": enemy_elite = not is_boss()
+			"elite", "duel": enemy_elite = not is_boss()
 			"rest": enemy_elite = false
 			_: enemy_elite = not is_boss() and room >= 6 and rng.randf() < (0.24 if eclipse >= 1 else 0.12)
+	affixes = _roll_affixes(2 if node_at(room) == "duel" else 1) if enemy_elite else []
 	enemy_max = (45 + room * 13) * pow(1.1, mini(room - 1, 500)) * (3.5 if is_boss() else 1.0) * (2.2 if enemy_elite else 1.0) * (1.25 if is_boss() and eclipse >= 4 else 1.0)
 	enemy_max *= [1.0, 0.85, 1.3][enemy_index()] if not is_boss() else 1.0
 	enemy_hp = enemy_max
@@ -1515,10 +1611,14 @@ func _enter_node() -> void:
 			chest_tier = 2 if roll < 0.1 else (1 if roll < (0.4 if room < 20 else 0.55) else 0)
 			if has_trait("lucky") and rng.randf() < 0.3:
 				chest_tier = mini(2, chest_tier + 1)
+			if has_synergy("deep_pockets"):
+				chest_tier = maxi(1, chest_tier)
 			event.emit(CHEST_NAMES[chest_tier] + " · ábrelo antes del combate")
-		"shrine", "merchant", "altar", "wheel":
+		"shrine", "merchant", "altar", "wheel", "smithy":
 			journey_phase = "event"
 			encounter_kind = node
+			if node == "smithy":
+				smithy_kind = rng.randi_range(0, UPGRADES.size() - 1)
 	if not node.is_empty():
 		node_entered.emit(node)
 
@@ -1529,6 +1629,7 @@ func encounter_cost() -> int:
 	match encounter_kind:
 		"merchant": return maxi(1, int(price(1) * 0.8))
 		"wheel": return maxi(1, int(room_reward() * 2.5))
+		"smithy": return price(smithy_kind)
 	return int(ceil(max_hp() * 0.25))
 
 # ---------------------------------------------------------------- chests and the wheel
@@ -1541,7 +1642,9 @@ func roll_loot(tier: int) -> Array:
 		weights["relic"] = LOOT_RELIC[tier]
 	if hp >= max_hp() * 0.9:
 		weights.erase("heal")
-	for i in range(tier + 1):
+	for i in range(tier + 1 + count_relic("bag")):
+		if weights.is_empty():
+			break
 		var kind = _weighted(weights)
 		# Each reward of a chest is different; an eclipse chest always holds a relic.
 		if tier == 2 and i == tier and weights.has("relic"):
@@ -1639,7 +1742,7 @@ func can_accept_encounter() -> bool:
 		return false
 	match encounter_kind:
 		"shrine": return true
-		"merchant", "wheel": return gold >= encounter_cost()
+		"merchant", "wheel", "smithy": return gold >= encounter_cost()
 		"altar": return hp > encounter_cost()
 	return false
 
@@ -1660,6 +1763,10 @@ func resolve_encounter(accept: bool) -> bool:
 				hp -= cost
 				altar_pacts += 1
 			"wheel": _spin_wheel(cost)
+			"smithy":
+				gold -= cost
+				for i in range(2):
+					_raise_forge(smithy_kind)
 		if kind != "wheel":
 			event.emit(NODES[kind].name + " · trato completado")
 	else:
@@ -1813,19 +1920,23 @@ func buy_mastery(index: int) -> bool:
 	changed.emit()
 	return true
 
+## One level of a forge upgrade, as if bought.
+func _raise_forge(kind: int) -> void:
+	match kind:
+		0: blade += 1
+		1: wisps += 1
+		2:
+			armor += 1
+			hp = minf(max_hp(), hp + 30)
+		3: focus += 1
+
 func buy(kind: int, count: int = 1) -> int:
 	if kind < 0 or kind >= UPGRADES.size() or not active() or count < 1:
 		return 0
 	var bought := 0
 	while bought < count and gold >= price(kind):
 		gold -= price(kind)
-		match kind:
-			0: blade += 1
-			1: wisps += 1
-			2:
-				armor += 1
-				hp = minf(max_hp(), hp + 30)
-			3: focus += 1
+		_raise_forge(kind)
 		bought += 1
 	if bought > 0:
 		var names = ["Filo mejorado", "Un lucero se une a ti", "Armadura reforzada · +30 vida", "Tu mirada arde · más críticos"]
@@ -1851,6 +1962,7 @@ func finish_run() -> void:
 	wall = 0
 	wall_time = 0
 	summon_time = 0
+	burn_time = 0
 	ember_active = false
 	weak_active = false
 	parry_window = 0
@@ -1930,7 +2042,7 @@ const NUMBER_KEYS = ["room", "gold", "hp", "enemy_hp", "blade", "wisps", "armor"
 	"master_volume", "music_volume", "sfx_volume", "ember_cooldown", "altar_pacts", "run_start_best",
 	"eclipse", "eclipse_unlocked", "total_interrupts", "total_armor_breaks", "total_parries", "total_weak",
 	"total_chests", "total_spins", "lane_start", "chest_tier", "scrap", "next_item_uid", "total_items",
-	"total_missions", "daily_done", "total_time"]
+	"total_missions", "daily_done", "total_time", "smithy_kind"]
 const BOOL_KEYS = ["dead", "reduced_motion", "screen_shake", "show_numbers", "fullscreen", "enemy_elite"]
 # Older version 1/2 saves omit these fields. Their neutral defaults preserve
 # the previous load behavior; new saves resume the exact combat phase.
@@ -1939,11 +2051,11 @@ const COMBAT_DEFAULTS = {"fight_clicks": 0, "manual_rest": 0.0, "shelter_ready":
 	"charging": false, "charge_timer": 0.0, "fury_time": 0.0,
 	"ember_active": false, "ember_timer": 0.0,
 	"parry_window": 0.0, "parry_cooldown": 0.0, "weak_active": false, "weak_timer": 0.0, "weak_cooldown": WEAK_FIRST,
-	"wall": 0.0, "wall_time": 0.0, "summon_time": 0.0, "fight_hits": 0}
+	"wall": 0.0, "wall_time": 0.0, "summon_time": 0.0, "fight_hits": 0, "burn_time": 0.0, "burn_dps": 0.0}
 const COMBAT_LIMITS = {"manual_rest": 2.0, "bell_resonance": 3, "shield_hits": 4, "pending_hit": HIT_DELAY, "auto_timer": 1.0, "click_cooldown": CLICK_INTERVAL, "combo": COMBO_BASE + 15,
 	"combo_time": 1.5, "spawn_delay": BOSS_INTRO_FULL, "stun_time": 2.0,
 	"charge_timer": CHARGE_TIME, "fury_time": 12.0, "ember_timer": 8.0,
-	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME + 1.0, "weak_cooldown": 10.0, "summon_time": SUMMON_TIME, "wall_time": WALL_TIME}
+	"parry_window": PARRY_WINDOW, "parry_cooldown": PARRY_WHIFF, "weak_timer": WEAK_TIME + 10.0, "burn_time": BURN_TIME, "weak_cooldown": 10.0, "summon_time": SUMMON_TIME, "wall_time": WALL_TIME}
 
 func snapshot() -> Dictionary:
 	var data := {"version": SAVE_VERSION, "discoveries": discoveries.duplicate(), "relics": relics, "offers": offers, "legacy": legacy,
@@ -1969,6 +2081,7 @@ func snapshot() -> Dictionary:
 	data.masteries = masteries.duplicate()
 	data.run_items = run_items.duplicate()
 	data.bearer = bearer
+	data.affixes = affixes.duplicate()
 	data.achievements_claimed = achievements_claimed.duplicate()
 	data.collection_claimed = collection_claimed.duplicate()
 	data.bestiary = bestiary.duplicate()
@@ -2046,9 +2159,12 @@ static func _migrate(data: Dictionary) -> Dictionary:
 		data.collection_claimed = []
 		data.bestiary = {}
 		data.missions = {"day": -1, "week": -1, "daily": [], "weekly": []}
-	for key in ["total_missions", "daily_done", "total_time"]:
+	for key in ["total_missions", "daily_done", "total_time", "smithy_kind"]:
 		if not data.has(key):
 			data[key] = 0
+	# Before the affixes an elite had none.
+	if not data.has("affixes"):
+		data.affixes = []
 	# Before the bearers there was only the Portador.
 	if not data.has("bearer"):
 		data.bearer = "bearer"
@@ -2157,6 +2273,10 @@ func _read_save(path: String) -> Variant:
 	if not data.get("bearer") in BEARER_IDS:
 		return null
 	if not _valid_retos(data):
+		return null
+	if not data.affixes is Array or data.affixes.size() > 2 or data.affixes.any(func(id): return not id in AFFIX_IDS):
+		return null
+	if data.smithy_kind != floor(data.smithy_kind) or data.smithy_kind >= UPGRADES.size():
 		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
@@ -2323,6 +2443,8 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 	for key in COMBAT_DEFAULTS:
 		set(key, int(data[key]) if COMBAT_DEFAULTS[key] is int else data[key])
 	ember_pos = Vector2(float(data.ember_pos[0]), float(data.ember_pos[1]))
+	# Respawning above rolled new affixes; the saved rival keeps its own.
+	affixes = data.affixes.duplicate() if enemy_elite else []
 	weak_pos = Vector2(float(data.weak_pos[0]), float(data.weak_pos[1]))
 	if journey_phase == "route":
 		journey_phase = "map"

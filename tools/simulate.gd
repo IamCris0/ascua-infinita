@@ -27,7 +27,7 @@ func play(s, cps: float, buy_strategy: String, max_minutes: float, lane_choice: 
 		if s.journey_phase == "chest":
 			s.open_chest()
 		if s.journey_phase == "event":
-			s.resolve_encounter(s.can_accept_encounter() and s.encounter_kind in ["shrine", "merchant"])
+			s.resolve_encounter(s.can_accept_encounter() and s.encounter_kind in ["shrine", "merchant", "smithy"])
 		if s.ember_active and s.rng.randf() < 0.02:
 			s.collect_ember()
 		# Active play: each blow is met with a perfect parry, a block or nothing,

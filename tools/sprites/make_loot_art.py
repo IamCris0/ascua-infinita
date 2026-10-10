@@ -8,6 +8,7 @@ Outputs:
   assets/art/loot/map_icons.png   ten 16 px icons in a row (see ICONS)
   assets/art/loot/chests.png      3 tiers x (closed, open), 40 x 34 px cells
   assets/art/loot/items.png       nine equipment pieces and the shard (see ITEMS)
+  assets/art/loot/relics_extra.png  five relics of 0.11 at 28 px (see RELICS)
 """
 import math
 import os
@@ -24,7 +25,13 @@ PALETTE = {
     "r": (224, 100, 90), "R": (140, 47, 47), "o": (255, 154, 74), "O": (196, 92, 34), "y": (255, 231, 168),
     "t": (127, 224, 191), "T": (47, 143, 116), "p": (177, 140, 240), "P": (91, 63, 143), "q": (46, 30, 74),
     "c": (217, 207, 192), "C": (154, 143, 128), "n": (58, 47, 42), "e": (111, 207, 126), "E": (47, 120, 70),
+    "v": (240, 228, 196), "V": (196, 178, 138), "i": (214, 240, 255), "I": (128, 188, 236), "j": (62, 104, 168),
+    "m": (122, 84, 196),
 }
+# Light and dark variants used by Canvas.shade for each fill colour.
+SHADES = {"v": ("w", "V"), "V": ("v", "C"), "I": ("i", "j"), "o": ("y", "O"), "O": ("o", "R"), "P": ("m", "q"),
+          "m": ("p", "P"), "g": ("y", "G"), "G": ("g", "B"), "T": ("t", "q"), "b": ("o", "B"), "r": ("o", "R"),
+          "s": ("w", "S"), "S": ("s", "n")}
 
 
 class Canvas:
@@ -80,6 +87,31 @@ class Canvas:
             for i, ch in enumerate(row):
                 if ch != ".":
                     self.set(x0 + i, y0 + j, ch)
+
+    def shade(self):
+        """Lights pixels whose upper-left neighbour is empty and darkens those
+        whose lower-right neighbour is empty, for a rounded look."""
+        src = [row[:] for row in self.px]
+        for y in range(self.h):
+            for x in range(self.w):
+                ch = src[y][x]
+                if ch not in SHADES:
+                    continue
+                up = src[y - 1][x] if y > 0 else "."
+                left = src[y][x - 1] if x > 0 else "."
+                down = src[y + 1][x] if y + 1 < self.h else "."
+                right = src[y][x + 1] if x + 1 < self.w else "."
+                if down == "." or right == ".":
+                    self.px[y][x] = SHADES[ch][1]
+                elif up == "." or left == ".":
+                    self.px[y][x] = SHADES[ch][0]
+
+    def bezier(self, a, c, b, r0, r1, ch, steps=60):
+        for i in range(steps + 1):
+            t = i / steps
+            x = (1 - t) ** 2 * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0]
+            y = (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]
+            self.disc(int(round(x)), int(round(y)), int(round(r0 + (r1 - r0) * t)), ch)
 
     def outline(self, c="k"):
         filled = [[self.px[y][x] != "." for x in range(self.w)] for y in range(self.h)]
@@ -467,6 +499,156 @@ def item_scrap():
     return c
 
 
+def icon_smithy():
+    c = Canvas(16, 16)
+    c.rows(1, 4, [
+        "SSSSSSSSSSSSS.",
+        ".SsssssssssSSS",
+        "..SSSSSSSSSS..",
+        "....SSSSSS....",
+        "....SSssSS....",
+        "...SSSSSSSS...",
+        "..BBBBBBBBBB..",
+        "..BbbbbbbbbB..",
+    ])
+    for x, y in ((3, 1), (6, 0), (9, 2), (12, 1)):
+        c.set(x, y, "o")
+    c.set(7, 1, "y")
+    c.outline()
+    return c
+
+
+def icon_duel():
+    c = Canvas(16, 16)
+    for t in range(9):  # two blades crossing
+        c.set(2 + t, 1 + t, "w")
+        c.set(13 - t, 1 + t, "s")
+    c.line(1, 9, 5, 9, "G")
+    c.line(10, 9, 14, 9, "G")
+    c.line(2, 10, 0, 13, "b")
+    c.line(13, 10, 15, 13, "b")
+    c.rows(6, 3, ["..y..", ".yyy.", "yyyyy", ".yyy.", "..y.."])
+    c.outline()
+    return c
+
+
+ICONS += [icon_smithy, icon_duel]
+
+
+# ---------------------------------------------------------------- relics (0.11)
+def relic_horn():
+    c = Canvas(28, 28)
+    a, m, b = (6, 21), (5, 6), (23, 4)
+    c.bezier(a, m, b, 5, 1, "v")
+    c.shade()
+    # Gold bands across the horn, kept inside its silhouette.
+    for t in (0.3, 0.62):
+        px = (1 - t) ** 2 * a[0] + 2 * (1 - t) * t * m[0] + t * t * b[0]
+        py = (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * m[1] + t * t * b[1]
+        tx = 2 * (1 - t) * (m[0] - a[0]) + 2 * t * (b[0] - m[0])
+        ty = 2 * (1 - t) * (m[1] - a[1]) + 2 * t * (b[1] - m[1])
+        n = (tx * tx + ty * ty) ** 0.5
+        nx, ny = -ty / n, tx / n
+        for k in range(-14, 15):
+            for off in (0.0, 0.7):
+                x = int(round(px + nx * k * 0.5 + tx / n * off))
+                y = int(round(py + ny * k * 0.5 + ty / n * off))
+                if c.get(x, y) != ".":
+                    c.set(x, y, "g" if off == 0.0 else "G")
+    c.ring(6, 22, 4, "g")
+    c.disc(6, 22, 3, "n")
+    c.disc(6, 22, 1, "d")
+    c.line(10, 14, 13, 23, "r")
+    c.line(11, 14, 14, 23, "R")
+    c.rect(12, 23, 15, 25, "r")
+    c.outline()
+    return c
+
+
+def relic_frost():
+    c = Canvas(28, 28)
+    for y in range(3, 26):
+        if y < 15:
+            x0, x1 = 5, 22
+        else:
+            k = (y - 15) / 10.0
+            x0, x1 = int(5 + 8.5 * k), int(22 - 8.5 * k)
+        c.rect(x0, y, x1, y, "I")
+    c.shade()
+    for y in range(3, 26):
+        row = [x for x in range(28) if c.get(x, y) != "."]
+        if row:
+            c.set(row[0], y, "s")
+            c.set(row[-1], y, "S")
+    c.rect(5, 3, 22, 3, "s")
+    c.line(13, 7, 13, 21, "w")
+    c.line(14, 7, 14, 21, "w")
+    c.line(8, 14, 19, 14, "w")
+    c.line(9, 9, 18, 19, "i")
+    c.line(18, 9, 9, 19, "i")
+    c.disc(13, 14, 1, "w")
+    c.outline()
+    return c
+
+
+def relic_tear():
+    c = Canvas(28, 28)
+    c.disc(14, 17, 7, "o")
+    for y in range(3, 12):
+        half = int((y - 3) * 0.8)
+        c.rect(14 - half, y, 14 + half, y, "o")
+    c.shade()
+    c.disc(12, 15, 3, "y")
+    c.disc(16, 20, 2, "r")
+    c.set(11, 12, "w")
+    c.set(12, 13, "w")
+    c.rect(12, 24, 16, 25, "g")
+    c.rect(13, 26, 15, 26, "G")
+    c.outline()
+    return c
+
+
+def relic_lens():
+    c = Canvas(28, 28)
+    c.line(17, 17, 24, 24, "b")
+    c.line(18, 17, 25, 24, "b")
+    c.line(17, 18, 24, 25, "B")
+    c.disc(12, 12, 9, "g")
+    c.disc(12, 12, 7, "T")
+    c.shade()
+    c.disc(11, 11, 5, "t")
+    c.disc(9, 9, 2, "w")
+    c.set(14, 15, "i")
+    c.outline()
+    return c
+
+
+def relic_bag():
+    c = Canvas(28, 28)
+    for y in range(11, 26):
+        k = (y - 18) / 7.5
+        half = int(10 * (1 - k * k) ** 0.5) if abs(k) < 1 else 3
+        c.rect(14 - half, y, 14 + half, y, "P")
+    c.rect(11, 8, 17, 11, "P")
+    c.rect(9, 6, 19, 8, "m")
+    c.shade()
+    c.line(9, 10, 19, 10, "g")
+    c.line(19, 10, 22, 14, "g")
+    c.set(22, 15, "y")
+    for x, y in ((6, 3), (21, 2), (24, 6), (13, 2)):
+        c.set(x, y, "y")
+        c.set(x - 1, y, "g")
+        c.set(x + 1, y, "g")
+        c.set(x, y - 1, "g")
+        c.set(x, y + 1, "g")
+    c.disc(14, 18, 2, "g")
+    c.outline()
+    return c
+
+
+RELICS = [relic_horn, relic_frost, relic_tear, relic_lens, relic_bag]
+
+
 ITEMS = [item_ash_sword, item_comet_blade, item_rune_spear, item_wisp_lantern, item_black_hourglass,
          item_silver_bell, item_moss_charm, item_split_coin, item_forge_scale, item_scrap]
 
@@ -552,3 +734,7 @@ if __name__ == "__main__":
     for i, fn in enumerate(ITEMS):
         sheet.paste(fn().image(), (16 * i, 0))
     save(sheet, "items.png")
+    sheet = Image.new("RGBA", (28 * len(RELICS), 28), (0, 0, 0, 0))
+    for i, fn in enumerate(RELICS):
+        sheet.paste(fn().image(), (28 * i, 0))
+    save(sheet, "relics_extra.png")
