@@ -22,6 +22,8 @@ La versión web y la traducción al inglés quedan para después. Cada fase se p
 | C | 0.8 | **Arsenal**: equipamiento permanente con rarezas, mejora y desguace; maestrías de Destello y Parada | Necesita los cofres de la fase B como fuente |
 | D | 0.9 | **Portadores**: tres personajes con pasiva y técnica propias | Cambia el estilo de juego sobre las piezas anteriores |
 | E | 0.10 | **Retos**: misiones diarias y semanales, logros con recompensa, colección interactiva y estadísticas | Recompensa todo lo anterior y da motivos para volver |
+| F | 0.11 | **Variedad y vistosidad**: afijos de élite, reliquias nuevas, duelos, fragua, barra de jefe y ambiente por bioma | Completa lo que quedaba corto de la petición: variedad y más vistosidad |
+| G | 0.12 | **Web e inglés**: build para itch.io comprobada y traducción completa | Se aplazaron hasta tener el contenido cerrado |
 
 Las mejoras visuales van dentro de cada fase, no en una aparte.
 
@@ -374,3 +376,76 @@ Capturas: [retos](retos.png), [logros](logros.png) y [bestiario](bestiary.png).
 - Los retos premian el tiempo de juego, no la profundidad, así que el bot no los mide.
 - Para un jugador diario, suman unas 36 ascuas al día más 100 a la semana. Es menos de lo que deja una expedición que pase de la cámara 30, así que completan la progresión sin sustituirla.
 - Los logros dan unas 700 ascuas y 150 esquirlas en total, una sola vez.
+
+## Fase F · Variedad y vistosidad (0.11) — implementada el 10 de octubre de 2026
+
+Capturas: [élite con dos afijos](elite.png) y [barra de jefe](boss.png).
+
+**Afijos de élite**
+
+Todos los élites llevan un afijo; los rivales de duelo, dos.
+
+| Afijo | Efecto | Cómo se contrarresta |
+|---|---|---|
+| Ardiente | Sus golpes queman un 60% extra durante 3 s | Una parada perfecta no recibe el golpe ni la quemadura |
+| Acorazada | −40% de daño hasta media vida | Guardar Destello para la segunda mitad |
+| Veloz | Ataca un 35% más rápido | Parar o bloquear más a menudo |
+| Vampírica | Se cura un 10% de su vida al golpearte | Parar sus golpes |
+| Espinosa | Cada golpe manual te devuelve un 8% de su golpe | Dejar el daño a los luceros y a Destello |
+
+- El élite brilla con el color de su afijo y su placa lo nombra («ÉLITE ARDIENTE Y ESPINOSA»).
+- Con dos afijos, sus pistas aparecen por turnos.
+- La quemadura se ve en el portador y las espinas, en números verdes.
+
+**Reliquias nuevas**
+- Cinco, dibujadas a 28 px para acercarse al detalle de las de Gemini:
+
+| Reliquia | Efecto |
+|---|---|
+| Cuerno de guerra | +30% de daño contra élites y jefes |
+| Escudo de escarcha | La parada perfecta aturde 0,6 s más y el bloqueo detiene un 15% más |
+| Lágrima de fénix | Recupera un 0,5% de la vida máxima por segundo |
+| Lente de cazador | Puntos débiles un 40% más frecuentes y 1 s más largos |
+| Bolsa sin fondo | Una recompensa más por cofre |
+
+- Tres sinergias nuevas:
+  - **Cazador implacable** (cuerno y lente): acertar el punto débil de un élite o un jefe adelanta 3 s Destello.
+  - **Hielo y llama** (escarcha y lágrima): cada parada perfecta cura un 5%.
+  - **Fortuna sin fondo** (bolsa y moneda): no hay cofres de madera.
+- La colección pasa a 36 entradas.
+
+**Mapa**
+- **Duelo**, en la Senda del desafío: un élite con dos afijos que, al caer, deja una pieza del Arsenal de calidad de jefe.
+- **Fragua errante**, en el Sendero y el Azar: sube dos niveles de una mejora de forja (elegida al llegar) por el precio de uno.
+
+**Vistosidad**
+- **Barra de jefe** ancha y segmentada en lo alto del escenario. La carga del jefe y los avisos se apartan para no taparla.
+- **Ambiente por bioma**:
+  - Jardín: ceniza que sube.
+  - Criptas: motas violetas lentas y bancos de niebla a ras de suelo.
+  - Forja: chispas rápidas que titilan.
+- **Golpes y contadores**:
+  - Los críticos aparecen grandes y se asientan.
+  - El oro del HUD sube contando.
+  - Las ventanas se abren con un pequeño impulso.
+
+  Nada de esto se aplica con *Reducir movimiento*.
+
+**Equilibrio**
+
+Cámara media de las expediciones 9–12, tres semillas:
+
+| Intentos/s | 0.10 | 0.11 |
+|---|---|---|
+| 0 | 22,4 | 22,8 |
+| 1 | 36,7 | 38,7 |
+| 3 | 42,4 | 49,1 |
+| 5 | 57,8 | 55,4 |
+
+Los élites son más duros y las reliquias nuevas y la fragua lo compensan; las diferencias están dentro del ruido. El bot acepta la fragua.
+
+## Fase G · Web e inglés (0.12)
+
+Pendiente:
+- Reexportar la versión web con todo lo nuevo y comprobarla en el navegador.
+- Traducir al inglés unos 600 textos, con selector de idioma y pruebas de cobertura.

@@ -355,7 +355,7 @@ func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 	if show_numbers:
 		var text = compact_number(damage) + ("!" if critical else "")
 		var color = Color("ffcf7b") if critical else (Color("86e0bd") if automatic else Color("f6efe0"))
-		numbers.append({"pos": at + Vector2(randf_range(-30, 30), -40), "vel": Vector2(randf_range(-20, 20), -95), "life": 1.0, "text": text, "color": color, "size": 34 if critical else (20 if automatic else 26)})
+		numbers.append({"pos": at + Vector2(randf_range(-30, 30), -40), "vel": Vector2(randf_range(-20, 20), -95), "life": 1.0, "text": text, "color": color, "size": 34 if critical else (20 if automatic else 26), "pop": critical})
 	hint_alpha = maxf(0.0, hint_alpha - 0.12)
 
 func on_burst(interrupted: bool) -> void:
@@ -443,6 +443,12 @@ func on_last_breath() -> void:
 	burst_particles(hero_center(), [Color("86e0bd"), Color("fff1cf")], 30, 300.0)
 	hero.play("hurt")
 	show_banner("ÚLTIMO ALIENTO", "La brasa se niega a apagarse · Destello listo", Color("86e0bd"), 2.0)
+
+func on_thorned(amount: float) -> void:
+	if show_numbers:
+		numbers.append({"pos": hero_center() + Vector2(20, -50), "vel": Vector2(-10, -70), "life": 0.8, "text": "-" + compact_number(amount), "color": Color("8fe39a"), "size": 20})
+	hero.flash = maxf(hero.flash, 0.35)
+	hero.flash_color = Color(0.5, 1.0, 0.5)
 
 func on_walled() -> void:
 	var at = hero_center() + Vector2(80, -10)
@@ -591,6 +597,9 @@ func _process(delta: float) -> void:
 		enemy.offset.x = -sin(clampf(t / 0.45, 0, 1) * PI) * (55 if reduced_motion else 110)
 		if t >= 0.45:
 			enemy.remove_meta("lunge")
+	if state.burn_time > 0 and not reduced_motion and randf() < 0.6:
+		var at = hero_center() + Vector2(randf_range(-30, 30), randf_range(-10, 40))
+		particles.append({"pos": at, "vel": Vector2(randf_range(-20, 20), randf_range(-160, -90)), "life": randf_range(0.3, 0.6), "max": 0.6, "color": [Color("ff8a3d"), Color("ffcf7b"), Color("e0645a")][randi() % 3], "size": randf_range(3, 6)})
 	if state.stun_time > 0:
 		enemy.speed = 0.25
 	else:
@@ -617,10 +626,11 @@ func _process(delta: float) -> void:
 		n.vel.y += 60 * delta
 	numbers = numbers.filter(func(n): return n.life > 0)
 	var drift = 160.0 if travelling() else 0.0
+	var rise = [1.0, 0.45, 2.8][bg_index]
 	for a in ash:
 		if reduced_motion:
 			break
-		a.pos.y -= a.speed * delta
+		a.pos.y -= a.speed * rise * delta
 		a.pos.x += (sin(ambient_time * 0.7 + a.phase) * 10 - drift) * delta
 		if a.pos.y < -10:
 			a.pos = Vector2(randf() * 1024, 810)
@@ -637,6 +647,13 @@ func _draw_backdrop() -> void:
 	backdrop.draw_texture_rect(lib.backgrounds[bg_index], rect, false)
 	if bg_fade > 0:
 		backdrop.draw_texture_rect(lib.backgrounds[bg_prev], rect, false, Color(1, 1, 1, bg_fade))
+	# The crypts breathe a slow, low fog.
+	if bg_index == 1 or bg_prev == 1:
+		var fog = (1.0 - bg_fade) if bg_index == 1 else bg_fade
+		for i in range(4):
+			var x = fmod(ambient_time * (14.0 + i * 5.0) + i * 300.0, 1500.0) - 300.0
+			var y = 560.0 + i * 38.0 + sin(ambient_time * 0.4 + i) * 12.0
+			backdrop.draw_texture_rect(glow, Rect2(x - 260, y - 60, 520, 120), false, Color(0.62, 0.56, 0.82, 0.16 * fog))
 	# Ground shadows under the actors.
 	_ellipse(backdrop, HERO_FEET + Vector2(hero.offset.x, 2), Vector2(62, 12), Color(0, 0, 0, 0.45))
 	var ew = 110.0 if enemy.key in BOSS_KEYS else 70.0
@@ -657,11 +674,18 @@ func _draw_lights() -> void:
 	var core = 105.0 + 6.0 * sin(ambient_time * 3.0)
 	lights.draw_texture_rect(glow, Rect2(HERO_FEET + Vector2(0, -80) - Vector2.ONE * core, Vector2.ONE * core * 2), false, Color(0.45, 1.0, 0.8, 0.22))
 	for a in ash:
-		var c = Color(1.0, 0.6, 0.3, 0.55) if bg_index != 1 else Color(0.75, 0.6, 1.0, 0.5)
-		lights.draw_rect(Rect2(a.pos, Vector2.ONE * a.size), c)
+		var c = [Color(1.0, 0.6, 0.3, 0.55), Color(0.75, 0.6, 1.0, 0.5), Color(1.0, 0.75, 0.3, 0.75 + 0.25 * sin(ambient_time * 20.0 + a.phase))][bg_index]
+		lights.draw_rect(Rect2(a.pos, Vector2.ONE * a.size * (0.7 if bg_index == 2 else 1.0)), c)
 	if state.enemy_elite and state.spawn_delay <= 0:
 		var r = 140.0 + 10 * sin(ambient_time * 4.0)
-		lights.draw_texture_rect(glow, Rect2(enemy_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.75, 0.25, 0.55))
+		var aura = Color(state.AFFIXES[state.affixes[0]].color) if not state.affixes.is_empty() else Color(1.0, 0.75, 0.25)
+		lights.draw_texture_rect(glow, Rect2(enemy_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(aura, 0.6))
+		if state.affixes.size() > 1:
+			var r2 = r * 0.7
+			lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(0, -30) - Vector2.ONE * r2, Vector2.ONE * r2 * 2), false, Color(Color(state.AFFIXES[state.affixes[1]].color), 0.5))
+	if state.burn_time > 0:
+		var r = 110.0 + 12 * sin(ambient_time * 12.0)
+		lights.draw_texture_rect(glow, Rect2(hero_center() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.45, 0.1, 0.5))
 	if state.charging:
 		var r = 120.0 + 160.0 * state.charge_progress()
 		lights.draw_texture_rect(glow, Rect2(enemy_center() + Vector2(-70, -10) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(0.65, 0.4, 1.0, 0.5) if state.is_bell_keeper() else Color(1.0, 0.45, 0.1, 0.7))
@@ -776,26 +800,12 @@ func _draw_overlay() -> void:
 		var plate_w = clampf(w * 0.3, 210, 300)
 		var top_y = maxf(56.0, head.y - 54)
 		var cx = clampf(head.x, plate_w * 0.5 + 12, w - plate_w * 0.5 - 12)
-		var name: String = state.enemy_name()
+		var name: String = state.enemy_title() if state.enemy_elite else state.enemy_name()
 		var name_color = Color("ffd37a") if state.enemy_elite else (Color("ff9c7a") if state.is_boss() else Color("f1e9da"))
 		if state.is_boss():
-			_text_center(body, state.boss_title(), Vector2(cx, top_y - 22), 13, Color("e7b089"))
-		_text_center(font, name, Vector2(cx, top_y), 22, name_color, 5)
-		var bar = Rect2(cx - plate_w * 0.5, top_y + 10, plate_w, 12)
-		overlay.draw_rect(bar.grow(2), Color(0.02, 0.03, 0.05, 0.85))
-		var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
-		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.95, 0.85, 0.55))
-		var fill = Color("e0645a") if state.is_boss() else (Color("e8b450") if state.enemy_elite else Color("6fcf9f"))
-		if state.echo_healing() and not reduced_motion:
-			fill = fill.lerp(Color("b18cf0"), 0.5 + 0.5 * sin(ambient_time * 6.0))
-		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
-		overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
-		var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
-		if state.echo_healing():
-			health_text += "  ·  ECO: ATACA PARA DETENERLO"
-		_text_center(body, health_text, Vector2(cx, bar.end.y + 17), 13, Color("c9a6f5") if state.echo_healing() else Color("c3cbd3"), 3)
-		if not state.enemy_hint().is_empty() and not state.is_boss():
-			_text_center(body, state.enemy_hint(), Vector2(cx, top_y - 24), 13, Color("acd5ff"), 3)
+			_draw_boss_bar(font, body)
+		else:
+			_draw_plate(font, body, name, name_color, cx, top_y, plate_w)
 		# Telegraph.
 		var feet = stage_to_screen(ENEMY_FEET)
 		var tele_w = plate_w * 0.8
@@ -803,7 +813,8 @@ func _draw_overlay() -> void:
 		if state.charging:
 			var k = state.charge_progress()
 			var pulse = 0.6 + 0.4 * sin(ambient_time * 16.0)
-			tele = Rect2(w * 0.5 - w * 0.3, size.y * 0.16, w * 0.6, 12)
+			# Below the boss bar when there is one.
+			tele = Rect2(w * 0.5 - w * 0.3, maxf(size.y * 0.16, 150.0 + letterbox() * size.y * 0.1) if state.is_boss() else size.y * 0.16, w * 0.6, 12)
 			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
 			var cue = " · DESTELLO [E]"
@@ -862,7 +873,9 @@ func _draw_overlay() -> void:
 	for n in numbers:
 		var p = stage_to_screen(n.pos)
 		var a = clampf(n.life * 2.0, 0, 1)
-		_text_center(font, n.text, p, n.size, Color(n.color, a), 6, Color(0.05, 0.03, 0.02, a))
+		# Criticals land big and settle back to their size.
+		var grow = 1.0 + 0.6 * clampf((n.life - 0.85) / 0.15, 0, 1) if n.get("pop", false) and not reduced_motion else 1.0
+		_text_center(font, n.text, p, int(n.size * grow), Color(n.color, a), 6, Color(0.05, 0.03, 0.02, a))
 	# First-steps hint.
 	if hint_alpha > 0 and state.total_kills < 3 and state.active() and not state.in_boss_intro():
 		var pulse = 0.65 + 0.35 * sin(ambient_time * 4.0)
@@ -880,7 +893,7 @@ func _draw_overlay() -> void:
 		var toast: Dictionary = toasts[i]
 		var a = clampf(toast.t / 0.25, 0, 1) * clampf((3.4 - toast.t) / 0.5, 0, 1)
 		var width = body.get_string_size(toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 28
-		var box = Rect2(size.x - width - 14, 14 + i * 40 + letterbox() * size.y * 0.1, width, 32)
+		var box = Rect2(size.x - width - 14, 14 + i * 40 + letterbox() * size.y * 0.1 + (96.0 if state.is_boss() and state.spawn_delay <= 0 else 0.0), width, 32)
 		overlay.draw_rect(box, Color(0.05, 0.05, 0.08, 0.85 * a))
 		overlay.draw_rect(Rect2(box.position, Vector2(3, box.size.y)), Color(1.0, 0.8, 0.45, a))
 		overlay.draw_string(body, box.position + Vector2(14, 22), toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.7, a))
@@ -894,6 +907,58 @@ func _draw_overlay() -> void:
 		overlay.draw_rect(Rect2(0, y + 38, w, 2), Color(banner.color, 0.6 * a))
 		_text_center(font, banner.title, Vector2(w * 0.5, y), 40, Color(banner.color, a), 7)
 		_text_center(body, banner.subtitle, Vector2(w * 0.5, y + 26), 16, Color(0.92, 0.9, 0.85, a), 3)
+
+## Name, health and hint over an ordinary rival.
+func _draw_plate(font: Font, body: Font, name: String, name_color: Color, cx: float, top_y: float, plate_w: float) -> void:
+	_text_center(font, name, Vector2(cx, top_y), 22, name_color, 5)
+	var bar = Rect2(cx - plate_w * 0.5, top_y + 10, plate_w, 12)
+	overlay.draw_rect(bar.grow(2), Color(0.02, 0.03, 0.05, 0.85))
+	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.95, 0.85, 0.55))
+	var fill = Color("e8b450") if state.enemy_elite else Color("6fcf9f")
+	if state.echo_healing() and not reduced_motion:
+		fill = fill.lerp(Color("b18cf0"), 0.5 + 0.5 * sin(ambient_time * 6.0))
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 3)), Color(1, 1, 1, 0.25))
+	if state.has_affix("armored") and state.enemy_hp > state.enemy_max * 0.5:
+		overlay.draw_rect(Rect2(bar.position + Vector2(bar.size.x * 0.5, 0), Vector2(bar.size.x * (ratio - 0.5), bar.size.y)), Color(0.75, 0.8, 0.88, 0.45))
+	var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
+	if state.echo_healing():
+		health_text += "  ·  ECO: ATACA PARA DETENERLO"
+	_text_center(body, health_text, Vector2(cx, bar.end.y + 17), 13, Color("c9a6f5") if state.echo_healing() else Color("c3cbd3"), 3)
+	if state.enemy_elite and not state.affixes.is_empty():
+		# The affixes above the name; with two, their hints take turns.
+		var shown: String = state.affixes[int(ambient_time / 3.0) % state.affixes.size()]
+		var color = Color(state.AFFIXES[shown].color).lightened(0.25)
+		_text_center(font, state.affix_label(), Vector2(cx, top_y - 22), 15, Color("ffd37a"), 4)
+		_text_center(body, state.AFFIXES[shown].hint, Vector2(cx, top_y - 44), 13, color, 3)
+	elif not state.enemy_hint().is_empty():
+		_text_center(body, state.enemy_hint(), Vector2(cx, top_y - 24), 13, Color("acd5ff"), 3)
+
+## A wide segmented health bar across the top of the stage for bosses.
+func _draw_boss_bar(font: Font, body: Font) -> void:
+	var w = size.x
+	var bar_w = minf(w * 0.7, 640.0)
+	var y = 46.0 + letterbox() * size.y * 0.1
+	_text_center(body, state.boss_title(), Vector2(w * 0.5, y - 26), 13, Color("e7b089"), 3)
+	_text_center(font, state.enemy_name(), Vector2(w * 0.5, y), 26, Color("ff9c7a"), 6)
+	var bar = Rect2((w - bar_w) * 0.5, y + 10, bar_w, 16)
+	overlay.draw_rect(bar.grow(4), Color(0.02, 0.02, 0.03, 0.92))
+	overlay.draw_rect(bar.grow(4), Color("8c2f2f"), false, 2.0)
+	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.92, 0.8, 0.6))
+	var fill = Color("d84a3d")
+	if state.echo_healing() and not reduced_motion:
+		fill = fill.lerp(Color("b18cf0"), 0.5 + 0.5 * sin(ambient_time * 6.0))
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), fill)
+	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 5)), Color(1, 0.7, 0.55, 0.45))
+	for i in range(1, 10):
+		var x = bar.position.x + bar.size.x * i / 10.0
+		overlay.draw_line(Vector2(x, bar.position.y), Vector2(x, bar.end.y), Color(0.02, 0.02, 0.03, 0.7), 2.0)
+	var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
+	if state.echo_healing():
+		health_text += "  ·  ECO: ATACA PARA DETENERLO"
+	_text_center(body, health_text, Vector2(w * 0.5, bar.end.y + 18), 13, Color("c9a6f5") if state.echo_healing() else Color("e8d5c8"), 3)
 
 ## Cinema bars, and on a first meeting the boss's name card and advice.
 func _draw_intro(font: Font, body: Font) -> void:

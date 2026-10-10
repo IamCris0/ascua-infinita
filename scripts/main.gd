@@ -76,6 +76,8 @@ var parry_label: Label
 var hitstop_until: int = 0
 # Seconds until the daily retos are checked against the clock again.
 var mission_check: float = 0.0
+# Gold shown in the HUD; it counts up toward the real amount.
+var shown_gold: float = 0.0
 # Live views of the chest and wheel screens, for their keyboard shortcuts.
 var chest_view
 var wheel_view
@@ -235,6 +237,10 @@ func connect_state() -> void:
 		audio.play("heal" if kind == "heal" else "ember_take")
 	)
 	state.relic_offered.connect(func(): audio.play("offer"))
+	state.thorned.connect(func(amount):
+		arena.on_thorned(amount)
+		audio.play("hurt", 0.1, -9.0, 0.15)
+	)
 	state.walled.connect(func():
 		arena.on_walled()
 		audio.play("parry", 0.05, -2.0)
@@ -801,7 +807,11 @@ func try_parry() -> void:
 func refresh() -> void:
 	if arena == null or status_label == null:
 		return
-	gold_label.text = fmt(state.gold)
+	if state.gold < shown_gold or state.reduced_motion or absf(state.gold - shown_gold) < 1.0:
+		shown_gold = state.gold
+	else:
+		shown_gold += (state.gold - shown_gold) * minf(1.0, get_process_delta_time() * 9.0)
+	gold_label.text = fmt(shown_gold)
 	essence_label.text = str(state.essence)
 	run_essence_label.text = "+%d en el viaje" % state.run_essence if not state.dead else "en la hoguera"
 	biome_label.text = state.BIOMES[state.biome()]
@@ -1019,7 +1029,16 @@ func modal(kind: String, overline: String, title: String, description: String, w
 		overlay.modulate.a = 0.0
 		var tw = create_tween()
 		tw.tween_property(overlay, "modulate:a", 1.0, 0.16)
+		if not state.reduced_motion:
+			modal_panel.scale = Vector2(0.95, 0.95)
+			_pop_modal.call_deferred()
 	return v
+
+## The panel opens with a small spring once its size is known.
+func _pop_modal() -> void:
+	modal_panel.pivot_offset = modal_panel.size * 0.5
+	var tw = create_tween()
+	tw.tween_property(modal_panel, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func close_modal(resume: bool = true) -> void:
 	if overlay.visible and resume:
@@ -1603,8 +1622,8 @@ func capture() -> void:
 				state.spawn_delay = state.BOSS_INTRO_FULL - 1.4
 			"options": show_options("pause")
 			"howto": show_howto("welcome")
-	await get_tree().create_timer({"preview": 1.6, "boss": 1.6, "crypt": 1.6, "forge": 1.6, "chest": 1.9, "wheel": 4.3}.get(shot, 0.8)).timeout
-	if shot in ["preview", "boss", "crypt", "forge"]:
+	await get_tree().create_timer({"preview": 1.6, "boss": 1.6, "crypt": 1.6, "forge": 1.6, "elite": 1.6, "chest": 1.9, "wheel": 4.3}.get(shot, 0.8)).timeout
+	if shot in ["preview", "boss", "crypt", "forge", "elite"]:
 		for i in range(6):
 			state.click()
 			await get_tree().create_timer(0.07).timeout
@@ -1630,7 +1649,7 @@ func demo_state(shot: String) -> void:
 	state.wisps = 3
 	state.armor = 2
 	state.focus = 1
-	state.room = {"boss": 10, "crypt": 14, "forge": 24, "map": 16, "chest": 12, "wheel": 13, "event": 6, "intro": 30, "preview": 9}.get(shot, 8)
+	state.room = {"boss": 10, "crypt": 14, "forge": 24, "map": 16, "chest": 12, "wheel": 13, "event": 6, "intro": 30, "preview": 9, "elite": 17}.get(shot, 8)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--room="):
 			state.room = int(a.substr(7))
@@ -1645,9 +1664,17 @@ func demo_state(shot: String) -> void:
 	state.run_bosses = 1
 	state.legacy = [4, 3, 3, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0]
 	state.relics = ["fang", "eye", "clock", "fang"]
+	state.enemy_elite = shot == "elite"
 	state.spawn_enemy(false)
 	state.spawn_delay = 0
 	state.hp = state.max_hp() * 0.78
+	if shot == "elite":
+		# A duel rival that burns: the bearer is still smouldering.
+		state.affixes = ["burning", "thorny"]
+		state.enemy_max *= 4
+		state.enemy_hp = state.enemy_max * 0.8
+		state.burn_time = 2.5
+		state.burn_dps = 1.0
 	state.combo = 9
 	state.combo_time = 1.2
 	if shot == "relic":

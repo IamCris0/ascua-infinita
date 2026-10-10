@@ -1,5 +1,18 @@
 # Validación del proyecto
 
+## Variedad y vistosidad (0.11) — 10 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 21 suites sin fallos y partida gráfica de 70 s.
+- `test_variety.gd` es nueva (40 comprobaciones):
+  - cada reliquia y sinergia nueva;
+  - los cinco afijos (quemadura evitada con parada, muerte por quemadura, espinas);
+  - duelo con dos afijos y su pieza;
+  - fragua errante;
+  - guardado, validación y partidas anteriores.
+- `test_collection.gd`: la colección tiene 36 entradas.
+- Capturas `elite.png` y `boss.png` revisadas: la barra del jefe no se pisa con su carga y la placa del élite cabe con dos afijos.
+- Equilibrio frente a la 0.10, con tres semillas, en HOJA_DE_RUTA.md.
+
 ## Retos (0.10) — 9 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 20 suites sin fallos y partida gráfica de 70 s.

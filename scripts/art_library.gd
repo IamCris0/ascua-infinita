@@ -11,7 +11,10 @@ const EVENTS = "res://assets/art/imagegen/final/events-v1.png"
 const EVENT_CELL = 360
 # Map icons and chests drawn by tools/sprites/make_loot_art.py, stored at 4x.
 const MAP_ICONS = "res://assets/art/loot/map_icons.png"
-const MAP_ICON_ORDER = ["fight", "elite", "rest", "chest", "shrine", "merchant", "altar", "wheel", "milestone", "boss"]
+const MAP_ICON_ORDER = ["fight", "elite", "rest", "chest", "shrine", "merchant", "altar", "wheel", "milestone", "boss", "smithy", "duel"]
+# Relics added in 0.11, drawn at 28 px and stored at 4x, in this order.
+const RELICS_EXTRA = "res://assets/art/loot/relics_extra.png"
+const RELICS_EXTRA_ORDER = ["horn", "frost", "tear", "lens", "bag"]
 const CHESTS = "res://assets/art/loot/chests.png"
 # Equipment pieces in the order of run_state.ITEM_IDS, then the esquirla.
 const ITEM_ICONS = "res://assets/art/loot/items.png"
@@ -58,6 +61,12 @@ func _init() -> void:
 		fx[key]["tex"] = load(data.fx[key].texture)
 	for key in data.relics:
 		relics[key] = load(data.relics[key])
+	var extra: Texture2D = load(RELICS_EXTRA)
+	for i in range(RELICS_EXTRA_ORDER.size()):
+		var a = AtlasTexture.new()
+		a.atlas = extra
+		a.region = Rect2(i * 112, 0, 112, 112)
+		relics[RELICS_EXTRA_ORDER[i]] = a
 	for key in data.ui:
 		var entry = data.ui[key]
 		ui[key] = load(entry.texture if entry is Dictionary else entry)

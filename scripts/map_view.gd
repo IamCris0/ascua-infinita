@@ -8,7 +8,8 @@ signal lane_chosen(index: int)
 
 const LANE_COLORS = [Color("7fe0bf"), Color("ec8a6d"), Color("b18cf0")]
 const NODE_COLORS = {"fight": Color("aab6c1"), "elite": Color("e0645a"), "rest": Color("6fcf7e"), "chest": Color("f2c47c"),
-	"shrine": Color("ffb070"), "merchant": Color("e8bd75"), "altar": Color("b18cf0"), "wheel": Color("f2c47c")}
+	"shrine": Color("ffb070"), "merchant": Color("e8bd75"), "altar": Color("b18cf0"), "wheel": Color("f2c47c"),
+	"smithy": Color("c9d3dd"), "duel": Color("ff6b5b")}
 # Lane rows as a share of the height.
 const ROWS = [0.2, 0.46, 0.72]
 const NODE_RADIUS = 30.0
