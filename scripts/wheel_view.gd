@@ -106,7 +106,7 @@ func _draw() -> void:
 		var at = c + Vector2(cos(mid), sin(mid)) * r * 0.66
 		if icon:
 			draw_texture_rect(icon, Rect2(at - Vector2(19, 26), Vector2(38, 38)), false)
-		var label: String = names.get(sectors[i], "")
+		var label: String = tr(names.get(sectors[i], ""))
 		var w = body.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 		draw_string_outline(body, at + Vector2(-w * 0.5, 24), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
 		draw_string(body, at + Vector2(-w * 0.5, 24), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 0.97, 0.9))

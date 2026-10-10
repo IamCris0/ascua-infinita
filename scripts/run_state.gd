@@ -466,6 +466,8 @@ var reduced_motion: bool = false
 var screen_shake: bool = true
 var show_numbers: bool = true
 var fullscreen: bool = false
+# "auto" follows the system: Spanish if it is Spanish, English otherwise.
+var language: String = "auto"
 var save_error: String = ""
 var offline_reward: float = 0
 
@@ -2082,6 +2084,7 @@ func snapshot() -> Dictionary:
 	data.run_items = run_items.duplicate()
 	data.bearer = bearer
 	data.affixes = affixes.duplicate()
+	data.language = language
 	data.achievements_claimed = achievements_claimed.duplicate()
 	data.collection_claimed = collection_claimed.duplicate()
 	data.bestiary = bestiary.duplicate()
@@ -2165,6 +2168,8 @@ static func _migrate(data: Dictionary) -> Dictionary:
 	# Before the affixes an elite had none.
 	if not data.has("affixes"):
 		data.affixes = []
+	if not data.has("language"):
+		data.language = "auto"
 	# Before the bearers there was only the Portador.
 	if not data.has("bearer"):
 		data.bearer = "bearer"
@@ -2277,6 +2282,8 @@ func _read_save(path: String) -> Variant:
 	if not data.affixes is Array or data.affixes.size() > 2 or data.affixes.any(func(id): return not id in AFFIX_IDS):
 		return null
 	if data.smithy_kind != floor(data.smithy_kind) or data.smithy_kind >= UPGRADES.size():
+		return null
+	if not data.language in ["auto", "es", "en"]:
 		return null
 	if not (data.oath is float or data.oath is int) or data.oath != floor(data.oath) or data.oath < -1 or data.oath >= LEGACY.size():
 		return null
@@ -2424,6 +2431,7 @@ func load_game(path: String = SAVE_PATH, allow_offline: bool = true) -> bool:
 		masteries[id] = int(data.masteries[id])
 	run_items = data.run_items.map(func(uid): return int(uid))
 	bearer = data.bearer if bearer_unlocked_by(data.bearer) else "bearer"
+	language = data.language
 	achievements_claimed = data.achievements_claimed.duplicate()
 	collection_claimed = data.collection_claimed.duplicate()
 	bestiary = {}

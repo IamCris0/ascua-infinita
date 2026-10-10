@@ -1,5 +1,24 @@
 # Validación del proyecto
 
+## Web e inglés (0.12) — 10 de octubre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 22 suites sin fallos y partida gráfica de 70 s.
+- `test_i18n.gd` es nueva (20 comprobaciones) y no deja ningún texto sin traducir. Recorre en inglés:
+  - título, pausa, opciones y guía;
+  - todas las pestañas de la colección y el Arsenal;
+  - combates de élite y jefe;
+  - reliquia, mapa, cofre, Rueda y los cinco eventos;
+  - retirada, resumen, portadores y hoguera.
+- HUD más cargado: 888 px de alto en español y en inglés.
+- Versión web 0.12.0-dev probada en el navegador integrado:
+  - arranque en español;
+  - cambio a inglés desde Opciones;
+  - expedición y combate en inglés, sin errores en la consola;
+  - guardado en IndexedDB con el campo de idioma;
+  - el inglés se conserva al recargar.
+- Build de Windows 0.12.0-dev verificada (`--verify-build` y `--verify-build-reload`). La comprobación del paquete ahora exige `locale/en.json` y que «CÁMARA 7» se traduzca.
+- Rendimiento frente a `main` en un combate fijo de 15 s, dos rondas: 97–100 fps en `main`, 107–124 en español y 101–112 en inglés. La traducción no lo rebaja.
+
 ## Variedad y vistosidad (0.11) — 10 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 21 suites sin fallos y partida gráfica de 70 s.

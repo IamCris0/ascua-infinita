@@ -30,6 +30,9 @@ if (-not (Test-Path -LiteralPath $template)) {
 }
 $gameVersion = (Select-String -LiteralPath (Join-Path $projectRoot 'project.godot') -Pattern '^config/version="(.+)"').Matches[0].Groups[1].Value
 $output = Join-Path $projectRoot 'builds/web'
+# Keeps Godot from importing the exported files as project resources.
+New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot 'builds') | Out-Null
+Set-Content -LiteralPath (Join-Path $projectRoot 'builds/.gdignore') -Value '' -Encoding ascii
 if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 # Piping makes PowerShell wait even if GODOT_BIN points to the GUI executable.

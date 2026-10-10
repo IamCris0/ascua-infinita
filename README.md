@@ -2,7 +2,7 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.11.0-dev**: élites con afijos, cinco reliquias nuevas, duelos y la fragua errante, barra de jefe y ambiente por bioma; retos diarios y semanales, 30 logros con recompensa, colección con bestiario y estadísticas, cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge lo que viene: mapa, cofres, equipamiento, personajes y misiones.
+Roguelike clicker para Godot 4, en español e inglés, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.12.0-dev**: traducción completa al inglés y versión web comprobada en el navegador; élites con afijos, cinco reliquias nuevas, duelos y la fragua errante, barra de jefe y ambiente por bioma; retos diarios y semanales, 30 logros con recompensa, colección con bestiario y estadísticas, cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge cada fase y sus resultados.
 
 Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Hay dos formas de jugar mejor que solo hacer clic:
 - **Parada**: alza la guardia justo antes de que llegue un golpe. A tiempo, lo anula, aturde al enemigo y contraatacas; antes de tiempo, solo bloquea la mitad.
@@ -118,6 +118,8 @@ scripts/ui_kit.gd           Paleta, tema y estilos
 scripts/stone_panel.gd      Paneles de piedra con correas
 scripts/title_art.gd        Fondo animado de la pantalla de título
 scripts/fly_layer.gd        Monedas y ascuas que vuelan al HUD
+scripts/i18n.gd             Traducción al inglés: textos exactos y plantillas con huecos
+locale/en.json              Textos en español y su traducción al inglés
 assets/art/                 Atlas y texturas preparados a partir de Gemini (+ atlas.json)
 assets/gemini/              Fondos y hoja del portador con transparencia
 assets/source/gemini/       Originales de Gemini (no se importan)
@@ -127,6 +129,7 @@ assets/shaders/actor.gdshader
 tools/sprites/              Preparación de sprites (Python)
 tools/audio/synth.py        Síntesis de efectos y música (Python)
 tools/simulate.gd           Bot de equilibrio
+tools/i18n/extract.py       Recoge los textos nuevos del código en locale/en.json
 tests/                      Pruebas de reglas, de interfaz y de resistencia
 legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se usan)
 ```
@@ -134,7 +137,7 @@ legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se us
 ## Comprobar el proyecto
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 21 suites
+powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1             # importa y ejecuta las 22 suites
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Balance    # además, la muestra del bot de equilibrio
 powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1 -Soak       # además, la partida automática de 70 s
 ```
@@ -145,13 +148,31 @@ El ejecutor encuentra Godot igual que el lanzador y termina con código 1 si fal
 godot --headless --path . --script tests/test_progression.gd   # también assets, audio, journey, combat_timing, enemy_roles, bell_keeper, forge_keeper, synergies, legacy_tree, boss_intro, eclipse, active_combat, map, arsenal, bearers, retos, variety
 godot --headless --path . --script tests/test_ui.gd -- --qa
 godot --headless --path . --script tests/test_collection.gd -- --qa
+godot --headless --path . --script tests/test_i18n.gd -- --qa --language=en
 godot --path . --script tests/soak.gd -- --qa
 godot --headless --path . --script tools/simulate.gd -- --sample
 ```
 
-Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel`, `event`, `arsenal`, `masteries`, `bearers`, `retos`, `logros`, `bestiary` y `elite`).
+Las pruebas usan un guardado independiente o el modo `--qa`, que no toca la partida real. Las que abren la escena del juego (`test_ui`, `test_collection`, `soak`) se niegan a arrancar sin `--qa`. Las capturas de `docs/` se generan con `godot --path . -- --capture --shot=preview` (también `title`, `relic`, `camp`, `summary`, `boss`, `pause`, `options`, `howto`, `map`, `chest`, `wheel`, `event`, `arsenal`, `masteries`, `bearers`, `retos`, `logros`, `bestiary` y `elite`). Con `--language=en` salen en inglés.
 
-Al exportar, `export_presets.cfg` ya incluye `assets/art/atlas.json` y `assets/art/imagegen/characters.json` en el filtro de archivos no reconocidos como recursos.
+Al exportar, `export_presets.cfg` ya incluye `assets/art/atlas.json`, `assets/art/imagegen/characters.json` y `locale/en.json` en el filtro de archivos no reconocidos como recursos.
+
+## Idiomas
+
+El juego está en español e inglés. En **Opciones → Idioma** se elige:
+- **Automático** (por defecto): español si el sistema o el navegador están en español, inglés en otro caso.
+- **Español** o **English**, que se guardan con la partida.
+
+El código y las pruebas están escritos en español. `scripts/i18n.gd` traduce al vuelo con `locale/en.json`:
+- textos exactos, en mayúsculas o con mayúscula inicial;
+- textos compuestos, mediante plantillas como `CÁMARA %d` o `Logro · %s`, que traducen también lo que va en cada hueco.
+
+Al añadir textos al código:
+1. `python tools/i18n/extract.py` los añade a `locale/en.json`, sin traducción.
+2. Se completa la traducción en el archivo.
+3. `python tools/i18n/extract.py --report` termina con código 1 si queda alguno vacío.
+
+`test_i18n.gd` recorre todas las pantallas en inglés y falla si queda algún texto en español.
 
 ## Regenerar el arte y el sonido
 
@@ -180,4 +201,4 @@ La compilación está documentada en [docs/WINDOWS.md](docs/WINDOWS.md). Ejecuta
 
 ## Versión web
 
-`tools/export_web.ps1` genera `builds/AscuaInfinita-Web-<versión>.zip`, listo para subir a itch.io como proyecto HTML. Instrucciones y diferencias (guardado en el navegador, sin botón Salir) en [docs/WEB.md](docs/WEB.md).
+`tools/export_web.ps1` genera `builds/AscuaInfinita-Web-<versión>.zip`, listo para subir a itch.io como proyecto HTML. Instrucciones y diferencias (guardado en el navegador, sin botón Salir, idioma según el navegador) en [docs/WEB.md](docs/WEB.md).
