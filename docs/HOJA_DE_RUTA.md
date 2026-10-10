@@ -11,7 +11,7 @@ Escrita el 8 de octubre de 2026 a partir de la petición de llevar el juego haci
 - equipamiento y mejoras;
 - varios personajes y más variedad.
 
-La versión web y la traducción al inglés quedan para después. Cada fase se publica en su propia PR, con pruebas, simulación del bot y builds reexportadas.
+La versión web y la traducción al inglés se dejaron para el final (fase G). Cada fase se publica en su propia PR, con pruebas, simulación del bot y builds reexportadas.
 
 ## Orden y motivo
 
@@ -444,8 +444,41 @@ Cámara media de las expediciones 9–12, tres semillas:
 
 Los élites son más duros y las reliquias nuevas y la fragua lo compensan; las diferencias están dentro del ruido. El bot acepta la fragua.
 
-## Fase G · Web e inglés (0.12)
+## Fase G · Web e inglés (0.12) — implementada el 10 de octubre de 2026
 
-Pendiente:
-- Reexportar la versión web con todo lo nuevo y comprobarla en el navegador.
-- Traducir al inglés unos 600 textos, con selector de idioma y pruebas de cobertura.
+**Traducción**
+- `scripts/i18n.gd` es una traducción de Godot propia. El código sigue en español y cada texto se traduce al dibujarse:
+  - los controles se traducen solos;
+  - el escenario, el mapa, los cofres y la Rueda pasan sus textos por `tr()`.
+- `locale/en.json` tiene 729 textos y 80 plantillas.
+  - Las plantillas (`CÁMARA %d`, `Logro · %s`, `ÉLITE %s Y %s`…) cubren los textos compuestos y traducen también lo que va en cada hueco.
+  - Así, «Élite veloz · Gelatina de hollín» pasa a «swift elite · Soot Jelly».
+- Las cifras, las versiones y los símbolos no se tocan, y los espacios alrededor de un texto se conservan.
+- `tools/i18n/extract.py` recoge los textos nuevos del código, y `--report` lista los que faltan.
+
+**Idioma**
+- Opciones → Idioma: Automático, Español o English. El cambio se aplica sin reiniciar y se guarda con la partida.
+- Automático sigue el idioma del sistema o del navegador: español si es español, inglés en otro caso.
+- Las pruebas juegan en español salvo que pidan `--language=en`.
+
+**Ajustes de interfaz**
+- El inglés ocupa más en algunos paneles. Se acortaron cuatro descripciones de la forja y las reglas de dos biomas.
+- La forja tiene ahora un ancho mínimo fijo.
+- El HUD más cargado mide 888 px en los dos idiomas, dentro de los 900 de la ventana.
+
+**Versión web**
+- Reexportada como 0.12.0-dev: 36,8 MB comprimida.
+- Jugada en el navegador integrado:
+  - título en español;
+  - cambio a inglés en vivo;
+  - expedición y combate con el HUD en inglés;
+  - guardado en IndexedDB con el idioma.
+
+**Pruebas**
+- `test_i18n.gd` es nueva (20 comprobaciones):
+  - cada texto tiene traducción con los mismos huecos;
+  - muestras de textos compuestos;
+  - el español no cambia;
+  - el HUD más cargado cabe en inglés;
+  - un recorrido por todas las pantallas que falla si queda algún texto en español.
+- El equilibrio no cambia: la fase solo toca textos y medidas.

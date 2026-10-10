@@ -1,7 +1,7 @@
-# Versión Windows — 5 de octubre de 2026 (reexportada el 10 de octubre como 0.11.0-dev)
+# Versión Windows — 5 de octubre de 2026 (reexportada el 10 de octubre como 0.12.0-dev)
 
-Paquete: builds/AscuaInfinita-Windows-0.11.0-dev.zip (64.638.919 bytes).
-SHA256: c3cea6e8879e219da5accc1f1f297fa23bde40e9c82f09f774388eec4c738919
+Paquete: builds/AscuaInfinita-Windows-0.12.0-dev.zip (64.665.022 bytes).
+SHA256: 9150b871ac049e43388a9d31f14091d2f1bcda41ac46c8eecb8aff4771c427ee
 
 Extraer el ZIP completo y abrir AscuaInfinita.exe; AscuaInfinita.pck debe permanecer a su lado. Incluye LEEME y avisos de Godot, sus componentes y la fuente Jersey 10. El nombre del paquete toma la versión de project.godot. Versión web: WEB.md.
 
@@ -14,7 +14,7 @@ Referencias: [exportación de proyectos](https://docs.godotengine.org/en/4.7/tut
 ## Validación realizada
 
 - ZIP extraído en una carpeta independiente del proyecto, sin archivos de editor.
-- Ejecutable release real: editor=false. Once hojas de personaje (incluye compañero y mercader), tres fondos, iconos del mapa, cofres y equipo, 40 sonidos, seis pistas y ambos manifiestos JSON disponibles.
+- Ejecutable release real: editor=false. Once hojas de personaje (incluye compañero y mercader), tres fondos, iconos del mapa, cofres y equipo, 40 sonidos, seis pistas, ambos manifiestos JSON y la traducción al inglés disponibles.
 - Primer proceso escribe una partida de prueba; un segundo proceso recupera cámara 20, oro, canalización, resonancia, descubrimientos y sinergia.
 - Arranque normal sin argumentos de verificación: código de salida 0, sin errores.
 - Renderizado OpenGL con RTX 4050 revisado en windows-preview.png.

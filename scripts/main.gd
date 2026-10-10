@@ -15,6 +15,8 @@ const JourneyScreens = preload("res://scripts/journey_screens.gd")
 const ArsenalScreen = preload("res://scripts/arsenal_screen.gd")
 const BearerScreen = preload("res://scripts/bearer_screen.gd")
 const CollectionScreen = preload("res://scripts/collection_screen.gd")
+const I18n = preload("res://scripts/i18n.gd")
+const LANGUAGES = [["auto", "Automático"], ["es", "Español"], ["en", "English"]]
 # Read from project.godot so a single setting names every build.
 var VERSION: String = ProjectSettings.get_setting("application/config/version", "")
 const BUY_MODES = [1, 10, 0]
@@ -113,6 +115,8 @@ func _ready() -> void:
 	var unreadable = state.preserve_unreadable_save() if not qa_mode and not restored else ""
 	if not restored:
 		state.restart()
+	I18n.install()
+	apply_language()
 	theme = Kit.build_theme(lib)
 	audio = AudioDirector.new()
 	add_child(audio)
@@ -154,6 +158,7 @@ func _verify_build() -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	I18n.uninstall()
 	load("res://scripts/art_library.gd").release()
 
 func connect_state() -> void:
@@ -359,6 +364,23 @@ func quit_game() -> void:
 		title_stats.text = message
 		return
 	get_tree().quit()
+
+## Spanish or English. Tests keep Spanish unless they ask for --language=en.
+func apply_language() -> void:
+	var language = state.language
+	var args = OS.get_cmdline_user_args()
+	if qa_mode:
+		language = "en" if "--language=en" in args else "es"
+	if language == "auto":
+		language = "es" if OS.get_locale_language() == "es" else "en"
+	TranslationServer.set_locale(language)
+
+func set_language(language: String) -> void:
+	state.language = language
+	apply_language()
+	audio.play("ui_click")
+	persist()
+	show_options(modal_return)
 
 func apply_settings() -> void:
 	audio.apply_volumes(state.master_volume, state.music_volume, state.sfx_volume)
@@ -691,7 +713,8 @@ func build_center(body: Node) -> void:
 	parry_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func build_forge_panel(body: Node) -> void:
-	var right = ui.stone(body, 344)
+	# As wide as in Spanish, so shorter English texts never squeeze it into more lines.
+	var right = ui.stone(body, 410)
 	right.add_theme_constant_override("separation", 8)
 	ui.header(right, "FORJA DE CAMPAÑA", "Alimenta la llama")
 	var modes = HBoxContainer.new()
@@ -1225,6 +1248,16 @@ func show_options(return_to: String) -> void:
 			if key == "sfx_volume":
 				audio.play("coin", 0.0, 0.0, 0.12)
 		)
+	var languages = HBoxContainer.new()
+	languages.add_theme_constant_override("separation", 8)
+	v.add_child(languages)
+	var caption = ui.label(languages, "Idioma", 17)
+	caption.custom_minimum_size.x = 190
+	for entry in LANGUAGES:
+		var code: String = entry[0]
+		var b = ui.small_button(languages, entry[1], func(): set_language(code))
+		b.custom_minimum_size.x = 130
+		b.disabled = state.language == code
 	ui.separator(v)
 	var toggles = [["Sacudidas de pantalla", "screen_shake"], ["Números de daño", "show_numbers"], ["Reducir movimiento y destellos", "reduced_motion"], ["Pantalla completa", "fullscreen"]]
 	for t in toggles:
@@ -1638,6 +1671,8 @@ func capture() -> void:
 			out = a.substr(6)
 	get_viewport().get_texture().get_image().save_png(out)
 	print("CAPTURE_OK " + out)
+	if I18n.instance != null and TranslationServer.get_locale() == "en" and not I18n.instance.missing.is_empty():
+		print("I18N_MISSING " + " | ".join(I18n.instance.missing.keys()))
 	set_process(false)
 	audio.queue_free()
 	await get_tree().create_timer(0.15).timeout

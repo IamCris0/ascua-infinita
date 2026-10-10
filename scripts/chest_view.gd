@@ -141,6 +141,7 @@ func _draw() -> void:
 		_text_left(body, text_for.call(loot[i]), rect.position + Vector2(64, 44), 14, Color(0.95, 0.92, 0.85, k), card_w - 70)
 
 func _text(font: Font, text: String, pos: Vector2, font_size: int, color: Color) -> void:
+	text = tr(text)
 	if font == lib.heading_font:
 		font_size = int(font_size * 1.22)
 	var at = Vector2(pos.x - font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x * 0.5, pos.y)
@@ -148,4 +149,4 @@ func _text(font: Font, text: String, pos: Vector2, font_size: int, color: Color)
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 func _text_left(font: Font, text: String, pos: Vector2, font_size: int, color: Color, width: float) -> void:
-	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, width, font_size, color)
+	draw_string(font, pos, tr(text), HORIZONTAL_ALIGNMENT_LEFT, width, font_size, color)

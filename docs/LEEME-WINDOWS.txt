@@ -1,4 +1,4 @@
-ASCUA INFINITA — Windows x64 — 0.11.0-dev
+ASCUA INFINITA — Windows x64 — 0.12.0-dev
 
 Extrae todo el ZIP en una carpeta y abre AscuaInfinita.exe.
 Mantén AscuaInfinita.pck junto al ejecutable. No necesitas instalar Godot.
@@ -13,6 +13,8 @@ RETOS Y COLECCIÓN (título, pausa u hoguera): retos diarios y semanales,
 logros con recompensa, bestiario y estadísticas.
 La colección (con logros y registro) se abre desde el menú y la hoguera.
 En la hoguera compras el árbol de legado y eliges juramento y nivel Eclipse.
+Idioma: Opciones → Idioma (Automático, Español o English).
+Language: Options → Idioma → English.
 
 La partida se guarda en %APPDATA%/Godot/app_userdata/Ascua Infinita/.
 Comparte guardado con el proyecto abierto en Godot bajo el mismo usuario.

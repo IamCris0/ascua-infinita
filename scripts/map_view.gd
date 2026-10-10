@@ -105,7 +105,7 @@ func _draw() -> void:
 		var label_at = node_pos(i, 0) + Vector2(-NODE_RADIUS, -NODE_RADIUS - 12)
 		var title = "%d · %s" % [i + 1, state.LANES[i].name.to_upper()] if not read_only else state.LANES[i].name.to_upper()
 		_text(font, title, label_at, 19, color, false)
-		var title_width = font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, int(19 * 1.22)).x
+		var title_width = font.get_string_size(tr(title), HORIZONTAL_ALIGNMENT_LEFT, -1, int(19 * 1.22)).x
 		_text(body, state.LANES[i].hint, label_at + Vector2(title_width + 14, -1), 13, Color(0.82, 0.8, 0.86, a), false)
 	for i in range(state.lanes.size()):
 		for k in range(state.LANE_LENGTH):
@@ -161,8 +161,8 @@ func _draw_tooltip(font: Font, body: Font) -> void:
 		return
 	var kind: String = state.lanes[hovered_node.x][hovered_node.y]
 	var p = node_pos(hovered_node.x, hovered_node.y)
-	var title = "%s · cámara %d" % [state.NODES[kind].name, state.lane_start + hovered_node.y]
-	var hint: String = state.NODES[kind].hint
+	var title = tr("%s · cámara %d" % [state.NODES[kind].name, state.lane_start + hovered_node.y])
+	var hint: String = tr(state.NODES[kind].hint)
 	var width = maxf(font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, int(17 * 1.22)).x, body.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x) + 28
 	var box = Rect2(p + Vector2(-width * 0.5, NODE_RADIUS + 12), Vector2(width, 58))
 	if box.end.y > size.y - 4:
@@ -188,6 +188,7 @@ func _dashed(a: Vector2, b: Vector2, color: Color, width: float) -> void:
 		t += 20.0
 
 func _text(font: Font, text: String, pos: Vector2, font_size: int, color: Color, center: bool) -> void:
+	text = tr(text)
 	if font == lib.heading_font:
 		font_size = int(font_size * 1.22)
 	var at = pos

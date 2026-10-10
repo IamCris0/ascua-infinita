@@ -892,11 +892,12 @@ func _draw_overlay() -> void:
 	for i in range(toasts.size()):
 		var toast: Dictionary = toasts[i]
 		var a = clampf(toast.t / 0.25, 0, 1) * clampf((3.4 - toast.t) / 0.5, 0, 1)
-		var width = body.get_string_size(toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 28
+		var text = tr(toast.text)
+		var width = body.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 28
 		var box = Rect2(size.x - width - 14, 14 + i * 40 + letterbox() * size.y * 0.1 + (96.0 if state.is_boss() and state.spawn_delay <= 0 else 0.0), width, 32)
 		overlay.draw_rect(box, Color(0.05, 0.05, 0.08, 0.85 * a))
 		overlay.draw_rect(Rect2(box.position, Vector2(3, box.size.y)), Color(1.0, 0.8, 0.45, a))
-		overlay.draw_string(body, box.position + Vector2(14, 22), toast.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.7, a))
+		overlay.draw_string(body, box.position + Vector2(14, 22), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.7, a))
 	# Banner.
 	if not banner.is_empty():
 		var t: float = banner.t
@@ -994,6 +995,7 @@ func _frame_glow(color: Color) -> void:
 		overlay.draw_rect(Rect2(inset, inset, size.x - inset * 2, size.y - inset * 2), c, false, 8.0)
 
 func _text_center(font: Font, text: String, pos: Vector2, font_size: int, color: Color, outline: int = 0, outline_color: Color = Color(0.03, 0.03, 0.05, 1)) -> void:
+	text = tr(text)
 	if font == lib.heading_font:
 		font_size = int(font_size * 1.22)
 	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x

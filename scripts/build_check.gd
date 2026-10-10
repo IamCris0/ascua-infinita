@@ -9,9 +9,14 @@ func run(game) -> void:
 		failures.append("Missing map, chest or equipment art")
 	if game.audio.streams.size() != game.audio.SFX.size() or game.audio.music.size() != game.audio.TRACKS.size():
 		failures.append("Missing audio")
-	for path in ["res://assets/art/atlas.json", "res://assets/art/imagegen/characters.json"]:
+	for path in ["res://assets/art/atlas.json", "res://assets/art/imagegen/characters.json", "res://locale/en.json"]:
 		if not FileAccess.file_exists(path):
 			failures.append("Missing manifest: " + path)
+	var locale = TranslationServer.get_locale()
+	TranslationServer.set_locale("en")
+	if TranslationServer.translate("CÁMARA 7") != "CHAMBER 7":
+		failures.append("English translation not loaded")
+	TranslationServer.set_locale(locale)
 	var State = load("res://scripts/run_state.gd")
 	if "--verify-build" in OS.get_cmdline_user_args():
 		var sample = State.new()
