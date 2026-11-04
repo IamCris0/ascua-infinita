@@ -1,5 +1,7 @@
 # Hoja de ruta 0.6 → 1.0
 
+> Las fases A–G están completas (0.6 → 0.12). Desde el 3 de noviembre de 2026 el trabajo sigue en [Ascua 2.0](VISION_2_0.md), una reestructuración por fases que empieza en la 0.13.
+
 Escrita el 8 de octubre de 2026 a partir de la petición de llevar el juego hacia una calidad «AAA»:
 - ritmo más pausado;
 - mapa interactivo;

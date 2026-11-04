@@ -17,6 +17,10 @@ var english_templates: Array = []
 var cache: Dictionary = {}
 # Spanish texts that reached the screen without a translation (for reports).
 var missing: Dictionary = {}
+# While a template is being tried its pieces are not reported; they are only
+# counted, so another template that explains every piece can win.
+var probing: int = 0
+var probe_misses: int = 0
 
 static var instance
 
@@ -153,23 +157,47 @@ func translate_text(source: String) -> String:
 	var templated = _from_templates(source, templates)
 	if templated != null:
 		return templated
-	if not english.has(source) and _from_templates(source, english_templates) == null:
-		missing[source] = true
+	if not english.has(source) and _from_templates(source, english_templates, true) == null:
+		if probing > 0:
+			probe_misses += 1
+		else:
+			missing[source] = true
 	return source
 
-func _from_templates(source: String, list: Array):
+## The first template whose pieces all translate. Lists joined with commas can
+## match a template at the wrong place ("A +1, B (épica)" is not one "%s (%s)");
+## when no template explains every piece, the first match is used, unless
+## `strict` asks for none.
+func _from_templates(source: String, list: Array, strict: bool = false):
+	var first: Array = []
+	# Attempts that failed here must not count against an outer template.
+	var entry_misses = probe_misses
 	for t in list:
 		if not t.anchor.is_empty() and not source.contains(t.anchor):
 			continue
 		var m: RegExMatch = t.regex.search(source)
 		if m == null:
 			continue
-		var values: Array = []
-		for i in range(t.kinds.size()):
-			var piece = m.get_string(i + 1)
-			values.append(translate_text(piece) if t.kinds[i] == "s" else piece)
-		return _fill(t.target, values)
-	return null
+		probing += 1
+		var before = probe_misses
+		var values = _pieces(t, m)
+		probing -= 1
+		if probe_misses == before:
+			probe_misses = entry_misses
+			return _fill(t.target, values)
+		if first.is_empty():
+			first = [t, m]
+	probe_misses = entry_misses
+	if first.is_empty() or strict:
+		return null
+	return _fill(first[0].target, _pieces(first[0], first[1]))
+
+func _pieces(t: Dictionary, m: RegExMatch) -> Array:
+	var values: Array = []
+	for i in range(t.kinds.size()):
+		var piece = m.get_string(i + 1)
+		values.append(translate_text(piece) if t.kinds[i] == "s" else piece)
+	return values
 
 ## Puts the values back in the order of the template's placeholders.
 static func _fill(target: String, values: Array) -> String:

@@ -5,7 +5,7 @@ extends Control
 
 signal finished(index: int)
 
-const SECTOR_COLORS = {"nothing": Color("2b2f3a"), "gold2": Color("b8862f"), "gold3": Color("f2c47c"), "heal": Color("4f9f63"),
+const SECTOR_COLORS = {"nothing": Color("403025"), "gold2": Color("b8862f"), "gold3": Color("f2c47c"), "heal": Color("4f9f63"),
 	"relic": Color("7d5bc4"), "chest": Color("8a5a2b"), "essence": Color("2f8f74")}
 const SPIN_TIME = 3.6
 const TURNS = 5

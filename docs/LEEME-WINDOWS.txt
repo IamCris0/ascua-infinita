@@ -1,10 +1,12 @@
-ASCUA INFINITA — Windows x64 — 0.12.0-dev
+ASCUA INFINITA — Windows x64 — 0.13.0-dev
 
 Extrae todo el ZIP en una carpeta y abre AscuaInfinita.exe.
 Mantén AscuaInfinita.pck junto al ejecutable. No necesitas instalar Godot.
 
 Clic o mantener Espacio: atacar. E: Destello. R o clic derecho: Parada.
-Clic sobre el punto dorado del enemigo: golpe al punto débil. Escape: menú.
+Clic sobre el punto dorado del enemigo: golpe al punto débil. Escape: menú
+(desde allí también se vuelve a la hoguera).
+La llama junto al portador es su vida: cuanto más brilla, más vida le queda.
 Cada cinco cámaras eliges reliquia y camino en el mapa (1, 2, 3). Clic en la
 barra de cámaras para volver a verlo. Cofres: clic o Espacio. Rueda: 1 gira, 2 sigue.
 El ARSENAL (pausa u hoguera) guarda el equipo que se conserva al caer y las maestrías.

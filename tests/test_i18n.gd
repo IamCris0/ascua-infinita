@@ -58,6 +58,7 @@ func run() -> void:
 		"Brasa Del Rey · −12 de vida": "King's Ember · −12 health",
 		"Requiere Lucero heredado y Órbita veloz": "Requires Inherited Wisp and Swift Orbit",
 		"Botín · Espada de ceniza (rara)": "Loot · Ash Sword (rare)",
+		"Cofre de hierro · Filo de ascua +1, Lanza rúnica (épica), Espada de ceniza (rara)": "Iron Chest · Ember Edge +1, Rune Spear (epic), Ash Sword (rare)",
 		"1250 / 4000": "1250 / 4000",
 		"Cámara 9 de jardín de las cenizas. Tu progreso se guarda automáticamente.": "Chamber 9 of the garden of ashes. Your progress saves automatically."}
 	for source in samples:

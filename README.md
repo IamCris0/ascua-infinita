@@ -2,7 +2,21 @@
 
 **Un clic enciende la llama. Cada caída la hace eterna.**
 
-Roguelike clicker para Godot 4, en español e inglés, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.12.0-dev**: traducción completa al inglés y versión web comprobada en el navegador; élites con afijos, cinco reliquias nuevas, duelos y la fragua errante, barra de jefe y ambiente por bioma; retos diarios y semanales, 30 logros con recompensa, colección con bestiario y estadísticas, cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge cada fase y sus resultados.
+Roguelike clicker para Godot 4, en español e inglés, con pixel art, música y efectos propios, compañeros automáticos y progresión permanente. Versión **0.13.0-dev**, primera fase de [Ascua 2.0](docs/VISION_2_0.md): el mundo está a oscuras y la llama del portador lo ilumina, el combate ocupa toda la pantalla y la interfaz pasa a tonos cálidos. Incluye además la traducción completa al inglés, la versión web, élites con afijos, cinco reliquias nuevas, duelos y la fragua errante, barra de jefe y ambiente por bioma; retos diarios y semanales, 30 logros con recompensa, colección con bestiario y estadísticas, cuatro portadores jugables, el Arsenal (equipo permanente con rarezas, mejoras, desguace y maestrías), el mapa de caminos con cofres y la Rueda del eclipse, y el combate activo con Parada y puntos débiles, sobre la Constelación del Legado y los modos Eclipse. La [hoja de ruta](docs/HOJA_DE_RUTA.md) recoge cada fase y sus resultados.
+
+**La llama.** El portador lleva la última ascua, que flota junto a su hombro:
+- **Su luz es su vida.** Con la vida llena ilumina buena parte de la cámara; al perder vida se encoge y la oscuridad se cierra.
+- **Cada victoria la alimenta.** Las brasas del enemigo caído vuelan hasta ella y curan un poco, como siempre.
+- **Destello** ilumina toda la cámara durante un instante.
+- Antorchas, eclipse, luceros, ascuas errantes, impactos y paradas tienen luz propia, y los élites brillan con el color de su afijo.
+
+El HUD flota sobre el escenario:
+- arriba, la cámara, el progreso, el oro, las ascuas y el menú;
+- a la izquierda, el portador con su vida y sus reliquias (sus cifras, al pasar el ratón);
+- a la derecha, la forja;
+- abajo, Destello y Parada.
+
+Volver a la hoguera está en el menú de pausa.
 
 Empiezas cada expedición con un lucero. Puedes mantener Espacio para atacar sin pulsaciones repetidas; el ritmo máximo es un golpe cada 0,3 segundos. Hay dos formas de jugar mejor que solo hacer clic:
 - **Parada**: alza la guardia justo antes de que llegue un golpe. A tiempo, lo anula, aturde al enemigo y contraatacas; antes de tiempo, solo bloquea la mitad.
@@ -74,7 +88,7 @@ También puedes importar `project.godot` en Godot y pulsar **F5**. Probado con *
 | 1 · 2 en eventos | Aceptar o marcharse sin pagar (en la Rueda: girar o seguir) |
 | Clic / Espacio en un cofre | Golpear el cerrojo y abrirlo; Enter para continuar |
 | Enter en la hoguera | Renacer; el árbol de legado se compra con el ratón |
-| Esc | Menú de pausa; durante la presentación de un jefe, saltarla (también Enter) |
+| Esc | Menú de pausa (allí está también volver a la hoguera); durante la presentación de un jefe, saltarla (también Enter) |
 | F11 | Pantalla completa |
 
 ## Novedades de la versión 0.2.0
@@ -130,6 +144,7 @@ tools/sprites/              Preparación de sprites (Python)
 tools/audio/synth.py        Síntesis de efectos y música (Python)
 tools/simulate.gd           Bot de equilibrio
 tools/i18n/extract.py       Recoge los textos nuevos del código en locale/en.json
+assets/shaders/darkness.gdshader  La oscuridad y las luces del escenario
 tests/                      Pruebas de reglas, de interfaz y de resistencia
 legacy/                     Sprites SVG y sonidos de la versión 0.1.0 (no se usan)
 ```

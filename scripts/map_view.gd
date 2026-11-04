@@ -7,9 +7,9 @@ extends Control
 signal lane_chosen(index: int)
 
 const LANE_COLORS = [Color("7fe0bf"), Color("ec8a6d"), Color("b18cf0")]
-const NODE_COLORS = {"fight": Color("aab6c1"), "elite": Color("e0645a"), "rest": Color("6fcf7e"), "chest": Color("f2c47c"),
+const NODE_COLORS = {"fight": Color("c0b3ab"), "elite": Color("e0645a"), "rest": Color("6fcf7e"), "chest": Color("f2c47c"),
 	"shrine": Color("ffb070"), "merchant": Color("e8bd75"), "altar": Color("b18cf0"), "wheel": Color("f2c47c"),
-	"smithy": Color("c9d3dd"), "duel": Color("ff6b5b")}
+	"smithy": Color("d9d2cd"), "duel": Color("ff6b5b")}
 # Lane rows as a share of the height.
 const ROWS = [0.2, 0.46, 0.72]
 const NODE_RADIUS = 30.0
@@ -87,8 +87,8 @@ func _draw() -> void:
 		return
 	var font: Font = lib.heading_font
 	var body: Font = ThemeDB.fallback_font
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.045, 0.05, 0.075, 0.92))
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.25, 0.22, 0.3, 0.6), false, 2.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.075, 0.05, 0.035, 0.92))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.36, 0.26, 0.18, 0.6), false, 2.0)
 	for i in range(46):
 		var p = Vector2(fmod(i * 97.31 + 13.0, size.x), fmod(i * 53.77 + 29.0, size.y))
 		draw_circle(p, 1.3, Color(1, 0.95, 0.85, 0.06 + 0.05 * sin(time * 1.7 + i)))
@@ -131,7 +131,7 @@ func _draw_node(i: int, k: int, body: Font) -> void:
 	var r = NODE_RADIUS * (1.12 if hovered_node == Vector2i(i, k) else 1.0)
 	var color: Color = NODE_COLORS.get(kind, Color.WHITE)
 	draw_circle(p + Vector2(0, 3), r + 3, Color(0, 0, 0, 0.55 * a))
-	draw_circle(p, r, Color(0.09, 0.09, 0.12, a))
+	draw_circle(p, r, Color(0.12, 0.085, 0.065, a))
 	draw_arc(p, r, 0, TAU, 40, Color(color, a * (0.5 if done else 1.0)), 3.0)
 	if here:
 		var pulse = 0.5 + 0.5 * sin(time * 5.0)
@@ -140,7 +140,7 @@ func _draw_node(i: int, k: int, body: Font) -> void:
 
 func _draw_ends(font: Font, body: Font) -> void:
 	var s = start_pos()
-	draw_circle(s, 38, Color(0.09, 0.09, 0.12))
+	draw_circle(s, 38, Color(0.12, 0.085, 0.065))
 	draw_arc(s, 38, 0, TAU, 48, Color("f2c47c"), 3.0)
 	if lib.characters.hero.has("portrait"):
 		draw_texture_rect(lib.portrait("hero"), Rect2(s - Vector2.ONE * 28, Vector2.ONE * 56), false)
@@ -150,7 +150,7 @@ func _draw_ends(font: Font, body: Font) -> void:
 	var boss = chamber % 10 == 0
 	var color = Color("e0645a") if boss else Color("f2c47c")
 	var pulse = 0.5 + 0.5 * sin(time * 3.0)
-	draw_circle(e, 40, Color(0.09, 0.09, 0.12))
+	draw_circle(e, 40, Color(0.12, 0.085, 0.065))
 	draw_arc(e, 40 + pulse * 3, 0, TAU, 48, color, 3.0)
 	draw_texture_rect(lib.map_icon("boss" if boss else "milestone"), Rect2(e - Vector2.ONE * 26, Vector2.ONE * 52), false)
 	_text(font, "JEFE" if boss else "RELIQUIA", e + Vector2(0, 62), 17, color, true)
@@ -168,7 +168,7 @@ func _draw_tooltip(font: Font, body: Font) -> void:
 	if box.end.y > size.y - 4:
 		box.position.y = p.y - NODE_RADIUS - 12 - box.size.y
 	box.position.x = clampf(box.position.x, 4, size.x - width - 4)
-	draw_rect(box, Color(0.06, 0.06, 0.09, 0.96))
+	draw_rect(box, Color(0.09, 0.06, 0.045, 0.96))
 	draw_rect(box, Color(NODE_COLORS.get(kind, Color.WHITE), 0.8), false, 2.0)
 	_text(font, title, box.position + Vector2(14, 24), 17, Color("f2e6cf"), false)
 	_text(body, hint, box.position + Vector2(14, 46), 14, Color(0.84, 0.84, 0.88), false)
@@ -194,5 +194,5 @@ func _text(font: Font, text: String, pos: Vector2, font_size: int, color: Color,
 	var at = pos
 	if center:
 		at.x -= font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x * 0.5
-	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 4, Color(0.02, 0.02, 0.04, color.a))
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 4, Color(0.04, 0.025, 0.02, color.a))
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)

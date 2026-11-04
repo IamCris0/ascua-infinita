@@ -2,6 +2,8 @@ extends Control
 ## The battle stage: Gemini backgrounds, animated actors, effects and the
 ## in-world HUD (enemy plate, telegraphs, banners, damage numbers).
 ## Stage coordinates are the background's own 1024 x 800 pixel space.
+## The chamber lies in the dark of the eclipse: the bearer's flame lights it,
+## and its reach is the bearer's health.
 
 signal clicked
 signal ember_clicked
@@ -10,6 +12,14 @@ signal guard_clicked
 signal coins(screen_pos: Vector2, amount: int, essence: int)
 
 const Actor = preload("res://scripts/actor.gd")
+const Darkness = preload("res://assets/shaders/darkness.gdshader")
+const MAX_LIGHTS = 24
+# Reach of the flame in stage pixels, from nearly spent to full health.
+const FLAME_MIN = 130.0
+const FLAME_MAX = 440.0
+const FLAME_COLOR = Color(1.0, 0.7, 0.42)
+# What each biome keeps visible where no light reaches.
+const AMBIENT = [Color(0.32, 0.33, 0.46), Color(0.29, 0.25, 0.44), Color(0.46, 0.31, 0.25)]
 const STAGE_SIZE = Vector2(1024, 800)
 const HERO_FEET = Vector2(300, 652)
 const ENEMY_FEET = Vector2(745, 640)
@@ -74,6 +84,26 @@ var hovered: bool = false
 var last_hurt_anim: float = 0.0
 var hint_alpha: float = 1.0
 var toasts: Array = []
+var darkness: ColorRect
+# Smoke at the top and bottom edges so the HUD reads over the stage.
+var edge_shade: Texture2D
+# Brief lights: impacts, parries, pickups.
+var flares: Array = []
+# Embers flowing from a fallen enemy into the bearer's flame.
+var motes: Array = []
+# Shown size of the flame (0..1), easing towards the health it stands for,
+# and a short kick: up when it is fed, down when the bearer is hit.
+var flame: float = 1.0
+var flame_kick: float = 0.0
+# Destello lights the whole chamber for a moment.
+var lift: float = 0.0
+# Where the stage sits vertically: 0 shows the top of the background, 1 its floor.
+var focus_y: float = 0.78
+# Screen margins covered by the HUD; banners, toasts and embers avoid them.
+var safe_top: float = 0.0
+var safe_bottom: float = 0.0
+var safe_left: float = 0.0
+var safe_right: float = 0.0
 # Boss entrance: its total length when it began, and whether it is the full
 # first-meeting version with the closer look and the name card.
 var intro_total: float = 0.0
@@ -96,6 +126,16 @@ func _ready() -> void:
 	gt.width = 128
 	gt.height = 128
 	glow = gt
+	var smoke = Gradient.new()
+	smoke.set_color(0, Color(0.035, 0.02, 0.012, 0.88))
+	smoke.set_color(1, Color(0.035, 0.02, 0.012, 0.0))
+	var st = GradientTexture2D.new()
+	st.gradient = smoke
+	st.fill_from = Vector2(0, 0)
+	st.fill_to = Vector2(0, 1)
+	st.width = 4
+	st.height = 64
+	edge_shade = st
 	stage = Node2D.new()
 	add_child(stage)
 	backdrop = Node2D.new()
@@ -117,6 +157,16 @@ func _ready() -> void:
 	hero = Actor.new(lib, "hero")
 	hero.position = HERO_FEET
 	stage.add_child(hero)
+	# The dark covers the background and the actors; effects drawn after it glow.
+	darkness = ColorRect.new()
+	darkness.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	darkness.position = Vector2(-600, -500)
+	darkness.size = STAGE_SIZE + Vector2(1200, 1000)
+	var dark = ShaderMaterial.new()
+	dark.shader = Darkness
+	dark.set_shader_parameter("origin", darkness.position)
+	darkness.material = dark
+	stage.add_child(darkness)
 	fx_layer = Node2D.new()
 	fx_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	fx_layer.draw.connect(_draw_fx)
@@ -131,6 +181,7 @@ func _ready() -> void:
 	mouse_entered.connect(func(): hovered = true)
 	mouse_exited.connect(func(): hovered = false)
 	resized.connect(_layout)
+	resized.connect(queue_redraw)
 	if state != null:
 		apply_bearer()
 		sync_enemy(false)
@@ -146,7 +197,7 @@ func _layout() -> void:
 	if size.x / size.y >= STAGE_SIZE.x / STAGE_SIZE.y:
 		s = size.x / STAGE_SIZE.x
 		var visible_h = size.y / s
-		var top = clampf((STAGE_SIZE.y - visible_h) * 0.78, 0, STAGE_SIZE.y - visible_h)
+		var top = clampf((STAGE_SIZE.y - visible_h) * focus_y, 0, STAGE_SIZE.y - visible_h)
 		origin = Vector2(0, -top * s)
 	else:
 		s = size.y / STAGE_SIZE.y
@@ -158,6 +209,9 @@ func _layout() -> void:
 	stage.set_meta("origin", origin)
 	stage.set_meta("scale", s)
 
+func _draw() -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color("110d0a"))
+
 func stage_to_screen(p: Vector2) -> Vector2:
 	return stage.position + p * stage.scale
 
@@ -167,6 +221,14 @@ func visible_stage_rect() -> Rect2:
 	return Rect2(-origin / s, size / s)
 
 ## Seconds since the current boss entrance began, or -1 outside one.
+## The part of the visible stage that the HUD leaves uncovered.
+func safe_stage_rect() -> Rect2:
+	var r = visible_stage_rect()
+	var s: float = stage.get_meta("scale", stage.scale.x)
+	var inset_start = Vector2(safe_left, safe_top) / s
+	var inset_end = Vector2(safe_right, safe_bottom) / s
+	return Rect2(r.position + inset_start, (r.size - inset_start - inset_end).max(Vector2(80, 80)))
+
 func intro_elapsed() -> float:
 	if intro_total <= 0 or not state.is_boss() or state.spawn_delay <= 0:
 		return -1.0
@@ -207,6 +269,11 @@ func enemy_center() -> Vector2:
 func hero_center() -> Vector2:
 	return hero.position + Vector2(hero.offset.x + 10, -hero.height() * 0.5)
 
+## The last ember floats at the bearer's shoulder; the light comes from it.
+func flame_pos() -> Vector2:
+	var sway = Vector2.ZERO if reduced_motion else Vector2(sin(ambient_time * 1.7) * 6, sin(ambient_time * 2.3) * 5)
+	return hero.position + Vector2(hero.offset.x - 30, -hero.height() * 0.88) + sway
+
 ## The lit weak point follows the enemy's body, lunges and knockbacks included.
 func weak_stage_pos() -> Vector2:
 	return enemy_center() + Vector2(state.weak_pos.x * 55.0 * enemy.base_scale, state.weak_pos.y * enemy.height() * 0.38)
@@ -216,7 +283,7 @@ func travelling() -> bool:
 	return state.spawn_delay > 0 and not state.is_boss() and not state.dead and state.active()
 
 func ember_stage_pos() -> Vector2:
-	var r = visible_stage_rect()
+	var r = safe_stage_rect()
 	return r.position + r.size * state.ember_pos + Vector2(0, sin(ambient_time * 2.2) * 8)
 
 # ---------------------------------------------------------------- input
@@ -306,6 +373,7 @@ func on_parried(full: bool) -> void:
 	rings.append({"pos": at, "t": 0.0, "dur": 0.45, "radius": 160.0 if full else 110.0, "color": Color("9fe8ff")})
 	burst_particles(at, [Color("9fe8ff"), Color("ffffff"), Color("ffcf7b")], 26 if full else 12, 380.0)
 	effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 260.0 if full else 170.0, "rot": 0.0, "color": Color(0.8, 0.95, 1.0)})
+	flare(at, 260.0 if full else 170.0, Color(0.55, 0.9, 1.0), 0.35)
 	add_shake(7.0 if full else 4.0)
 	numbers.append({"pos": at + Vector2(0, -70), "vel": Vector2(0, -70), "life": 1.1, "text": "¡PARADA!" if full else "BLOQUEO", "color": Color("9fe8ff"), "size": 34 if full else 24})
 	if full:
@@ -324,6 +392,7 @@ func on_weak_struck() -> void:
 	rings.append({"pos": at, "t": 0.0, "dur": 0.4, "radius": 120.0, "color": Color("ffe7a8")})
 	burst_particles(at, [Color("ffe7a8"), Color("ffcf7b"), Color("ffffff")], 18, 320.0)
 	numbers.append({"pos": at + Vector2(0, -60), "vel": Vector2(0, -80), "life": 1.0, "text": "¡PUNTO DÉBIL!", "color": Color("ffe7a8"), "size": 28})
+	flare(at, 240.0, Color(1.0, 0.85, 0.45), 0.3)
 
 func on_attack_started() -> void:
 	hero.play("attack")
@@ -342,6 +411,7 @@ func on_struck(damage: float, critical: bool, automatic: bool) -> void:
 		hero.offset = Vector2(ENEMY_FEET.x - HERO_FEET.x - 125, 0)
 		var rot = randf_range(-0.7, 0.5)
 		effects.append({"name": "blade_arc", "t": 0.0, "pos": at, "size": 150.0 if critical else 110.0, "rot": rot, "color": Color("baffd9")})
+		flare(at, 230.0 if critical else 120.0, Color(1.0, 0.8, 0.55), 0.25 if critical else 0.14)
 		if critical:
 			effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 210.0, "rot": 0.0, "color": Color(1, 1, 1)})
 			add_shake(5.0)
@@ -362,6 +432,8 @@ func on_burst(interrupted: bool) -> void:
 	hero.play("attack")
 	hero.anim_time = state.HIT_DELAY
 	flash = 0.0 if reduced_motion else 0.55
+	lift = 0.6 if reduced_motion else 1.0
+	flame_kick = 1.0
 	add_shake(9.0)
 	var at = enemy_center()
 	effects.append({"name": "critical", "t": 0.0, "pos": at, "size": 380.0, "rot": 0.0, "color": Color(1, 1, 1)})
@@ -382,6 +454,7 @@ func on_hero_hit(damage: float, heavy: bool) -> void:
 	hero.flash_color = Color(1, 0.3, 0.25)
 	hero.offset = Vector2(-16 if not heavy else -30, 0)
 	hurt_vignette = 1.0 if heavy else 0.6
+	flame_kick = -1.0 if heavy else -0.6
 	add_shake(12.0 if heavy else 6.0)
 	burst_particles(hero_center(), [Color("ff6a4a"), Color("ffcf7b")], 16 if heavy else 8, 240.0)
 	if heavy:
@@ -413,6 +486,10 @@ func on_enemy_defeated(_kind: String, elite: bool, boss: bool) -> void:
 	var amount = 14 if boss else (8 if elite else 4)
 	var essence = 5 if boss else (2 if elite else 1)
 	coins.emit(global_position + stage_to_screen(at), amount, essence)
+	# The victory feeds the flame: embers rise from the body into the bearer's.
+	flare(at, 300.0 if boss else 200.0, Color(1.0, 0.6, 0.3), 0.5)
+	for i in range(18 if boss else (10 if elite else 6)):
+		motes.append({"from": at + Vector2(randf_range(-30, 30), randf_range(-40, 30)), "t": -i * 0.045, "dur": randf_range(0.65, 0.9), "bend": Vector2(randf_range(-120, 60), randf_range(-260, -120))})
 
 func on_fallen() -> void:
 	hero.play("death", "death", true)
@@ -428,6 +505,10 @@ func on_restart() -> void:
 	effects.clear()
 	numbers.clear()
 	projectiles.clear()
+	motes.clear()
+	flares.clear()
+	# A new expedition lights the flame from nothing.
+	flame = 0.0
 	hint_alpha = 1.0
 	sync_enemy(true)
 
@@ -443,6 +524,8 @@ func on_last_breath() -> void:
 	burst_particles(hero_center(), [Color("86e0bd"), Color("fff1cf")], 30, 300.0)
 	hero.play("hurt")
 	show_banner("ÚLTIMO ALIENTO", "La brasa se niega a apagarse · Destello listo", Color("86e0bd"), 2.0)
+	lift = 0.5
+	flame_kick = 1.0
 
 func on_thorned(amount: float) -> void:
 	if show_numbers:
@@ -466,12 +549,17 @@ func apply_bearer() -> void:
 func on_ember_collected(kind: String) -> void:
 	var at = ember_stage_pos()
 	effects.append({"name": "magic" if kind == "heal" else "critical", "t": 0.0, "pos": at, "size": 200.0, "rot": 0.0, "color": Color(1, 1, 1)})
+	flare(at, 280.0, Color(1.0, 0.7, 0.35), 0.4)
 	rings.append({"pos": at, "t": 0.0, "dur": 0.5, "radius": 140.0, "color": Color("ffcf7b")})
 	burst_particles(at, [Color("ffcf7b"), Color("ff9a4a")], 20, 300.0)
 	var labels = {"gold": "¡ORO!", "fury": "¡FURIA!", "heal": "¡VIDA!", "spark": "¡DESTELLO!"}
 	numbers.append({"pos": at + Vector2(0, -30), "vel": Vector2(0, -60), "life": 1.4, "text": labels.get(kind, "¡ASCUA!"), "color": Color("ffcf7b"), "size": 30})
 	if kind == "gold":
 		coins.emit(global_position + stage_to_screen(at), 10, 0)
+
+## A brief light at `at` that fades over `duration` seconds.
+func flare(at: Vector2, radius: float, color: Color, duration: float) -> void:
+	flares.append({"pos": at, "radius": radius, "color": color, "t": 0.0, "dur": duration})
 
 func add_shake(amount: float) -> void:
 	if shake_enabled and not reduced_motion:
@@ -636,10 +724,88 @@ func _process(delta: float) -> void:
 			a.pos = Vector2(randf() * 1024, 810)
 		if a.pos.x < -10:
 			a.pos.x = 1030
+	_update_flame(delta)
 	backdrop.queue_redraw()
 	lights.queue_redraw()
 	fx_layer.queue_redraw()
 	overlay.queue_redraw()
+
+## Moves the embers of victories, then gathers every light of the chamber for
+## the darkness shader, most important first.
+func _update_flame(delta: float) -> void:
+	var health = 0.0 if state.dead else clampf(state.hp / maxf(1.0, state.max_hp()), 0.0, 1.0)
+	flame = move_toward(flame, health, delta * (0.7 if state.dead else 1.4))
+	flame_kick = move_toward(flame_kick, 0.0, delta * 2.2)
+	lift = maxf(0.0, lift - delta * 1.3)
+	for f in flares:
+		f.t += delta
+	flares = flares.filter(func(f): return f.t < f.dur)
+	var target = flame_pos()
+	for m in motes:
+		m.t += delta
+		if m.t >= m.dur:
+			flame_kick = minf(1.0, flame_kick + 0.18)
+			burst_particles(target, [Color("ffcf7b"), Color("ff9a4a")], 2, 120.0)
+	motes = motes.filter(func(m): return m.t < m.dur)
+	var flicker = 1.0 if reduced_motion else 1.0 + 0.045 * sin(ambient_time * 11.0) + 0.03 * sin(ambient_time * 27.0 + 1.3)
+	var positions = PackedVector4Array()
+	var tints = PackedVector4Array()
+	var reach = (FLAME_MIN + (FLAME_MAX - FLAME_MIN) * flame + 70.0 * flame_kick) * flicker
+	var warm = Color(1.0, 0.5, 0.28) if state.fury_time > 0 else FLAME_COLOR
+	_add_light(positions, tints, target, maxf(40.0, reach), 1.0, warm)
+	if state.ember_active:
+		_add_light(positions, tints, ember_stage_pos(), 170.0 * flicker, 0.9, Color(1.0, 0.68, 0.35))
+	if state.weak_active and state.spawn_delay <= 0:
+		_add_light(positions, tints, weak_stage_pos(), 110.0, 0.8, Color(1.0, 0.82, 0.4))
+	for f in flares:
+		var k = 1.0 - f.t / f.dur
+		_add_light(positions, tints, f.pos, f.radius * (0.6 + 0.4 * k), k, f.color)
+	# The rival is always readable; élites shine with their affix.
+	var foe = enemy_center()
+	_add_light(positions, tints, foe, 190.0 * enemy.base_scale, 0.26, Color(0.85, 0.82, 0.95))
+	if state.enemy_elite and state.spawn_delay <= 0:
+		var aura = Color(state.AFFIXES[state.affixes[0]].color) if not state.affixes.is_empty() else Color(1.0, 0.75, 0.25)
+		_add_light(positions, tints, foe, 260.0 * flicker, 0.5, aura)
+	if state.charging:
+		var hot = Color(0.65, 0.4, 1.0) if state.is_bell_keeper() else Color(1.0, 0.45, 0.15)
+		_add_light(positions, tints, foe + Vector2(-70, -10), 140.0 + 280.0 * state.charge_progress(), 0.85, hot)
+	if state.parry_window > 0:
+		_add_light(positions, tints, hero_center() + Vector2(70, 0), 160.0, 0.55 * state.parry_window / state.PARRY_WINDOW, Color(0.55, 0.9, 1.0))
+	for p in projectiles:
+		var k = clampf(p.t / p.dur, 0, 1)
+		_add_light(positions, tints, p.from.lerp(p.to, k), 130.0 if p.get("fire", false) else 70.0, 0.7, p.color)
+	for i in range(companion_count()):
+		_add_light(positions, tints, companion_pos(i), 95.0, 0.42, Color(0.45, 1.0, 0.8))
+	for m in motes:
+		if m.t > 0:
+			_add_light(positions, tints, mote_pos(m), 60.0, 0.5, Color(1.0, 0.6, 0.3))
+	for light in LIGHTS[bg_index]:
+		var f = 1.0 if reduced_motion else 1.0 + 0.08 * sin(ambient_time * 9.0 + light[0].x)
+		_add_light(positions, tints, light[0], light[2] * 1.9 * f, 0.7, light[1])
+	var mat: ShaderMaterial = darkness.material
+	var ambient: Color = AMBIENT[bg_index]
+	if bg_fade > 0:
+		ambient = ambient.lerp(AMBIENT[bg_prev], bg_fade)
+	# As the flame weakens, the dark closes in; it never blinds.
+	ambient *= 0.5 + 0.5 * flame
+	mat.set_shader_parameter("lights", positions)
+	mat.set_shader_parameter("tints", tints)
+	mat.set_shader_parameter("light_count", positions.size())
+	mat.set_shader_parameter("ambient", Vector3(ambient.r, ambient.g, ambient.b))
+	mat.set_shader_parameter("lift", lift)
+
+func _add_light(positions: PackedVector4Array, tints: PackedVector4Array, at: Vector2, radius: float, strength: float, color: Color) -> void:
+	if positions.size() >= MAX_LIGHTS or strength <= 0.0:
+		return
+	positions.append(Vector4(at.x, at.y, radius, strength))
+	tints.append(Vector4(color.r, color.g, color.b, 1.0))
+
+## Where an ember of victory is on its curve from the body to the flame.
+func mote_pos(m: Dictionary) -> Vector2:
+	var k = ease(clampf(m.t / m.dur, 0.0, 1.0), 0.6)
+	var to = flame_pos()
+	var mid = m.from.lerp(to, 0.5) + m.bend
+	return m.from.lerp(mid, k).lerp(mid.lerp(to, k), k)
 
 # ---------------------------------------------------------------- drawing
 func _draw_backdrop() -> void:
@@ -671,8 +837,8 @@ func _draw_lights() -> void:
 		var flicker = 1.0 + 0.08 * sin(ambient_time * 9.0 + light[0].x) + 0.05 * sin(ambient_time * 23.0 + light[0].y)
 		var r: float = light[2] * flicker
 		lights.draw_texture_rect(glow, Rect2(light[0] - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(light[1], 0.32))
-	var core = 105.0 + 6.0 * sin(ambient_time * 3.0)
-	lights.draw_texture_rect(glow, Rect2(HERO_FEET + Vector2(0, -80) - Vector2.ONE * core, Vector2.ONE * core * 2), false, Color(0.45, 1.0, 0.8, 0.22))
+	var core = (70.0 + 70.0 * flame) * (1.0 + 0.05 * sin(ambient_time * 3.0))
+	lights.draw_texture_rect(glow, Rect2(flame_pos() - Vector2.ONE * core, Vector2.ONE * core * 2), false, Color(1.0, 0.62, 0.3, 0.3))
 	for a in ash:
 		var c = [Color(1.0, 0.6, 0.3, 0.55), Color(0.75, 0.6, 1.0, 0.5), Color(1.0, 0.75, 0.3, 0.75 + 0.25 * sin(ambient_time * 20.0 + a.phase))][bg_index]
 		lights.draw_rect(Rect2(a.pos, Vector2.ONE * a.size * (0.7 if bg_index == 2 else 1.0)), c)
@@ -746,6 +912,13 @@ func _draw_fx() -> void:
 	for p in particles:
 		var a = clampf(p.life / 0.4, 0, 1)
 		fx_layer.draw_rect(Rect2(p.pos - Vector2.ONE * p.size * 0.5, Vector2.ONE * p.size), Color(p.color, a))
+	for m in motes:
+		if m.t <= 0:
+			continue
+		var at = mote_pos(m)
+		fx_layer.draw_texture_rect(glow, Rect2(at - Vector2.ONE * 16, Vector2.ONE * 32), false, Color(1.0, 0.6, 0.25, 0.7))
+		fx_layer.draw_rect(Rect2(at - Vector2.ONE * 2.5, Vector2.ONE * 5), Color("ffe7a8"))
+	_draw_flame()
 	for r in rings:
 		var k = r.t / r.dur
 		fx_layer.draw_arc(r.pos, r.radius * ease(k, 0.4), 0, TAU, 48, Color(r.color, 1.0 - k), 6.0 * (1.0 - k) + 1.0)
@@ -768,6 +941,34 @@ func _draw_fx() -> void:
 			var a = ambient_time * 4.0 + i * TAU / 3
 			lib.draw_fx(fx_layer, "critical", 0.08, top + Vector2(cos(a) * 46, sin(a) * 12), 54.0, Color(1, 0.95, 0.6), 14.0)
 
+## The last ember at the bearer's shoulder. Its size is the flame's.
+func _draw_flame() -> void:
+	if flame <= 0.01 and state.dead:
+		return
+	var at = flame_pos()
+	var size_k = clampf(0.35 + 0.65 * flame + 0.25 * flame_kick, 0.15, 1.3)
+	var beat = 1.0 if reduced_motion else 1.0 + 0.08 * sin(ambient_time * 7.0)
+	var lick = 0.0 if reduced_motion else sin(ambient_time * 9.0) * 0.25
+	paint_flame(fx_layer, glow, at, 13.0 * size_k * beat, lick)
+
+## A small flame: a glow and a teardrop of three layers that licks upwards.
+## Shared with the title screen.
+static func paint_flame(canvas: CanvasItem, glow_tex: Texture2D, at: Vector2, r: float, lick: float) -> void:
+	canvas.draw_texture_rect(glow_tex, Rect2(at - Vector2.ONE * r * 4.0, Vector2.ONE * r * 8.0), false, Color(1.0, 0.55, 0.2, 0.55))
+	for layer in [[1.0, Color("e0582a")], [0.68, Color("ff9a4a")], [0.38, Color("ffe7a8")]]:
+		var k: float = layer[0]
+		var pts = PackedVector2Array()
+		for i in range(12):
+			var a = i * TAU / 12
+			var radius = r * k
+			var p = Vector2(cos(a), sin(a)) * radius
+			if p.y < 0:
+				p.y *= 1.9
+				p.x *= 1.0 - (-p.y / (radius * 1.9)) * 0.55
+				p.x += lick * p.y * -0.4
+			pts.append(at + p)
+		canvas.draw_colored_polygon(pts, layer[1])
+
 ## A gold reticle that tightens as it appears; the outer arc is its time left.
 func _draw_weak_point() -> void:
 	var at = weak_stage_pos()
@@ -787,6 +988,11 @@ func _draw_overlay() -> void:
 	var font: Font = lib.heading_font
 	var body: Font = ThemeDB.fallback_font
 	var w = size.x
+	if safe_top > 0:
+		overlay.draw_texture_rect(edge_shade, Rect2(0, 0, w, safe_top + 50), false)
+	if safe_bottom > 0:
+		var h = safe_bottom + 60
+		overlay.draw_texture_rect(edge_shade, Rect2(0, size.y, w, -h), false)
 	# Screen-space vignettes.
 	if hurt_vignette > 0 or (state.hp < state.max_hp() * 0.3 and not state.dead):
 		var low = 0.25 + 0.15 * sin(ambient_time * 5.0) if state.hp < state.max_hp() * 0.3 and not state.dead else 0.0
@@ -798,8 +1004,8 @@ func _draw_overlay() -> void:
 	if state.spawn_delay <= 0 or not state.is_boss():
 		var head = stage_to_screen(enemy.position + Vector2(enemy.offset.x, -enemy.height() - 26 - (enemy.bob)))
 		var plate_w = clampf(w * 0.3, 210, 300)
-		var top_y = maxf(56.0, head.y - 54)
-		var cx = clampf(head.x, plate_w * 0.5 + 12, w - plate_w * 0.5 - 12)
+		var top_y = maxf(safe_top + 56.0, head.y - 54)
+		var cx = clampf(head.x, plate_w * 0.5 + 12 + safe_left * 0.5, w - plate_w * 0.5 - 12 - safe_right)
 		var name: String = state.enemy_title() if state.enemy_elite else state.enemy_name()
 		var name_color = Color("ffd37a") if state.enemy_elite else (Color("ff9c7a") if state.is_boss() else Color("f1e9da"))
 		if state.is_boss():
@@ -814,7 +1020,8 @@ func _draw_overlay() -> void:
 			var k = state.charge_progress()
 			var pulse = 0.6 + 0.4 * sin(ambient_time * 16.0)
 			# Below the boss bar when there is one.
-			tele = Rect2(w * 0.5 - w * 0.3, maxf(size.y * 0.16, 150.0 + letterbox() * size.y * 0.1) if state.is_boss() else size.y * 0.16, w * 0.6, 12)
+			var tele_y = maxf(size.y * 0.16, safe_top + 150.0 + letterbox() * size.y * 0.1) if state.is_boss() else maxf(size.y * 0.16, safe_top + 40.0)
+			tele = Rect2(w * 0.5 - w * 0.22, tele_y, w * 0.44, 12)
 			overlay.draw_rect(tele.grow(3), Color(0.1, 0.02, 0.02, 0.9))
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * k, tele.size.y)), Color(1, 0.35 + 0.3 * pulse, 0.1))
 			var cue = " · DESTELLO [E]"
@@ -835,8 +1042,8 @@ func _draw_overlay() -> void:
 		elif state.spawn_delay <= 0:
 			var warn = state.attack_timer / state.attack_interval()
 			var left = maxf(0, state.attack_interval() - state.attack_timer)
-			overlay.draw_rect(tele.grow(2), Color(0.02, 0.03, 0.05, 0.8))
-			var col = Color("ff7a4a") if warn > 0.8 else Color("8e9cab")
+			overlay.draw_rect(tele.grow(2), Color(0.05, 0.03, 0.02, 0.8))
+			var col = Color("ff7a4a") if warn > 0.8 else Color("aa9a8f")
 			overlay.draw_rect(Rect2(tele.position, Vector2(tele.size.x * warn, tele.size.y)), col)
 			# The last stretch of a normal wind-up is the parry zone, drawn over
 			# the fill; its brightest end is where a guard becomes a perfect parry.
@@ -849,7 +1056,7 @@ func _draw_overlay() -> void:
 				overlay.draw_rect(perfect_rect, Color(0.8, 1.0, 1.0, 0.5))
 				overlay.draw_rect(zone_rect, Color(0.6, 0.95, 1.0, 0.9), false, 1.5)
 			var label = "Golpe en %.1f s" % left
-			var label_color = Color("ffb08a") if warn > 0.8 else Color("aab6c1")
+			var label_color = Color("ffb08a") if warn > 0.8 else Color("c0b3ab")
 			if state.next_is_heavy():
 				label = "Canaliza en %.1f s" % left
 			elif state.parry_window > 0:
@@ -879,33 +1086,37 @@ func _draw_overlay() -> void:
 	# First-steps hint.
 	if hint_alpha > 0 and state.total_kills < 3 and state.active() and not state.in_boss_intro():
 		var pulse = 0.65 + 0.35 * sin(ambient_time * 4.0)
-		_text_center(font, "HAZ CLIC PARA ATACAR  ·  ESPACIO", Vector2(w * 0.5, size.y - 28), 22, Color(1, 0.85, 0.55, hint_alpha * pulse), 5)
+		_text_center(font, "HAZ CLIC PARA ATACAR  ·  ESPACIO", Vector2(w * 0.5, size.y - safe_bottom - 18), 22, Color(1, 0.85, 0.55, hint_alpha * pulse), 5)
 	if state.ember_active:
 		var p = stage_to_screen(ember_stage_pos())
 		_text_center(body, "¡Ascua errante!", p + Vector2(0, -44), 14, Color(1, 0.88, 0.6, 0.9), 3)
 	if travelling() and banner.is_empty():
 		var k = clampf(1.0 - state.spawn_delay / state.SPAWN_DELAY, 0, 1)
 		var a = sin(k * PI)
-		_text_center(font, "CÁMARA %d" % state.room, Vector2(w * 0.5, size.y * 0.2), 34, Color(1, 0.9, 0.7, 0.85 * a), 6)
-		_text_center(body, state.enemy_name(), Vector2(w * 0.5, size.y * 0.2 + 28), 15, Color(0.88, 0.86, 0.9, 0.8 * a), 3)
+		var title_y = maxf(size.y * 0.2, safe_top + 70.0)
+		_text_center(font, "CÁMARA %d" % state.room, Vector2(w * 0.5, title_y), 34, Color(1, 0.9, 0.7, 0.85 * a), 6)
+		_text_center(body, state.enemy_name(), Vector2(w * 0.5, title_y + 28), 15, Color(0.88, 0.86, 0.9, 0.8 * a), 3)
 	_draw_intro(font, body)
 	for i in range(toasts.size()):
 		var toast: Dictionary = toasts[i]
 		var a = clampf(toast.t / 0.25, 0, 1) * clampf((3.4 - toast.t) / 0.5, 0, 1)
 		var text = tr(toast.text)
 		var width = body.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 28
-		var box = Rect2(size.x - width - 14, 14 + i * 40 + letterbox() * size.y * 0.1 + (96.0 if state.is_boss() and state.spawn_delay <= 0 else 0.0), width, 32)
-		overlay.draw_rect(box, Color(0.05, 0.05, 0.08, 0.85 * a))
+		var box = Rect2(size.x - width - 14 - safe_right, safe_top + 14 + i * 40 + letterbox() * size.y * 0.1 + (96.0 if state.is_boss() and state.spawn_delay <= 0 else 0.0), width, 32)
+		overlay.draw_rect(box, Color(0.08, 0.05, 0.04, 0.85 * a))
 		overlay.draw_rect(Rect2(box.position, Vector2(3, box.size.y)), Color(1.0, 0.8, 0.45, a))
 		overlay.draw_string(body, box.position + Vector2(14, 22), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.7, a))
 	# Banner.
 	if not banner.is_empty():
 		var t: float = banner.t
 		var a = clampf(t / 0.35, 0, 1) * clampf((banner.dur - t) / 0.6, 0, 1)
-		var y = size.y * 0.24
-		overlay.draw_rect(Rect2(0, y - 52, w, 92), Color(0.02, 0.02, 0.04, 0.55 * a))
-		overlay.draw_rect(Rect2(0, y - 52, w, 2), Color(banner.color, 0.6 * a))
-		overlay.draw_rect(Rect2(0, y + 38, w, 2), Color(banner.color, 0.6 * a))
+		var y = maxf(size.y * 0.24, safe_top + 120.0)
+		# Between the HUD columns, centred on the screen.
+		var margin = maxf(safe_left, safe_right)
+		var band = Rect2(margin, y - 52, w - margin * 2, 92)
+		overlay.draw_rect(band, Color(0.04, 0.025, 0.02, 0.55 * a))
+		overlay.draw_rect(Rect2(band.position, Vector2(band.size.x, 2)), Color(banner.color, 0.6 * a))
+		overlay.draw_rect(Rect2(band.position + Vector2(0, 90), Vector2(band.size.x, 2)), Color(banner.color, 0.6 * a))
 		_text_center(font, banner.title, Vector2(w * 0.5, y), 40, Color(banner.color, a), 7)
 		_text_center(body, banner.subtitle, Vector2(w * 0.5, y + 26), 16, Color(0.92, 0.9, 0.85, a), 3)
 
@@ -913,7 +1124,7 @@ func _draw_overlay() -> void:
 func _draw_plate(font: Font, body: Font, name: String, name_color: Color, cx: float, top_y: float, plate_w: float) -> void:
 	_text_center(font, name, Vector2(cx, top_y), 22, name_color, 5)
 	var bar = Rect2(cx - plate_w * 0.5, top_y + 10, plate_w, 12)
-	overlay.draw_rect(bar.grow(2), Color(0.02, 0.03, 0.05, 0.85))
+	overlay.draw_rect(bar.grow(2), Color(0.05, 0.03, 0.02, 0.85))
 	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
 	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.95, 0.85, 0.55))
 	var fill = Color("e8b450") if state.enemy_elite else Color("6fcf9f")
@@ -926,7 +1137,7 @@ func _draw_plate(font: Font, body: Font, name: String, name_color: Color, cx: fl
 	var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
 	if state.echo_healing():
 		health_text += "  ·  ECO: ATACA PARA DETENERLO"
-	_text_center(body, health_text, Vector2(cx, bar.end.y + 17), 13, Color("c9a6f5") if state.echo_healing() else Color("c3cbd3"), 3)
+	_text_center(body, health_text, Vector2(cx, bar.end.y + 17), 13, Color("c9a6f5") if state.echo_healing() else Color("d2cac4"), 3)
 	if state.enemy_elite and not state.affixes.is_empty():
 		# The affixes above the name; with two, their hints take turns.
 		var shown: String = state.affixes[int(ambient_time / 3.0) % state.affixes.size()]
@@ -940,11 +1151,11 @@ func _draw_plate(font: Font, body: Font, name: String, name_color: Color, cx: fl
 func _draw_boss_bar(font: Font, body: Font) -> void:
 	var w = size.x
 	var bar_w = minf(w * 0.7, 640.0)
-	var y = 46.0 + letterbox() * size.y * 0.1
+	var y = safe_top + 46.0 + letterbox() * size.y * 0.1
 	_text_center(body, state.boss_title(), Vector2(w * 0.5, y - 26), 13, Color("e7b089"), 3)
 	_text_center(font, state.enemy_name(), Vector2(w * 0.5, y), 26, Color("ff9c7a"), 6)
 	var bar = Rect2((w - bar_w) * 0.5, y + 10, bar_w, 16)
-	overlay.draw_rect(bar.grow(4), Color(0.02, 0.02, 0.03, 0.92))
+	overlay.draw_rect(bar.grow(4), Color(0.03, 0.02, 0.015, 0.92))
 	overlay.draw_rect(bar.grow(4), Color("8c2f2f"), false, 2.0)
 	var ratio = state.enemy_hp / maxf(1.0, state.enemy_max)
 	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * hp_trail, bar.size.y)), Color(1, 0.92, 0.8, 0.6))
@@ -955,7 +1166,7 @@ func _draw_boss_bar(font: Font, body: Font) -> void:
 	overlay.draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 5)), Color(1, 0.7, 0.55, 0.45))
 	for i in range(1, 10):
 		var x = bar.position.x + bar.size.x * i / 10.0
-		overlay.draw_line(Vector2(x, bar.position.y), Vector2(x, bar.end.y), Color(0.02, 0.02, 0.03, 0.7), 2.0)
+		overlay.draw_line(Vector2(x, bar.position.y), Vector2(x, bar.end.y), Color(0.03, 0.02, 0.015, 0.7), 2.0)
 	var health_text = "%s / %s" % [compact_number(ceil(state.enemy_hp)), compact_number(ceil(state.enemy_max))]
 	if state.echo_healing():
 		health_text += "  ·  ECO: ATACA PARA DETENERLO"
@@ -979,7 +1190,7 @@ func _draw_intro(font: Font, body: Font) -> void:
 	if a <= 0:
 		return
 	var y = size.y * 0.1 + 46
-	overlay.draw_rect(Rect2(0, y - 26, w, 116), Color(0.02, 0.02, 0.04, 0.62 * a))
+	overlay.draw_rect(Rect2(0, y - 26, w, 116), Color(0.04, 0.025, 0.02, 0.62 * a))
 	overlay.draw_rect(Rect2(0, y - 26, w, 2), Color(1.0, 0.55, 0.35, 0.6 * a))
 	overlay.draw_rect(Rect2(0, y + 88, w, 2), Color(1.0, 0.55, 0.35, 0.6 * a))
 	_text_center(body, state.boss_title() + "  ·  NUEVO ENEMIGO", Vector2(w * 0.5, y), 14, Color(0.95, 0.7, 0.55, a), 3)
@@ -994,7 +1205,7 @@ func _frame_glow(color: Color) -> void:
 		var inset = k * 70.0
 		overlay.draw_rect(Rect2(inset, inset, size.x - inset * 2, size.y - inset * 2), c, false, 8.0)
 
-func _text_center(font: Font, text: String, pos: Vector2, font_size: int, color: Color, outline: int = 0, outline_color: Color = Color(0.03, 0.03, 0.05, 1)) -> void:
+func _text_center(font: Font, text: String, pos: Vector2, font_size: int, color: Color, outline: int = 0, outline_color: Color = Color(0.05, 0.03, 0.02, 1)) -> void:
 	text = tr(text)
 	if font == lib.heading_font:
 		font_size = int(font_size * 1.22)

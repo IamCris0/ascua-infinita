@@ -1,8 +1,10 @@
 extends Control
 ## Animated backdrop for the title screen and the bonfire: a Gemini background,
-## the bearer breathing by a fire and drifting embers.
+## the bearer breathing by a fire and drifting embers. As in the chamber, the
+## world is dark and the bearer's flame lights it.
 
 const Actor = preload("res://scripts/actor.gd")
+const Arena = preload("res://scripts/arena.gd")
 
 var lib
 var background: int = 0
@@ -16,6 +18,9 @@ var hero_anchor: Vector2 = Vector2(0.68, 0.86)
 var hero_scale: float = 1.7
 var campfire: bool = false
 var reduced_motion: bool = false
+var darkness: ColorRect
+# Drawn over the dark: the flame, the companions and the drifting embers.
+var front: Control
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -32,9 +37,9 @@ func _ready() -> void:
 	gt.fill_to = Vector2(1.0, 0.5)
 	glow = gt
 	var sg = Gradient.new()
-	sg.set_color(0, Color(0.02, 0.025, 0.04, 0.9))
-	sg.set_color(1, Color(0.02, 0.025, 0.04, 0.0))
-	sg.add_point(0.45, Color(0.02, 0.025, 0.04, 0.55))
+	sg.set_color(0, Color(0.04, 0.024, 0.015, 0.9))
+	sg.set_color(1, Color(0.04, 0.024, 0.015, 0.0))
+	sg.add_point(0.45, Color(0.04, 0.024, 0.015, 0.55))
 	var st = GradientTexture2D.new()
 	st.gradient = sg
 	st.width = 256
@@ -42,6 +47,16 @@ func _ready() -> void:
 	shade = st
 	hero = Actor.new(lib, "hero")
 	add_child(hero)
+	darkness = ColorRect.new()
+	darkness.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dark = ShaderMaterial.new()
+	dark.shader = Arena.Darkness
+	darkness.material = dark
+	add_child(darkness)
+	front = Control.new()
+	front.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	front.draw.connect(_draw_front)
+	add_child(front)
 	for i in range(46):
 		embers.append(_ember(true))
 
@@ -62,7 +77,48 @@ func _process(delta: float) -> void:
 	var s = _cover_scale()
 	hero.position = size * hero_anchor
 	hero.base_scale = hero_scale * s
+	darkness.size = size
+	front.size = size
+	_light()
 	queue_redraw()
+	front.queue_redraw()
+
+func flame_pos() -> Vector2:
+	var sway = Vector2.ZERO if reduced_motion else Vector2(sin(time * 1.7) * 6, sin(time * 2.3) * 5) * _cover_scale()
+	return hero.position + Vector2(-40 * _cover_scale(), -hero.height() * 0.88) + sway
+
+func companion_pos(i: int) -> Vector2:
+	var s = _cover_scale()
+	var a = time * 1.4 + i * TAU / maxf(1, companions)
+	return size * hero_anchor + Vector2(cos(a) * 110 * s, -150 * s + sin(a) * 34 * s)
+
+## The background's own lights, the companions and the flame, for the dark.
+func _light() -> void:
+	var s = _cover_scale()
+	var origin = (size - Vector2(1024, 800) * s) * Vector2(0.5, 0.75)
+	var flicker = 1.0 if reduced_motion else 1.0 + 0.045 * sin(time * 11.0) + 0.03 * sin(time * 27.0 + 1.3)
+	var positions = PackedVector4Array()
+	var tints = PackedVector4Array()
+	positions.append(Vector4(flame_pos().x, flame_pos().y, 560.0 * s * flicker, 1.0))
+	tints.append(Vector4(Arena.FLAME_COLOR.r, Arena.FLAME_COLOR.g, Arena.FLAME_COLOR.b, 1))
+	if campfire:
+		var fire = size * hero_anchor + Vector2(-150 * s, 0)
+		positions.append(Vector4(fire.x, fire.y, 520.0 * s * flicker, 0.9))
+		tints.append(Vector4(1.0, 0.6, 0.3, 1))
+	for i in range(companions):
+		var p = companion_pos(i)
+		positions.append(Vector4(p.x, p.y, 140.0 * s, 0.4))
+		tints.append(Vector4(0.45, 1.0, 0.8, 1))
+	for light in Arena.LIGHTS[background]:
+		var p: Vector2 = origin + light[0] * s
+		positions.append(Vector4(p.x, p.y, light[2] * 1.9 * s, 0.7))
+		tints.append(Vector4(light[1].r, light[1].g, light[1].b, 1))
+	var ambient: Color = Arena.AMBIENT[background] * 0.9
+	var mat: ShaderMaterial = darkness.material
+	mat.set_shader_parameter("lights", positions)
+	mat.set_shader_parameter("tints", tints)
+	mat.set_shader_parameter("light_count", positions.size())
+	mat.set_shader_parameter("ambient", Vector3(ambient.r, ambient.g, ambient.b))
 
 func _cover_scale() -> float:
 	return maxf(size.x / 1024.0, size.y / 800.0)
@@ -85,12 +141,16 @@ func _draw() -> void:
 			draw_rect(Rect2(x - 14 * s, fire.y - 6 * s, 28 * s, 9 * s), Color("3b2a22"))
 		lib.draw_fx(self, "critical", fmod(time * 0.5, 0.28), fire + Vector2(0, -22 * s), 90 * s, Color(1, 0.8, 0.5, 0.8), 14.0, time)
 	else:
-		var r = 220.0 * s
-		draw_texture_rect(glow, Rect2(feet + Vector2(0, -90 * s) - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(0.4, 0.9, 0.75, 0.16))
+		var r = 260.0 * s
+		draw_texture_rect(glow, Rect2(flame_pos() - Vector2.ONE * r, Vector2.ONE * r * 2), false, Color(1.0, 0.6, 0.3, 0.22))
+
+func _draw_front() -> void:
+	var s = _cover_scale()
 	for i in range(companions):
-		var a = time * 1.4 + i * TAU / maxf(1, companions)
-		var pos = feet + Vector2(cos(a) * 110 * s, -150 * s + sin(a) * 34 * s)
-		lib.draw_frame(self, "companion", lib.frame_at("companion", "idle", time + i * 0.3), pos, s * 1.6)
+		lib.draw_frame(front, "companion", lib.frame_at("companion", "idle", time + i * 0.3), companion_pos(i), s * 1.6)
+	var lick = 0.0 if reduced_motion else sin(time * 9.0) * 0.25
+	var beat = 1.0 if reduced_motion else 1.0 + 0.08 * sin(time * 7.0)
+	Arena.paint_flame(front, glow, flame_pos(), 20.0 * s * beat, lick)
 	for e in embers:
 		var c = Color(1.0, 0.55 + 0.3 * e.hue, 0.25, 0.75 * (0.5 + 0.5 * sin(time * 3.0 + e.phase)))
-		draw_rect(Rect2(e.pos * size, Vector2.ONE * e.size), c)
+		front.draw_rect(Rect2(e.pos * size, Vector2.ONE * e.size), c)

@@ -24,7 +24,7 @@ static func build(game, parent: VBoxContainer, tab: String) -> void:
 		b.disabled = name == tab
 	ui.hspacer(head)
 	ui.icon(head, lib.item_icon("scrap"), 34)
-	ui.label(head, str(state.scrap), 30, Color("c9d3dd"), true).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ui.label(head, str(state.scrap), 30, Color("d9d2cd"), true).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ui.label(head, "esquirlas", 15, Kit.MUTED).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	if tab == "Maestrías":
 		_masteries(game, parent)
@@ -119,7 +119,7 @@ static func _tile(game, grid: GridContainer, item: Dictionary) -> void:
 	var selected = game.arsenal_selected == item.uid
 	var bg = Color("2a2430") if selected else Kit.SLOT
 	b.add_theme_stylebox_override("normal", Kit.flat(bg, color, 6, 4 if selected else 2, 8))
-	b.add_theme_stylebox_override("hover", Kit.flat(Color("232733"), color.lightened(0.2), 6, 3, 8))
+	b.add_theme_stylebox_override("hover", Kit.flat(Color("362920"), color.lightened(0.2), 6, 3, 8))
 	b.add_theme_stylebox_override("pressed", Kit.flat(bg, color, 6, 3, 8))
 	b.tooltip_text = "%s (%s)\n%s" % [state.item_name(item), state.RARITIES[item.rarity].to_lower(), state.item_stat_text(item)]
 	b.pressed.connect(func(): game.select_item(item.uid))
