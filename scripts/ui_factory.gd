@@ -23,7 +23,7 @@ func label(parent: Node, value: String, font_size: int = 17, color: Color = Kit.
 		l.add_theme_font_size_override("font_size", int(font_size * 1.22))
 		l.add_theme_font_override("font", lib.heading_font)
 		l.add_theme_constant_override("outline_size", 4)
-		l.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.03, 0.9))
+		l.add_theme_color_override("font_outline_color", Color(0.03, 0.02, 0.015, 0.9))
 	if parent:
 		parent.add_child(l)
 	return l
@@ -56,10 +56,10 @@ func button(parent: Node, value: String, callback: Callable, height: float = 52,
 
 func small_button(parent: Node, value: String, callback: Callable) -> Button:
 	var b = button(parent, value, callback, 34, 16)
-	b.add_theme_stylebox_override("normal", Kit.flat(Kit.SLOT, Color("3b404c"), 5, 2, 6))
-	b.add_theme_stylebox_override("hover", Kit.flat(Color("232731"), Kit.COPPER, 5, 2, 6))
+	b.add_theme_stylebox_override("normal", Kit.flat(Kit.SLOT, Color("514136"), 5, 2, 6))
+	b.add_theme_stylebox_override("hover", Kit.flat(Color("35281f"), Kit.COPPER, 5, 2, 6))
 	b.add_theme_stylebox_override("pressed", Kit.flat(Color("2c2218"), Kit.COPPER, 5, 2, 6))
-	b.add_theme_stylebox_override("disabled", Kit.flat(Kit.SLOT, Color("23262e"), 5, 2, 6))
+	b.add_theme_stylebox_override("disabled", Kit.flat(Kit.SLOT, Color("33261e"), 5, 2, 6))
 	return b
 
 func stone(parent: Node, min_width: float = 0, straps: bool = true) -> VBoxContainer:

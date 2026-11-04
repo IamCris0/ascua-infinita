@@ -57,13 +57,13 @@ var room_label: Label
 var room_track: Control
 var hp_bar: ProgressBar
 var hp_label: Label
-var stat_values: Dictionary = {}
+var hud: MarginContainer
+# The bearer's card in the corner; its tooltip lists the numbers.
+var bearer_chip: PanelContainer
 var relic_grid: GridContainer
 var relic_hint: Label
 var relic_signature: String = ""
-var best_label: Label
 var bearer_label: Label
-var retreat_button: Button
 var upgrade_cards: Array = []
 var upgrade_buttons: Array[Button] = []
 var buy_mode_buttons: Array[Button] = []
@@ -85,10 +85,10 @@ var chest_view
 var wheel_view
 # Piece shown in the Arsenal's sheet.
 var arsenal_selected: int = -1
-var log_label: Label
 var status_label: Label
-var rule_label: Label
 var chronicle_label: Label
+# When the last chronicle line arrived; the lines fade a while later.
+var log_time: float = -100.0
 var next_label: Label
 var pause_button: Button
 var overlay: Control
@@ -321,6 +321,8 @@ func _process(delta: float) -> void:
 		if modal_type.is_empty() and Input.is_physical_key_pressed(KEY_SPACE):
 			state.click()
 		refresh()
+		# The chronicle lines fade once they have been read.
+		chronicle_label.modulate.a = clampf(1.0 - (time - log_time - 7.0) / 1.5, 0.0, 1.0)
 		auto_save += delta
 		if auto_save >= 8.0:
 			auto_save = 0.0
@@ -442,7 +444,7 @@ func build_title() -> void:
 	col.add_child(foot)
 	title_stats = ui.label(foot, "", 15, Kit.MUTED)
 	ui.hspacer(foot)
-	ui.label(foot, "v" + VERSION + "  ·  Godot 4.7", 13, Color("6f7782"))
+	ui.label(foot, "v" + VERSION + "  ·  Godot 4.7", 13, Color("897568"))
 
 func show_title() -> void:
 	screen = "title"
@@ -522,143 +524,144 @@ func start_game(new_run: bool) -> void:
 	persist()
 
 # ================================================================ game HUD
+## The stage fills the window and the HUD floats over it: the chamber and the
+## purses on top, the bearer on the left, the forge on the right and the two
+## actions below. Everywhere else a click reaches the stage.
 func build_game() -> void:
 	game_root = Control.new()
 	game_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(game_root)
-	var bg = ColorRect.new()
-	bg.color = Kit.INK
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game_root.add_child(bg)
-	var margin = MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	arena = Arena.new()
+	arena.state = state
+	arena.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	arena.safe_top = 88
+	arena.safe_bottom = 96
+	arena.safe_left = 360
+	arena.safe_right = 190
+	game_root.add_child(arena)
+	hud = MarginContainer.new()
+	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 14)
-	game_root.add_child(margin)
-	var root = VBoxContainer.new()
-	root.add_theme_constant_override("separation", 10)
-	margin.add_child(root)
-	build_top_bar(root)
-	var body = HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 14)
-	root.add_child(body)
-	build_bearer_panel(body)
-	build_center(body)
-	build_forge_panel(body)
-	build_footer(root)
+		hud.add_theme_constant_override("margin_" + side, 14)
+	game_root.add_child(hud)
+	var rows = VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 10)
+	hud.add_child(rows)
+	build_top_bar(rows)
+	var middle = HBoxContainer.new()
+	middle.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rows.add_child(middle)
+	build_bearer_panel(middle)
+	ui.hspacer(middle)
+	build_forge_panel(middle)
+	build_center(rows)
+	_let_clicks_through(hud)
+
+## Layout boxes and plain labels must not swallow the clicks meant for the stage.
+func _let_clicks_through(node: Node) -> void:
+	for child in node.get_children():
+		if child is PanelContainer or child is Button or child in [room_track, gold_box, essence_box, biome_label]:
+			continue
+		if child is Control:
+			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_let_clicks_through(child)
+
+## Text that floats over the stage keeps a dark outline.
+func _outlined(l: Label, outline: int = 5) -> Label:
+	l.add_theme_constant_override("outline_size", outline)
+	l.add_theme_color_override("font_outline_color", Color(0.04, 0.02, 0.01, 0.95))
+	return l
 
 func build_top_bar(root: Node) -> void:
-	var bar = ui.card(root, Color("14161d"), Kit.LINE, 8)
-	bar.get_theme_stylebox("panel").content_margin_left = 14
-	bar.get_theme_stylebox("panel").content_margin_right = 10
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
-	bar.add_child(row)
-	ui.icon(row, load("res://assets/icon.svg"), 46)
-	var title = VBoxContainer.new()
-	title.add_theme_constant_override("separation", -2)
-	row.add_child(title)
-	ui.label(title, "ASCUA INFINITA", 26, Kit.GOLD, true)
-	biome_label = ui.label(title, "", 14, Kit.TEAL, true)
-	ui.hspacer(row)
+	root.add_child(row)
+	var left = HBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 10)
+	row.add_child(left)
+	ui.icon(left, load("res://assets/icon.svg"), 40)
+	var place = VBoxContainer.new()
+	place.add_theme_constant_override("separation", -2)
+	left.add_child(place)
+	room_label = ui.label(place, "", 20, Kit.GOLD, true)
+	biome_label = ui.label(place, "", 13, Kit.TEAL, true)
+	biome_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	var mid = VBoxContainer.new()
 	mid.add_theme_constant_override("separation", 2)
 	mid.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(mid)
-	room_label = ui.label(mid, "", 20, Kit.TEXT, true)
-	room_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	room_track = RoomTrack.new()
 	room_track.main = self
-	room_track.custom_minimum_size = Vector2(330, 26)
+	room_track.custom_minimum_size = Vector2(360, 26)
 	mid.add_child(room_track)
-	ui.hspacer(row)
+	next_label = _outlined(ui.label(mid, "", 13, Color("e2cfb6")), 4)
+	next_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var right = HBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.alignment = BoxContainer.ALIGNMENT_END
+	right.add_theme_constant_override("separation", 14)
+	row.add_child(right)
 	gold_box = HBoxContainer.new()
 	gold_box.add_theme_constant_override("separation", 8)
 	gold_box.tooltip_text = "Oro de esta expedición. Gástalo en la forja."
 	gold_box.mouse_filter = Control.MOUSE_FILTER_PASS
-	row.add_child(gold_box)
-	ui.icon(gold_box, coin_tex, 30)
-	gold_label = ui.label(gold_box, "0", 30, Kit.GOLD, true)
-	gold_label.custom_minimum_size.x = 120
+	right.add_child(gold_box)
+	ui.icon(gold_box, coin_tex, 28)
+	gold_label = ui.label(gold_box, "0", 28, Kit.GOLD, true)
+	gold_label.custom_minimum_size.x = 110
 	essence_box = HBoxContainer.new()
 	essence_box.add_theme_constant_override("separation", 6)
 	essence_box.tooltip_text = "Ascuas: se conservan al caer o retirarte. Gástalas en la hoguera."
 	essence_box.mouse_filter = Control.MOUSE_FILTER_PASS
-	row.add_child(essence_box)
-	ui.icon(essence_box, lib.ui.shard, 30)
+	right.add_child(essence_box)
+	ui.icon(essence_box, lib.ui.shard, 28)
 	var ev = VBoxContainer.new()
 	ev.add_theme_constant_override("separation", -4)
 	essence_box.add_child(ev)
 	essence_label = ui.label(ev, "0", 22, Kit.TEAL, true)
-	run_essence_label = ui.label(ev, "", 13, Color("9fd8c4"))
-	essence_box.custom_minimum_size.x = 132
-	pause_button = ui.button(row, "MENÚ", toggle_pause, 52, 18)
-	pause_button.custom_minimum_size.x = 110
+	run_essence_label = _outlined(ui.label(ev, "", 13, Color("9fd8c4")), 4)
+	essence_box.custom_minimum_size.x = 124
+	pause_button = ui.button(right, "MENÚ", toggle_pause, 48, 17)
+	pause_button.custom_minimum_size.x = 104
 
 func build_bearer_panel(body: Node) -> void:
-	var left = ui.stone(body, 300)
-	left.add_theme_constant_override("separation", 5)
-	bearer_label = ui.header(left, "PORTADOR", "La última brasa")
-	var hp_row = HBoxContainer.new()
-	left.add_child(hp_row)
-	ui.label(hp_row, "VITALIDAD", 15, Kit.MUTED, true)
-	ui.hspacer(hp_row)
-	hp_label = ui.label(hp_row, "", 17, Kit.TEXT, true)
+	var column = VBoxContainer.new()
+	column.custom_minimum_size.x = 330
+	column.add_theme_constant_override("separation", 8)
+	body.add_child(column)
+	bearer_chip = PanelContainer.new()
+	bearer_chip.add_theme_stylebox_override("panel", Kit.glass())
+	bearer_chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	column.add_child(bearer_chip)
+	var v = VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	bearer_chip.add_child(v)
+	var head = HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	v.add_child(head)
+	bearer_label = ui.label(head, "El Portador", 18, Kit.TEXT, true)
+	ui.hspacer(head)
+	hp_label = ui.label(head, "", 16, Kit.TEXT, true)
 	hp_bar = ProgressBar.new()
-	hp_bar.custom_minimum_size.y = 18
+	hp_bar.custom_minimum_size.y = 14
 	hp_bar.show_percentage = false
-	left.add_child(hp_bar)
-	ui.spacer(left, 2)
-	var names = {"click": "Daño por clic", "auto": "Luceros / s", "crit": "Crítico", "burst": "Destello", "reward": "Oro por victoria"}
-	var colors = {"click": Kit.GOLD, "auto": Kit.TEAL, "crit": Kit.COPPER, "burst": Color("ffd28a"), "reward": Kit.GOLD}
-	for key in STAT_KEYS:
-		var row = HBoxContainer.new()
-		left.add_child(row)
-		ui.label(row, names[key], 15, Kit.MUTED)
-		ui.hspacer(row)
-		stat_values[key] = ui.label(row, "", 17, colors[key], true)
-	ui.separator(left)
-	ui.label(left, "RELIQUIAS DEL VIAJE", 14, Kit.RUNE, true)
+	v.add_child(hp_bar)
 	relic_grid = GridContainer.new()
-	relic_grid.columns = 5
-	relic_grid.add_theme_constant_override("h_separation", 6)
-	relic_grid.add_theme_constant_override("v_separation", 6)
-	left.add_child(relic_grid)
-	relic_hint = ui.wrap_label(left, "Tu primera reliquia espera al superar la cámara 5.", 14)
-	# Growing text takes the free space and clips instead of pushing the
-	# footer off screen late in an expedition.
-	relic_hint.clip_text = true
-	relic_hint.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	relic_hint.size_flags_stretch_ratio = 3.0
-	ui.spacer(left)
-	best_label = ui.wrap_label(left, "", 14)
-	retreat_button = ui.button(left, "VOLVER A LA HOGUERA", confirm_retreat, 50, 16)
-	retreat_button.tooltip_text = "Termina la expedición y conserva tus ascuas."
+	relic_grid.columns = 8
+	relic_grid.add_theme_constant_override("h_separation", 4)
+	relic_grid.add_theme_constant_override("v_separation", 4)
+	v.add_child(relic_grid)
+	relic_hint = ui.wrap_label(v, "Tu primera reliquia espera al superar la cámara 5.", 13)
+	chronicle_label = _outlined(ui.wrap_label(column, "", 14, Color("e2cfb6")), 4)
 
-func build_center(body: Node) -> void:
-	var center = VBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_theme_constant_override("separation", 10)
-	body.add_child(center)
-	var frame = PanelContainer.new()
-	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var fs = Kit.flat(Color("0c0e13"), Kit.LINE, 6, 4, 0)
-	frame.add_theme_stylebox_override("panel", fs)
-	center.add_child(frame)
-	arena = Arena.new()
-	arena.state = state
-	arena.custom_minimum_size = Vector2(520, 420)
-	arena.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	arena.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	frame.add_child(arena)
-	var actions = HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 10)
-	center.add_child(actions)
+func build_center(rows: Node) -> void:
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	rows.add_child(row)
+	ui.hspacer(row)
 	burst_button = Button.new()
-	burst_button.custom_minimum_size.y = 64
-	burst_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	burst_button.custom_minimum_size = Vector2(340, 58)
 	burst_button.focus_mode = Control.FOCUS_NONE
 	burst_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	burst_button.tooltip_text = "Destello: rompe escudos, interrumpe los ataques canalizados y golpea ×1,5 la coraza del Forjador."
@@ -667,7 +670,7 @@ func build_center(body: Node) -> void:
 	burst_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(1.0, 0.7, 0.5)))
 	burst_button.add_theme_stylebox_override("disabled", Kit.button_texture(lib, Color(0.55, 0.52, 0.52)))
 	burst_button.pressed.connect(try_burst)
-	actions.add_child(burst_button)
+	row.add_child(burst_button)
 	burst_fill = ProgressBar.new()
 	burst_fill.show_percentage = false
 	burst_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -679,13 +682,13 @@ func build_center(body: Node) -> void:
 	burst_fill.add_theme_stylebox_override("background", StyleBoxEmpty.new())
 	burst_fill.add_theme_stylebox_override("fill", Kit.flat(Color(1.0, 0.6, 0.25, 0.28), Color(0, 0, 0, 0), 4, 0, 0))
 	burst_button.add_child(burst_fill)
-	burst_label = ui.label(burst_button, "", 23, Color("fff0d6"), true)
+	burst_label = ui.label(burst_button, "", 20, Color("fff0d6"), true)
 	burst_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	burst_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	burst_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	burst_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parry_button = Button.new()
-	parry_button.custom_minimum_size = Vector2(236, 64)
+	parry_button.custom_minimum_size = Vector2(220, 58)
 	parry_button.focus_mode = Control.FOCUS_NONE
 	parry_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	parry_button.tooltip_text = "Parada [R] o clic derecho: alza la guardia justo antes de un golpe. Justo a tiempo (zona brillante) es una parada perfecta: el golpe no hace daño, el enemigo queda aturdido y contraatacas. Antes de tiempo solo bloqueas la mitad. Los jefes y los ataques cargados nunca se anulan del todo."
@@ -694,7 +697,7 @@ func build_center(body: Node) -> void:
 	parry_button.add_theme_stylebox_override("pressed", Kit.button_texture(lib, Color(0.65, 0.9, 1.0)))
 	parry_button.add_theme_stylebox_override("disabled", Kit.button_texture(lib, Color(0.5, 0.52, 0.55)))
 	parry_button.pressed.connect(try_parry)
-	actions.add_child(parry_button)
+	row.add_child(parry_button)
 	parry_fill = ProgressBar.new()
 	parry_fill.show_percentage = false
 	parry_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -706,94 +709,75 @@ func build_center(body: Node) -> void:
 	parry_fill.add_theme_stylebox_override("background", StyleBoxEmpty.new())
 	parry_fill.add_theme_stylebox_override("fill", Kit.flat(Color(0.5, 0.9, 1.0, 0.25), Color(0, 0, 0, 0), 4, 0, 0))
 	parry_button.add_child(parry_fill)
-	parry_label = ui.label(parry_button, "", 20, Color("e6fbff"), true)
+	parry_label = ui.label(parry_button, "", 18, Color("e6fbff"), true)
 	parry_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	parry_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	parry_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	parry_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var corner = HBoxContainer.new()
+	corner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	corner.alignment = BoxContainer.ALIGNMENT_END
+	row.add_child(corner)
+	status_label = _outlined(ui.label(corner, "", 13, Kit.TEAL), 4)
+	status_label.size_flags_vertical = Control.SIZE_SHRINK_END
 
+## The forge in a narrow column: icon, level and price; the name and what it
+## does are in the tooltip. Keys 1–4 buy, Q changes the amount.
 func build_forge_panel(body: Node) -> void:
-	# As wide as in Spanish, so shorter English texts never squeeze it into more lines.
-	var right = ui.stone(body, 410)
-	right.add_theme_constant_override("separation", 8)
-	ui.header(right, "FORJA DE CAMPAÑA", "Alimenta la llama")
+	var column = VBoxContainer.new()
+	body.add_child(column)
+	var tray = PanelContainer.new()
+	tray.add_theme_stylebox_override("panel", Kit.glass())
+	tray.mouse_filter = Control.MOUSE_FILTER_STOP
+	column.add_child(tray)
+	var v = VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	tray.add_child(v)
+	var head = HBoxContainer.new()
+	v.add_child(head)
+	ui.label(head, "FORJA", 15, Kit.COPPER, true)
+	ui.hspacer(head)
+	ui.label(head, "[Q]", 12, Color("897568"))
 	var modes = HBoxContainer.new()
-	modes.add_theme_constant_override("separation", 6)
-	right.add_child(modes)
-	ui.label(modes, "Comprar", 15, Kit.MUTED)
-	ui.hspacer(modes)
+	modes.add_theme_constant_override("separation", 4)
+	v.add_child(modes)
 	for i in range(BUY_MODES.size()):
 		var b = ui.small_button(modes, BUY_LABELS[i], func(): set_buy_mode(i))
-		b.custom_minimum_size.x = 58
+		b.custom_minimum_size = Vector2(44, 28)
+		b.add_theme_font_size_override("font_size", 15)
 		buy_mode_buttons.append(b)
-	ui.label(modes, "[Q]", 13, Color("6f7782"))
 	for i in range(state.UPGRADES.size()):
-		build_upgrade_card(right, i)
-	ui.spacer(right, 4)
-	var chron = ui.card(right, Color("15171d"), Kit.LINE, 10)
-	chron.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var cv = VBoxContainer.new()
-	cv.add_theme_constant_override("separation", 4)
-	chron.add_child(cv)
-	ui.label(cv, "CRÓNICA DEL VIAJE", 13, Kit.COPPER, true)
-	chronicle_label = ui.wrap_label(cv, "", 14, Color("b8b2a6"))
-	chronicle_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	chronicle_label.clip_text = true
-	chronicle_label.custom_minimum_size.y = 58 # Always room for three entries.
-	next_label = ui.label(cv, "", 14, Kit.TEAL, true)
-	var amb = ui.card(right, Color("1b1a24"), Color("3a2f52"), 10)
-	var av = VBoxContainer.new()
-	av.add_theme_constant_override("separation", 2)
-	amb.add_child(av)
-	ui.label(av, "AMBIENTE", 13, Kit.RUNE, true)
-	rule_label = ui.wrap_label(av, "", 14, Color("c8c0d8"))
-	set_buy_mode(0)
+		build_upgrade_card(v, i)
 
 func build_upgrade_card(parent: Node, kind: int) -> void:
 	var data: Dictionary = state.UPGRADES[kind]
-	var c = ui.card(parent, Kit.SLATE_DARK, Kit.LINE, 8)
+	var c = ui.card(parent, Kit.SLATE_DARK, Kit.LINE, 6)
+	c.tooltip_text = "%s  [%d]" % [data.name, kind + 1] + "\n" + data.description
+	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", 8)
 	c.add_child(row)
-	var ic = ui.icon_slot(row, lib.upgrade_icon(kind), 54)
-	ic.custom_minimum_size = Vector2(44, 44)
+	ui.icon_slot(row, lib.upgrade_icon(kind), 44)
 	var info = VBoxContainer.new()
-	info.add_theme_constant_override("separation", 0)
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
 	row.add_child(info)
-	var top = HBoxContainer.new()
-	info.add_child(top)
-	ui.label(top, data.name, 17, Kit.TEXT, true)
-	ui.hspacer(top)
-	var level = ui.label(top, "", 14, Kit.GOLD, true)
-	var desc = ui.wrap_label(info, data.description, 13, Kit.MUTED)
-	var cost = ui.button(row, "", func(): purchase(kind), 54, 18)
-	cost.custom_minimum_size.x = 108
+	var level = ui.label(info, "", 13, Kit.GOLD, true)
+	var cost = ui.button(info, "", func(): purchase(kind), 34, 15)
+	cost.custom_minimum_size.x = 92
 	cost.icon = coin_tex
 	cost.expand_icon = true
-	cost.add_theme_constant_override("icon_max_width", 18)
-	cost.add_theme_constant_override("h_separation", 6)
+	cost.add_theme_constant_override("icon_max_width", 16)
+	cost.add_theme_constant_override("h_separation", 4)
 	cost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	cost.tooltip_text = "Tecla [%d]" % (kind + 1)
-	upgrade_cards.append({"level": level, "desc": desc, "button": cost, "card": c, "font_size": 0})
+	cost.tooltip_text = c.tooltip_text
+	upgrade_cards.append({"level": level, "button": cost, "card": c, "font_size": 0})
 	upgrade_buttons.append(cost)
-
-func build_footer(root: Node) -> void:
-	var foot = ui.card(root, Color("111319"), Kit.LINE, 8)
-	var row = HBoxContainer.new()
-	foot.add_child(row)
-	log_label = ui.label(row, "", 15, Color("c9c2b4"))
-	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_label.clip_text = true
-	log_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	ui.label(row, "CLIC/ESPACIO atacar   E destello   R parada   1-4 forja   Q cantidad   ESC menú", 13, Color("78818d"))
-	status_label = ui.label(row, "", 13, Kit.TEAL)
 
 func set_buy_mode(index: int) -> void:
 	buy_mode = index
 	for i in range(buy_mode_buttons.size()):
 		var on = i == index
-		buy_mode_buttons[i].add_theme_stylebox_override("normal", Kit.flat(Color("2c2218") if on else Kit.SLOT, Kit.COPPER if on else Color("3b404c"), 5, 2, 6))
+		buy_mode_buttons[i].add_theme_stylebox_override("normal", Kit.flat(Color("2c2218") if on else Kit.SLOT, Kit.COPPER if on else Color("514136"), 5, 2, 6))
 		buy_mode_buttons[i].add_theme_color_override("font_color", Kit.GOLD if on else Kit.MUTED)
 	refresh()
 
@@ -839,7 +823,7 @@ func refresh() -> void:
 	run_essence_label.text = "+%d en el viaje" % state.run_essence if not state.dead else "en la hoguera"
 	biome_label.text = state.BIOMES[state.biome()]
 	room_label.text = ("CÁMARA %d  ·  JEFE" if state.is_boss() else "CÁMARA %d") % state.room + ("  ·  ECLIPSE %d" % state.eclipse if state.eclipse > 0 else "")
-	rule_label.text = state.BIOME_RULES[state.biome()]
+	biome_label.tooltip_text = state.BIOME_RULES[state.biome()]
 	var to_relic = 5 - ((state.room - 1) % 5)
 	var to_boss = 10 - ((state.room - 1) % 10)
 	next_label.text = ("Jefe en esta cámara" if state.is_boss() else "Jefe en %d" % to_boss) + "   ·   " + ("Reliquia al vencer" if to_relic == 1 else "Reliquia en %d" % to_relic)
@@ -850,12 +834,15 @@ func refresh() -> void:
 	if int(low) != hp_low_state:
 		hp_low_state = int(low)
 		hp_bar.add_theme_stylebox_override("fill", Kit.flat(Kit.DANGER if low else Color("5fcf96"), Color(0, 0, 0, 0), 3, 0, 0))
-	stat_values.click.text = fmt(state.click_damage()) + (" ×2" if state.fury_time > 0 else "")
-	stat_values.auto.text = fmt(state.auto_damage() / state.wisp_interval())
-	stat_values.crit.text = "%d%%  ·  ×%.1f" % [roundi(state.critical_chance() * 100), state.critical_multiplier()]
-	stat_values.burst.text = fmt(state.burst_damage())
-	stat_values.reward.text = fmt(state.kill_reward())
-	best_label.text = "Mejor cámara: %d   ·   Expedición nº %d" % [state.best, state.runs + (0 if state.dead else 1)]
+	var stats = [
+		["Daño por clic", fmt(state.click_damage()) + (" ×2" if state.fury_time > 0 else "")],
+		["Luceros / s", fmt(state.auto_damage() / state.wisp_interval())],
+		["Crítico", "%d%%  ·  ×%.1f" % [roundi(state.critical_chance() * 100), state.critical_multiplier()]],
+		["Destello", fmt(state.burst_damage())],
+		["Oro por victoria", fmt(state.kill_reward())]]
+	bearer_chip.tooltip_text = "\n".join(stats.map(func(line): return "%s · %s" % line))
+	# The HUD steps aside while a boss makes its entrance.
+	hud.modulate.a = 1.0 - arena.letterbox()
 	bearer_label.text = state.BEARERS[state.bearer].name
 	refresh_relics()
 	for i in range(upgrade_cards.size()):
@@ -873,7 +860,7 @@ func refresh() -> void:
 		var b: Button = entry.button
 		b.text = fmt(cost) + ("\n×%d" % count if count > 1 else "")
 		# Theme overrides relayout the card, so only touch them when the size changes.
-		var font_size = 19 if count > 1 else 22
+		var font_size = 13 if count > 1 else 16
 		if entry.font_size != font_size:
 			entry.font_size = font_size
 			b.add_theme_font_size_override("font_size", font_size)
@@ -894,7 +881,6 @@ func refresh() -> void:
 	burst_button.disabled = not ready
 	burst_button.modulate = Color.WHITE if not ready or state.reduced_motion else Color.WHITE.lerp(Color(1.25, 1.1, 0.9), 0.5 + 0.5 * sin(time * (9.0 if state.charging else 4.0)))
 	refresh_parry()
-	retreat_button.disabled = state.dead or not state.active()
 	status_label.text = "● GUARDADO" if state.save_error.is_empty() else state.save_error
 	room_track.queue_redraw()
 	# Chest and wheel screens stay until their rewards have been seen.
@@ -952,7 +938,7 @@ func refresh_relics() -> void:
 		if n == 0:
 			continue
 		var holder = Control.new()
-		holder.custom_minimum_size = Vector2(48, 48)
+		holder.custom_minimum_size = Vector2(32, 32)
 		holder.tooltip_text = "%s%s\n%s" % [relic.name, " ×%d" % n if n > 1 else "", relic.description + "\n" + state.synergy_hint(relic.id)]
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		relic_grid.add_child(holder)
@@ -969,7 +955,7 @@ func refresh_relics() -> void:
 		slot.add_child(t)
 		if n > 1:
 			var badge = ui.label(holder, "×%d" % n, 13, Kit.GOLD, true)
-			badge.position = Vector2(26, 28)
+			badge.position = Vector2(16, 14)
 
 func fmt(value: float) -> String:
 	if value >= 1e15:
@@ -987,13 +973,9 @@ func add_log(message: String) -> void:
 	logs.push_front(message)
 	if logs.size() > 6:
 		logs.resize(6)
+	log_time = time
 	if chronicle_label:
-		chronicle_label.text = "\n".join(logs.slice(0, 5))
-	if log_label:
-		log_label.text = message
-		log_label.modulate = Color(1.3, 1.2, 1.0)
-		var tw = create_tween()
-		tw.tween_property(log_label, "modulate", Color.WHITE, 0.6)
+		chronicle_label.text = "\n".join(logs.slice(0, 3))
 
 func _on_fly_arrived(kind: String) -> void:
 	var target: Control = gold_label if kind == "gold" else essence_label
@@ -1011,7 +993,7 @@ func build_overlay() -> void:
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(overlay)
 	var shade = ColorRect.new()
-	shade.color = Color(0.01, 0.012, 0.025, 0.84)
+	shade.color = Color(0.03, 0.018, 0.012, 0.82)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(shade)
 	var scroll = ScrollContainer.new()
@@ -1099,6 +1081,7 @@ func show_howto(return_to: String) -> void:
 	var v = modal("howto", "ROGUELIKE CLICKER  ·  " + ("PRIMERA EXPEDICIÓN" if welcome else "CÓMO JUGAR"), "Hasta la última ascua.", "El eclipse devoró el mundo. Tú llevas la chispa que queda.", 780)
 	var tips = [
 		[lib.fx_icon("slash", 2, 0.12), "Haz clic o mantén ESPACIO para atacar sin pulsar repetidamente. Ritmo máximo: un golpe cada 0,3 s. Encadenarlos suma hasta un 30% de daño."],
+		[lib.fx_icon("embers", 0, 0.1), "La llama que flota junto al portador es su vida: con más vida, más ilumina; al perderla, la oscuridad se cierra. Cada victoria la alimenta."],
 		[lib.upgrade_icon(1), "Empiezas con un lucero que ataca solo. Compra más en la forja; los clics aceleran el combate. Usa Q para comprar ×10 o al máximo."],
 		[lib.fx_icon("critical", 1, 0.12), "DESTELLO [E] golpea por ocho. Rompe el escudo del Guardián, interrumpe las cargas del Rey y del Acólito y agrieta la coraza del Forjador."],
 		[lib.upgrade_icon(2), "PARADA [R] o clic derecho: alza la guardia cuando la barra del golpe entra en la zona azul. En el último instante (zona brillante) es una parada perfecta: sin daño, enemigo aturdido y contraataque. Antes de tiempo solo bloqueas la mitad; si no llega nada, la guardia tarda en recargarse."],
@@ -1292,17 +1275,26 @@ func toggle_pause() -> void:
 func toggle_pause_menu() -> void:
 	state.paused = true
 	var v = modal("pause", "UN RESPIRO JUNTO AL FUEGO", "Expedición en pausa", "Cámara %d de %s. Tu progreso se guarda automáticamente." % [state.room, state.BIOMES[state.biome()].to_lower()], 560)
+	ui.label(v, "Mejor cámara: %d   ·   Expedición nº %d" % [state.best, state.runs + 1], 15, Kit.MUTED)
 	ui.button(v, "CONTINUAR", func(): close_modal(), 56, 21)
-	ui.button(v, "OPCIONES", func(): show_options("pause"), 50)
-	ui.button(v, "CÓMO JUGAR", func(): show_howto("pause"), 50)
-	ui.button(v, "ARSENAL", func(): show_arsenal("pause"), 50)
-	ui.button(v, "RETOS Y COLECCIÓN" + claims_badge(), func(): show_collection("pause"), 50)
-	ui.button(v, "MENÚ PRINCIPAL", func():
-		persist()
-		show_title()
-	, 50)
+	var back = ui.button(v, "VOLVER A LA HOGUERA", confirm_retreat, 50)
+	back.tooltip_text = "Termina la expedición y conserva tus ascuas."
+	# The rest in two columns, so the menu fits a short window.
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	v.add_child(grid)
+	var entries = [["OPCIONES", func(): show_options("pause")], ["CÓMO JUGAR", func(): show_howto("pause")],
+		["ARSENAL", func(): show_arsenal("pause")], ["RETOS Y COLECCIÓN" + claims_badge(), func(): show_collection("pause")],
+		["MENÚ PRINCIPAL", func():
+			persist()
+			show_title()]]
 	if not OS.has_feature("web"):
-		ui.button(v, "GUARDAR Y SALIR", quit_game, 50)
+		entries.append(["GUARDAR Y SALIR", quit_game])
+	for entry in entries:
+		var b = ui.button(grid, entry[0], entry[1], 48, 16)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ui.wrap_label(v, "Tus luceros reúnen 2 de oro por minuto y lucero mientras no juegas (máximo 4 horas). La expedición no recibe daño con el juego cerrado.", 14)
 	persist()
 
@@ -1703,6 +1695,9 @@ func demo_state(shot: String) -> void:
 	state.spawn_enemy(false)
 	state.spawn_delay = 0
 	state.hp = state.max_hp() * 0.78
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--hp="):
+			state.hp = state.max_hp() * float(a.substr(5))
 	if shot == "elite":
 		# A duel rival that burns: the bearer is still smouldering.
 		state.affixes = ["burning", "thorny"]
@@ -1753,7 +1748,7 @@ class RoomTrack extends Control:
 			var done = r < s.room
 			var current = r == s.room
 			var radius = 8.0 if boss else 5.5
-			var col = Color("2b303b")
+			var col = Color("3d3129")
 			if done:
 				col = Color("7fe0bf")
 			if current:
@@ -1761,7 +1756,7 @@ class RoomTrack extends Control:
 			if boss and not done:
 				col = Color("e0645a") if not current else col
 			if i > 0:
-				draw_line(Vector2(gap * (i - 0.5) + 7, c.y), Vector2(c.x - radius - 2, c.y), Color("3a404d"), 2.0)
+				draw_line(Vector2(gap * (i - 0.5) + 7, c.y), Vector2(c.x - radius - 2, c.y), Color("514136"), 2.0)
 			var node: String = s.node_at(r)
 			if not node.is_empty() and node != "fight":
 				# Lane chambers show what they hold.
@@ -1769,7 +1764,7 @@ class RoomTrack extends Control:
 					draw_circle(c, 12.0, col)
 				draw_texture_rect(main.lib.map_icon(node), Rect2(c - Vector2.ONE * 10, Vector2.ONE * 20), false, Color(1, 1, 1, 0.45 if done else 1.0))
 				continue
-			draw_circle(c, radius + 2.0, Color("07080b"))
+			draw_circle(c, radius + 2.0, Color("0b0907"))
 			draw_circle(c, radius, col)
 			if boss:
 				var crown = PackedVector2Array([c + Vector2(-5, 2), c + Vector2(-5, -3), c + Vector2(-2, 0), c + Vector2(0, -4), c + Vector2(2, 0), c + Vector2(5, -3), c + Vector2(5, 2)])

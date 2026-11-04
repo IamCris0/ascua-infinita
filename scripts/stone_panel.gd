@@ -7,12 +7,12 @@ extends PanelContainer
 @export var inner_inset: float = 9.0
 @export var accent: Color = Color(0, 0, 0, 0)
 
-const BEVEL_LIGHT = Color("5b6271")
-const BEVEL_DARK = Color("121419")
-const INNER_LINE = Color("1a1d24")
-const STRAP = Color("2c303b")
-const STRAP_LIGHT = Color("4d5363")
-const OUTLINE = Color("07080b")
+const BEVEL_LIGHT = Color("7a6252")
+const BEVEL_DARK = Color("1b1410")
+const INNER_LINE = Color("271d17")
+const STRAP = Color("3e3129")
+const STRAP_LIGHT = Color("6a5446")
+const OUTLINE = Color("0b0907")
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -57,5 +57,5 @@ func _strap(a: Vector2, b: Vector2, _dir: int) -> void:
 	for k in [0.18, 0.5, 0.82]:
 		var c = a.lerp(b, k)
 		draw_circle(c, 3.2, OUTLINE)
-		draw_circle(c, 2.2, Color("5e6575"))
+		draw_circle(c, 2.2, Color("7f6554"))
 		draw_circle(c + Vector2(-0.7, -0.7), 0.9, Color("9aa2b3"))

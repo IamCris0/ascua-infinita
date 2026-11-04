@@ -27,7 +27,7 @@ class Portrait extends Control:
 	func _draw() -> void:
 		var frame = lib.frame_at(key, "idle", time)
 		var scale = minf(1.0, (size.y - 8) / maxf(1.0, lib.frame_height(key)))
-		lib.draw_frame(self, key, frame, Vector2(size.x * 0.5, size.y - 4), scale, Color.WHITE if found else Color(0.02, 0.02, 0.04, 0.9))
+		lib.draw_frame(self, key, frame, Vector2(size.x * 0.5, size.y - 4), scale, Color.WHITE if found else Color(0.04, 0.025, 0.02, 0.9))
 
 static func badge(count: int) -> String:
 	return "  (%d)" % count if count > 0 else ""
@@ -209,7 +209,7 @@ static func _entry_art(game, row: HBoxContainer, entry: Dictionary, known: bool)
 	var slot = game.ui.icon_slot(row, texture, 72)
 	slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if entry.category == "Arsenal" else CanvasItem.TEXTURE_FILTER_LINEAR
 	if not known:
-		slot.modulate = Color(0.05, 0.05, 0.08)
+		slot.modulate = Color(0.08, 0.05, 0.04)
 
 static func _log(game, list: VBoxContainer) -> void:
 	var ui = game.ui

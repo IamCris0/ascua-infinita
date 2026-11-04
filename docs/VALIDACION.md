@@ -1,5 +1,16 @@
 # Validación del proyecto
 
+## La llama (0.13) — 3 de noviembre de 2026
+
+- `tools/run_tests.ps1 -Soak`: 22 suites sin fallos y partida gráfica de 70 s.
+- `test_i18n.gd` suma una muestra fija de botín en lista (21 comprobaciones).
+- `test_ui.gd` sigue comprobando que el HUD cabe en 900 px. El HUD nuevo mide mucho menos.
+- Capturas revisadas en español y en inglés:
+  - combate, élite, jefe con carga y entrada de jefe;
+  - los tres biomas y la vida baja;
+  - título, pausa, mapa y hoguera.
+- Rendimiento frente a `main` en un combate fijo de 15 s: 144 fps en ambos (tope del monitor). GPU de 0,33 a 0,37 ms por fotograma.
+
 ## Web e inglés (0.12) — 10 de octubre de 2026
 
 - `tools/run_tests.ps1 -Soak`: 22 suites sin fallos y partida gráfica de 70 s.

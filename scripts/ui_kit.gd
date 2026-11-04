@@ -2,14 +2,14 @@ extends RefCounted
 ## Palette, theme and reusable styles. Colours follow the Gemini interface
 ## reference: slate stone, iron, copper lettering, rune violet and soul green.
 
-const INK = Color("0a0c11")
-const SLATE = Color("272b35")
-const SLATE_DARK = Color("181b22")
-const SLATE_LIGHT = Color("3a404d")
-const SLOT = Color("12141a")
-const LINE = Color("07080b")
+const INK = Color("110d0a")
+const SLATE = Color("3a2c22")
+const SLATE_DARK = Color("251b15")
+const SLATE_LIGHT = Color("514136")
+const SLOT = Color("1c1510")
+const LINE = Color("0b0907")
 const TEXT = Color("ede6d6")
-const MUTED = Color("98a2b0")
+const MUTED = Color("b1a197")
 const GOLD = Color("f2c47c")
 const COPPER = Color("f0a368")
 const TEAL = Color("7fe0bf")
@@ -25,6 +25,10 @@ static func flat(color: Color, border: Color = LINE, radius: int = 6, border_wid
 	s.set_content_margin_all(margin)
 	s.anti_aliasing = false
 	return s
+
+## Translucent ember-dark card for the HUD that floats over the stage.
+static func glass() -> StyleBoxFlat:
+	return flat(Color(0.075, 0.05, 0.035, 0.8), Color(0.45, 0.31, 0.19, 0.6), 8, 2, 12)
 
 static func slot_style(border: Color = LINE) -> StyleBoxFlat:
 	var s = flat(SLOT, border, 6, 2, 4)
@@ -97,13 +101,13 @@ static func build_theme(lib) -> Theme:
 	t.set_stylebox("background", "ProgressBar", flat(SLOT, LINE, 4, 2, 0))
 	t.set_stylebox("fill", "ProgressBar", flat(TEAL, Color(0, 0, 0, 0), 3, 0, 0))
 	# Tooltips.
-	var tip = flat(Color("15171e"), Color("6b5a44"), 6, 2, 10)
+	var tip = flat(Color("201813"), Color("6b5a44"), 6, 2, 10)
 	t.set_stylebox("panel", "TooltipPanel", tip)
 	t.set_color("font_color", "TooltipLabel", TEXT)
 	t.set_font_size("font_size", "TooltipLabel", 15)
 	t.set_constant("separation", "VBoxContainer", 10)
 	t.set_constant("separation", "HBoxContainer", 12)
-	t.set_color("separator", "HSeparator", Color("3b404c"))
+	t.set_color("separator", "HSeparator", Color("514136"))
 	t.set_constant("separation", "HSeparator", 8)
 	return t
 

@@ -125,4 +125,4 @@ class Link extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func _draw() -> void:
 		var x = 31.0
-		draw_line(Vector2(x, 0), Vector2(x, size.y), color if lit else Color("3a404d"), 3.0)
+		draw_line(Vector2(x, 0), Vector2(x, size.y), color if lit else Color("514136"), 3.0)

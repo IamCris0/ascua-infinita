@@ -1,7 +1,7 @@
-# Versión web — 8 de octubre de 2026 (reexportada el 10 de octubre como 0.12.0-dev)
+# Versión web — 8 de octubre de 2026 (reexportada el 3 de noviembre como 0.13.0-dev)
 
-Paquete: builds/AscuaInfinita-Web-0.12.0-dev.zip (36.779.868 bytes), con `index.html` en la raíz.
-SHA256: 1c1bde763270ec6bef395f0d817d9345220b16d1b32b22833b6c436ac2b37304
+Paquete: builds/AscuaInfinita-Web-0.13.0-dev.zip (36.788.551 bytes), con `index.html` en la raíz.
+SHA256: 681929395299f87df1e20e48dee47eabb666d1cc87d4a1987a3e6f14ca5bb75d
 
 Exportación de un solo hilo (plantilla oficial `web_nothreads_release` de Godot 4.7.2, renderizador Compatibility sobre WebGL 2). No necesita cabeceras COOP/COEP ni la opción «SharedArrayBuffer» de itch.io.
 
@@ -38,6 +38,8 @@ La subida la hace el propietario de la cuenta. También se puede usar `butler` d
 - **Idioma:** en Automático sigue el idioma del navegador: español si es español, inglés en otro caso. Se cambia en Opciones → Idioma.
 
 ## Validación realizada
+
+0.13.0-dev: la oscuridad y las luces (sombreador `darkness.gdshader`) compilan en WebGL 2. Título y combate se ven iluminados, sin errores en la consola.
 
 0.12.0-dev, en el navegador integrado a 1280 × 800:
 - Título con v0.12.0-dev en español (idioma del navegador), sin errores en la consola y sin botón Salir.

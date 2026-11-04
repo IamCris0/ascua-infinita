@@ -132,7 +132,7 @@ func _draw() -> void:
 		var x = size.x * 0.5 - total * 0.5 + i * (card_w + gap)
 		var y = lerpf(190.0, 290.0, k)
 		var rect = Rect2(x, y, card_w, 76)
-		draw_rect(rect, Color(0.08, 0.08, 0.11, 0.95 * k))
+		draw_rect(rect, Color(0.11, 0.08, 0.06, 0.95 * k))
 		draw_rect(rect, Color(glow, 0.9 * k), false, 2.0)
 		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 4)), Color(glow, 0.9 * k))
 		var icon: Texture2D = icon_for.call(loot[i])
